@@ -6,7 +6,7 @@
 'use strict';
 
 var APP = 'shengqian';
-var VERSION = '0771b3532537';
+var VERSION = '113ea554bb5a';
 var SHELL = [
   "./",
   "./index.html",

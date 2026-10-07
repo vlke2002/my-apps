@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -7,11 +7,10 @@
 <meta name="color-scheme" content="light dark">
 <meta name="description" content="作业盒子 —— 完全离线的作业与课上习题收纳">
 <!-- 完全离线：禁止一切外部资源，绝不联网。
-     注意：PWA 版需要放开 manifest / service worker，那由 pwa/build-pwa.js
-     在构建时替换这一行；单文件成品保持最严格的策略。 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'">
-<!-- PWA 声明：由 pwa/build-pwa.js 注入。通过 file:// 打开时这些会被忽略。 -->
+     PWA 版需要放开 manifest / service worker，由 pwa/build-pwa.js 在构建时
+     用放松版【替换】这一行（不能追加：多条 CSP 叠加生效，旧的那条会拦死）。 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: 'self'; manifest-src 'self'; worker-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<!-- PWA 声明：由 pwa/build-pwa.js 注入。通过 file:// 打开时这些会被忽略。 -->
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <link rel="apple-touch-icon" href="icon-192.png">
