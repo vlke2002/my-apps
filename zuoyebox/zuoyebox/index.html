@@ -1,0 +1,2609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#4f46e5">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="作业盒子 —— 完全离线的作业与课上习题收纳">
+<!-- 完全离线：禁止一切外部资源，绝不联网。
+     PWA 版需要放开 manifest / service worker，由 pwa/build-pwa.js 在构建时
+     用放松版【替换】这一行（不能追加：多条 CSP 叠加生效，旧的那条会拦死）。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: 'self'; manifest-src 'self'; worker-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<!-- PWA 声明：由 pwa/build-pwa.js 注入。通过 file:// 打开时这些会被忽略。 -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>作业盒子</title>
+<style>
+/* ============================ 设计变量 ============================ */
+:root{
+  --bg:#f6f6f9; --card:#ffffff; --ink:#1a1c2b; --ink-2:#5c6076; --ink-3:#9397ad;
+  --line:#e8e9f1; --line-2:#f1f2f8;
+  --accent:#4f46e5; --accent-2:#4338ca; --accent-soft:#eef0fe;
+  --danger:#dc2f3c; --danger-soft:#fdecec; --danger-line:#f5c2c7;
+  --warn:#c2740a; --warn-soft:#fdf4e4; --warn-line:#f0d9a8;
+  --ok:#12a150;
+  --homework:#4f46e5; --exercise:#0891b2; --memo:#c2740a;
+  --r-lg:20px; --r-md:14px; --r-sm:10px;
+  --shadow:0 1px 2px rgba(25,28,50,.05), 0 8px 22px rgba(25,28,50,.055);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#101119; --card:#1a1c26; --ink:#eceef7; --ink-2:#a2a7be; --ink-3:#767b91;
+    --line:#282b39; --line-2:#212431;
+    --accent:#7c74f0; --accent-2:#918bf5; --accent-soft:#232441;
+    --danger:#ff6b74; --danger-soft:#3a1e21; --danger-line:#5c2b30;
+    --warn:#e8b462; --warn-soft:#33280f; --warn-line:#4d3c18;
+    --ok:#3ddc84;
+    --homework:#7c74f0; --exercise:#22b8d6; --memo:#e8b462;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 22px rgba(0,0,0,.26);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;height:100dvh;margin:0;overflow:hidden}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,textarea{font:inherit;color:inherit}
+
+#app{display:flex;flex-direction:column;height:100%;height:100dvh;max-width:520px;margin:0 auto;position:relative;background:var(--bg)}
+@media (min-width:560px){
+  body{background:#e9eaef}
+  #app{box-shadow:0 0 0 1px var(--line), 0 20px 60px rgba(0,0,0,.08)}
+}
+@media (prefers-color-scheme: dark) and (min-width:560px){ body{background:#0a0b11} }
+
+/* ============================ 顶栏 ============================ */
+.topbar{
+  padding:calc(var(--safe-t) + 14px) 18px 10px;background:var(--card);
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  border-bottom:1px solid var(--line);
+}
+.topbar h1{margin:0;font-size:17px;font-weight:700;letter-spacing:.3px}
+.topbar .sub{font-size:12px;color:var(--ink-3);margin-top:1px}
+.icon-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--line-2);font-size:16px}
+.icon-btn:active{transform:scale(.94)}
+
+/* ============================ 提醒横幅 ============================ */
+.banner{
+  display:flex;gap:10px;align-items:flex-start;margin:12px 14px 0;padding:12px 14px;
+  border-radius:var(--r-md);border:1px solid transparent;font-size:13.5px;line-height:1.5;
+}
+.banner.danger{background:var(--danger-soft);border-color:var(--danger-line);color:var(--danger)}
+.banner.warn{background:var(--warn-soft);border-color:var(--warn-line);color:var(--warn)}
+.banner .ico{font-size:16px;line-height:1.3}
+.banner b{font-weight:700}
+.banner .d{font-size:12px;opacity:.85;margin-top:2px}
+@media (prefers-color-scheme: dark){
+  .banner.danger{color:#ff9ba2} .banner.warn{color:#efc17e}
+}
+
+/* ============================ 分段切换 ============================ */
+.segwrap{padding:12px 14px 10px;background:var(--card);border-bottom:1px solid var(--line)}
+.seg{display:flex;gap:4px;background:var(--line-2);border-radius:14px;padding:4px}
+.seg button{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:9px 6px;border-radius:11px;font-size:14px;font-weight:600;color:var(--ink-2);
+  transition:.16s;
+}
+.seg button.on{background:var(--card);color:var(--accent);box-shadow:0 1px 4px rgba(25,28,50,.1)}
+.seg button .n{
+  font-size:11.5px;font-weight:700;background:var(--line);color:var(--ink-2);
+  min-width:19px;height:19px;line-height:19px;border-radius:99px;padding:0 5px;text-align:center;
+}
+.seg button.on .n{background:var(--accent);color:#fff}
+.seg button .e{font-size:15px}
+
+/* ============================ 滚动区 ============================ */
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 96px}
+.scroll::-webkit-scrollbar{width:0}
+
+/* ============================ 分组 ============================ */
+.group{margin-bottom:16px}
+.group-head{
+  display:flex;align-items:center;gap:8px;padding:0 4px 8px;
+  font-size:12.5px;font-weight:600;color:var(--ink-3);
+}
+.group-head .dot{width:7px;height:7px;border-radius:99px;background:var(--ink-3)}
+.group-head.danger{color:var(--danger)} .group-head.danger .dot{background:var(--danger)}
+.group-head.warn{color:var(--warn)} .group-head.warn .dot{background:var(--warn)}
+.group-head .cnt{margin-left:auto;font-weight:500;opacity:.75}
+/* 已完成折叠区 */
+details.collapsed{margin-bottom:16px}
+details.collapsed>summary{
+  list-style:none;cursor:pointer;padding:8px 4px;border-radius:10px;
+}
+details.collapsed>summary::-webkit-details-marker{display:none}
+details.collapsed>summary:active{background:var(--line-2)}
+details.collapsed>summary .dot{background:var(--ink-3);opacity:.6}
+details.collapsed[open]>summary{margin-bottom:2px}
+
+/* ============================ 条目卡片 ============================ */
+.item{
+  display:flex;gap:11px;align-items:flex-start;background:var(--card);
+  border-radius:var(--r-md);padding:12px;margin-bottom:8px;box-shadow:var(--shadow);
+  border-left:3px solid transparent;position:relative;
+}
+.item.tone-danger{border-left-color:var(--danger)}
+.item.tone-warn{border-left-color:var(--warn)}
+.item.tone-accent{border-left-color:var(--accent)}
+.item.done{opacity:.55}
+.item.done .t{text-decoration:line-through;text-decoration-color:var(--ink-3)}
+
+.tick{
+  flex:0 0 26px;width:26px;height:26px;border-radius:9px;border:2px solid var(--line);
+  display:grid;place-items:center;margin-top:1px;font-size:14px;color:transparent;
+  transition:.15s;
+}
+.tick:active{transform:scale(.9)}
+.item.done .tick{background:var(--ok);border-color:var(--ok);color:#fff}
+
+.item .body{flex:1;min-width:0}
+.item .t{font-size:15px;font-weight:600;line-height:1.35;word-break:break-word}
+/* 没写标题时，用正文第一行当标题（.untitled 这个类名不能叫 empty：
+   .empty 是空状态提示的样式，带 padding:52px 20px，会把这个标题撑得很高
+   —— 实测无标题备忘卡片被撑到 236px，真正的元凶就是这个 class 撞名）。 */
+.item .t.untitled{
+  color:var(--ink-3);font-weight:500;
+  display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.item .n{
+  font-size:12.5px;color:var(--ink-3);margin-top:3px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  white-space:pre-wrap;word-break:break-word;
+}
+.item .meta{display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap}
+.chip{
+  display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;
+  padding:2px 8px;border-radius:99px;background:var(--line-2);color:var(--ink-2);
+}
+.chip.danger{background:var(--danger-soft);color:var(--danger)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.calm{background:var(--line-2);color:var(--ink-2)}
+.chip .d{opacity:.7;font-weight:500}
+.chip.ph{background:var(--accent-soft);color:var(--accent)}
+
+.thumbs{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+.thumbs img{
+  width:52px;height:52px;object-fit:cover;border-radius:9px;border:1px solid var(--line);
+  background:var(--line-2);
+}
+.thumbs .more{
+  width:52px;height:52px;border-radius:9px;background:var(--line-2);display:grid;place-items:center;
+  font-size:12px;font-weight:600;color:var(--ink-2);
+}
+
+/* ============================ 空状态 ============================ */
+.empty{text-align:center;padding:52px 20px;color:var(--ink-3)}
+.empty .big{font-size:42px;margin-bottom:12px;opacity:.6}
+.empty p{margin:0 0 18px;font-size:13.5px;line-height:1.7}
+.btn-primary{
+  background:var(--accent);color:#fff;font-weight:600;font-size:14.5px;
+  padding:12px 22px;border-radius:99px;box-shadow:0 6px 18px rgba(79,70,229,.28);
+}
+.btn-primary:active{transform:scale(.97)}
+
+/* ============================ 悬浮按钮 ============================ */
+.fab{
+  position:absolute;right:18px;bottom:calc(22px + var(--safe-b));z-index:30;
+  width:58px;height:58px;border-radius:20px;display:grid;place-items:center;
+  background:linear-gradient(150deg,#6366f1,#4338ca);color:#fff;font-size:29px;font-weight:300;
+  box-shadow:0 10px 26px rgba(67,56,202,.4);line-height:1;transition:transform .16s,opacity .16s;
+}
+.fab:active{transform:scale(.9)}
+.fab.hide{opacity:0;pointer-events:none;transform:scale(.6)}
+
+/* ============================ 弹层 ============================ */
+.mask{
+  position:absolute;inset:0;background:rgba(18,20,40,.44);z-index:40;opacity:0;pointer-events:none;
+  transition:opacity .22s;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+}
+.mask.show{opacity:1;pointer-events:auto}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:50;background:var(--card);
+  border-radius:24px 24px 0 0;padding:8px 16px calc(12px + var(--safe-b));
+  transform:translateY(102%);transition:transform .3s cubic-bezier(.22,.9,.25,1);
+  max-height:94%;overflow-y:auto;box-shadow:0 -10px 40px rgba(0,0,0,.18);
+  overscroll-behavior:contain;
+}
+.sheet.show{transform:translateY(0)}
+.sheet-handle{width:38px;height:4px;border-radius:99px;background:var(--line);margin:2px auto 10px}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.sheet-head .st{font-size:15px;font-weight:700}
+.sheet-head .cancel{font-size:14px;color:var(--ink-2);padding:6px 8px;border-radius:8px;min-width:44px}
+.sheet-head .cancel:active{background:var(--line-2)}
+#sheetDelete{text-align:left;color:var(--danger);font-weight:500}
+#sheetCancel{text-align:right}
+
+.field{margin-bottom:11px}
+.field label{display:block;font-size:12px;color:var(--ink-3);margin-bottom:5px;font-weight:500}
+.field input,.field textarea{
+  width:100%;border:1px solid var(--line);background:var(--line-2);border-radius:var(--r-md);
+  padding:10px 12px;font-size:15px;outline:none;resize:none;
+}
+.field input:focus,.field textarea:focus{border-color:var(--accent);background:var(--accent-soft)}
+.field textarea{min-height:78px;line-height:1.5;font-size:14.5px}
+.field input::placeholder,.field textarea::placeholder{color:var(--ink-3)}
+
+.kindrow{display:flex;gap:7px;margin-bottom:11px}
+.kindbtn{
+  flex:1;display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:9px;border-radius:var(--r-md);background:var(--line-2);border:1.5px solid transparent;
+  font-size:13.5px;font-weight:600;color:var(--ink-2);
+}
+.kindbtn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.kindbtn[data-kind="exercise"].on{border-color:var(--exercise);color:var(--exercise);background:rgba(8,145,178,.1)}
+@media (prefers-color-scheme: dark){ .kindbtn[data-kind="exercise"].on{background:rgba(34,184,214,.14)} }
+
+.photo-label{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.photo-label span{font-size:12px;color:var(--ink-3);font-weight:500}
+.photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.photo-cell{
+  position:relative;aspect-ratio:1;border-radius:11px;overflow:hidden;border:1px solid var(--line);
+  background:var(--line-2);
+}
+.photo-cell img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-cell .rm{
+  position:absolute;top:3px;right:3px;width:21px;height:21px;border-radius:99px;
+  background:rgba(20,22,40,.72);color:#fff;font-size:13px;display:grid;place-items:center;line-height:1;
+}
+.photo-add{
+  aspect-ratio:1;border-radius:11px;border:1.5px dashed var(--line);background:var(--line-2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  font-size:11px;color:var(--ink-3);font-weight:500;
+}
+.photo-add .p{font-size:19px;line-height:1}
+.photo-add:active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+.sheet-actions{display:flex;gap:8px;margin-top:14px}
+.btn-save{
+  flex:1;background:var(--accent);color:#fff;font-weight:600;font-size:15px;
+  padding:13px;border-radius:var(--r-md);box-shadow:0 6px 16px rgba(79,70,229,.26);
+}
+.btn-save:active{transform:scale(.98)}
+.btn-done{
+  flex:0 0 auto;padding:13px 16px;border-radius:var(--r-md);background:var(--line-2);
+  font-size:14px;font-weight:600;color:var(--ink-2);border:1px solid var(--line);
+}
+.btn-done.is-done{background:var(--ok);border-color:var(--ok);color:#fff}
+
+/* ============================ 照片查看（可缩放） ============================ */
+.viewer{
+  position:absolute;inset:0;z-index:70;background:rgba(10,11,20,.96);
+  display:none;flex-direction:column;
+}
+.viewer.show{display:flex}
+.viewer .vhead{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:calc(var(--safe-t) + 12px) 16px 10px;color:#fff;font-size:14px;
+}
+.viewer .vhead button{color:#fff;font-size:15px;padding:6px 10px;border-radius:8px}
+.viewer .vhead button:active{background:rgba(255,255,255,.16)}
+.viewer .vhead .zoomtag{
+  font-size:12px;color:rgba(255,255,255,.65);margin-left:6px;
+}
+/* 触摸区：overflow:hidden 让放大后的图不会溢出到别处 */
+.vbody{
+  flex:1;position:relative;overflow:hidden;min-height:0;
+  touch-action:none;                    /* 自己处理手势，别让浏览器抢去滚动 */
+  -webkit-user-select:none;user-select:none;
+  display:flex;align-items:center;justify-content:center;
+  cursor:grab;
+}
+.vbody:active{cursor:grabbing}
+/* transform-origin 必须在中心：缩放平移的数学都按「相对容器中心」推导 */
+.vbody img{
+  max-width:100%;max-height:100%;object-fit:contain;display:block;
+  transform-origin:center center;
+  will-change:transform;
+  -webkit-user-drag:none;
+}
+.viewer .vfoot{
+  display:flex;gap:7px;justify-content:center;align-items:center;
+  padding:12px 12px calc(14px + var(--safe-b));flex-wrap:wrap;
+}
+.viewer .vfoot button{
+  color:#fff;background:rgba(255,255,255,.14);padding:9px 14px;border-radius:99px;
+  font-size:13px;white-space:nowrap;
+}
+.viewer .vfoot button:active{background:rgba(255,255,255,.26)}
+.viewer .vfoot .zbtn{
+  background:rgba(255,255,255,.2);min-width:44px;padding:9px 12px;font-size:16px;font-weight:600;
+}
+/* 提示单独占一行，且用负 margin 抵消 flex 的 gap，
+   否则它会被当成第 5 个按钮参与换行，把「上一张/下一张」挤到下一行去。 */
+.viewer .vfoot .hint{
+  flex:0 0 100%;width:100%;text-align:center;color:rgba(255,255,255,.5);
+  font-size:11px;margin-top:6px;
+}
+
+/* ============================ 备忘录 ============================ */
+.seg button[data-kind="memo"].on{color:var(--memo)}
+.seg button[data-kind="memo"].on .n{background:var(--memo)}
+.kindbtn[data-kind="memo"].on{border-color:var(--memo);color:var(--memo);background:rgba(194,116,10,.1)}
+@media (prefers-color-scheme: dark){ .kindbtn[data-kind="memo"].on{background:rgba(232,180,98,.14)} }
+
+/* 搜索栏（只在备忘录区显示） */
+.searchwrap{
+  display:none;padding:0 14px 10px;background:var(--card);border-bottom:1px solid var(--line);
+}
+.searchwrap.show{display:block}
+.searchbox{
+  display:flex;align-items:center;gap:8px;background:var(--line-2);
+  border:1px solid var(--line);border-radius:12px;padding:8px 12px;
+}
+.searchbox:focus-within{border-color:var(--accent);background:var(--accent-soft)}
+.searchbox .ico{font-size:14px;color:var(--ink-3)}
+.searchbox input{
+  flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:14px;
+}
+.searchbox input::placeholder{color:var(--ink-3)}
+.searchbox .clr{
+  font-size:12px;color:var(--accent);font-weight:600;padding:4px 8px;border-radius:8px;display:none;
+}
+.searchbox .clr.show{display:block}
+.searchbox .clr:active{background:var(--accent-soft)}
+/* 搜索结果的计数提示 */
+.searchinfo{
+  padding:8px 18px 0;font-size:12.5px;color:var(--ink-3);
+}
+/* 备忘录卡片：正文按原文换行，保留空行 */
+/* 备忘录卡片：正文按原文换行，允许比作业说明多几行 */
+.item .n.memo{
+  -webkit-line-clamp:4;line-height:1.6;color:var(--ink-2);font-size:13px;
+}
+/* 没写标题时，正文用第一行当标题，剩下的行数要少一点 ——
+   否则一条只有一句话的备忘会被撑到很高的卡片，中间全是空白（实测踩过）。 */
+.item .n.memo.loose{-webkit-line-clamp:2}
+.item .memo-mark{
+  font-size:11px;color:var(--memo);font-weight:600;
+}
+
+/* ============================ 提示条 ============================ */
+.toast{
+  position:absolute;left:50%;bottom:calc(96px + var(--safe-b));transform:translate(-50%,14px);
+  background:rgba(24,26,45,.95);color:#fff;font-size:13.5px;padding:10px 18px;border-radius:99px;
+  z-index:90;opacity:0;pointer-events:none;transition:.22s;max-width:88%;text-align:center;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:rgba(200,45,55,.96)}
+
+/* ============================ 矮屏自适应 ============================ */
+@media (max-height:720px){
+  .field textarea{min-height:60px}
+  .sheet-handle{margin-bottom:7px}
+  .sheet-head{margin-bottom:8px}
+  .field{margin-bottom:9px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div>
+      <h1>作业盒子</h1>
+      <div class="sub" id="todayLine">—</div>
+    </div>
+    <button class="icon-btn" id="btnData" title="数据与备份">⚙️</button>
+  </header>
+
+  <div id="bannerHost"></div>
+
+  <div class="segwrap">
+    <div class="seg" id="seg">
+      <button data-kind="homework" class="on"><span class="e">📘</span>作业<span class="n" id="cntHomework">0</span></button>
+      <button data-kind="exercise"><span class="e">✏️</span>课堂习题<span class="n" id="cntExercise">0</span></button>
+      <button data-kind="memo"><span class="e">📝</span>备忘<span class="n" id="cntMemo">0</span></button>
+    </div>
+  </div>
+
+  <!-- 搜索：只在备忘录区显示。想法一多就需要找得回来。 -->
+  <div class="searchwrap" id="searchWrap">
+    <div class="searchbox">
+      <span class="ico">🔍</span>
+      <input type="search" id="searchInput" placeholder="搜标题或内容…" autocomplete="off" enterkeyhint="search">
+      <button class="clr" id="searchClear">清空</button>
+    </div>
+  </div>
+
+  <main class="scroll" id="scroll"></main>
+
+  <button class="fab" id="fab" title="添加">＋</button>
+
+  <!-- ==================== 添加 / 编辑弹层 ==================== -->
+  <div class="mask" id="mask"></div>
+  <div class="sheet" id="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button class="cancel" id="sheetDelete" style="display:none">删除</button>
+      <span class="st" id="sheetTitle">添加作业</span>
+      <button class="cancel" id="sheetCancel">取消</button>
+    </div>
+
+    <div class="kindrow" id="kindRow">
+      <button class="kindbtn on" data-kind="homework">📘 作业</button>
+      <button class="kindbtn" data-kind="exercise">✏️ 课堂习题</button>
+      <button class="kindbtn" data-kind="memo">📝 备忘</button>
+    </div>
+
+    <div class="field">
+      <label for="titleInput" id="titleLabel">这是什么</label>
+      <input type="text" id="titleInput" maxlength="60" placeholder="比如：数学练习册 P32" autocomplete="off">
+    </div>
+
+    <div class="field" id="dueField">
+      <label for="dueInput">截止日期（选填）</label>
+      <input type="date" id="dueInput">
+    </div>
+
+    <div class="field">
+      <label for="noteInput" id="noteLabel">文字说明（选填）</label>
+      <textarea id="noteInput" maxlength="5000" placeholder="比如：第 1-5 题，明天上课要交；或者题目要求抄下来"></textarea>
+    </div>
+
+    <div class="field" style="margin-bottom:6px">
+      <div class="photo-label">
+        <span id="photoLabel">照片（拍的作业 / 黑板 / 题目）</span>
+        <span id="photoCount">0 / 30</span>
+      </div>
+      <div class="photo-grid" id="photoGrid"></div>
+    </div>
+
+    <div class="sheet-actions">
+      <button class="btn-done" id="btnDone">标记完成</button>
+      <button class="btn-save" id="btnSave">保存</button>
+    </div>
+
+    <input type="file" id="fileCamera" accept="image/*" capture="environment" multiple style="display:none">
+    <input type="file" id="fileGallery" accept="image/*" multiple style="display:none">
+  </div>
+
+  <!-- ==================== 照片查看（支持双指缩放 / 双击放大 / 拖动） ==================== -->
+  <div class="viewer" id="viewer">
+    <div class="vhead">
+      <span><span id="viewerTitle">照片</span><span class="zoomtag" id="viewerZoom"></span></span>
+      <button id="viewerClose">关闭</button>
+    </div>
+    <div class="vbody" id="viewerBody"><img id="viewerImg" alt="" draggable="false"></div>
+    <div class="vfoot">
+      <button class="zbtn" id="viewerZoomOut" title="缩小">−</button>
+      <button class="zbtn" id="viewerZoomReset" title="还原">1:1</button>
+      <button class="zbtn" id="viewerZoomIn" title="放大">＋</button>
+      <button id="viewerPrev">‹ 上一张</button>
+      <button id="viewerNext">下一张 ›</button>
+      <div class="hint">双指缩放 · 双击放大/还原 · 放大后拖动看图</div>
+    </div>
+  </div>
+
+  <!-- ==================== 数据弹层 ==================== -->
+  <div class="mask" id="mask2"></div>
+  <div class="sheet" id="sheet2">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <span class="st">数据与备份</span>
+      <button class="cancel" id="dataCancel">关闭</button>
+    </div>
+    <div id="dataBody"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+/* ==========================================================================
+ * 作业盒子 —— 单文件离线应用
+ * 结构：① 逻辑层(inline)  ② 状态与存储  ③ 图片压缩  ④ 渲染  ⑤ 事件
+ * 无网络请求、无外部依赖、无第三方脚本。
+ * ========================================================================== */
+/* ---------------------------------------------------------------------------
+ * 以下为逻辑层（由 homework-app/logic.js 自动内联，请勿直接在此修改）。
+ * 单元测试：homework-app/test-logic.js（241 项）
+ * ------------------------------------------------------------------------- */
+/* ===========================================================================
+ * 作业盒子 —— 纯逻辑层（不依赖 DOM / 网络）
+ *
+ * 两个区：
+ *   homework 作业 —— 有标题、说明、照片、截止日期、完成状态
+ *   exercise 习题 —— 只有标题、说明、照片（上课拍的题，没有截止日期）
+ *
+ * 金额那类浮点精度问题这里没有，但日期计算是核心，全部按「本地日期字符串」
+ * （YYYY-MM-DD）处理，绝不用 Date 时间戳做跨天比较，避免时区/夏令时误差。
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.HomeworkLogic = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  var KINDS = {
+    homework: { key: 'homework', name: '作业', emoji: '📘', hasDue: true },
+    exercise: { key: 'exercise', name: '课上习题', emoji: '✏️', hasDue: false },
+    memo: { key: 'memo', name: '备忘录', emoji: '📝', hasDue: false, isMemo: true }
+  };
+
+  /** 合法的 kind 值，用于校验与规范化 */
+  var KIND_KEYS = ['homework', 'exercise', 'memo'];
+
+  var DATA_VERSION = 1;
+
+  /** 单张照片的体积上限（字符数）。压缩后一般 10 万~30 万，这里留足余量。 */
+  var MAX_PHOTO_CHARS = 3000000;
+  var MAX_PHOTOS = 30;
+  var MAX_TITLE = 60;
+  var MAX_NOTE = 2000;
+  var MAX_CAPTION = 40;
+  /** 单条备忘录正文上限：比作业说明长得多，因为备忘录就是拿来写东西的 */
+  var MAX_MEMO = 5000;
+
+  /* ----------------------------- 日期工具 ----------------------------- */
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /** Date -> 'YYYY-MM-DD'（本地时间，不用 toISOString 以免时区偏移） */
+  function toDateKey(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  /** 'YYYY-MM-DD' -> Date（本地零点）；非法返回 null */
+  function fromDateKey(s) {
+    if (typeof s !== 'string') return null;
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], da = +m[3];
+    if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+    var d = new Date(y, mo - 1, da);
+    // 拒绝 2 月 31 日这类被自动进位的日期
+    if (d.getFullYear() !== y || d.getMonth() !== mo - 1 || d.getDate() !== da) return null;
+    return d;
+  }
+
+  function isValidDateKey(s) { return fromDateKey(s) !== null; }
+
+  /**
+   * 两个日期相差几天（b - a）。
+   * 用「本地零点」的差值再四舍五入，这样跨夏令时也不会差一天的错。
+   */
+  function daysBetween(aKey, bKey) {
+    var a = fromDateKey(aKey), b = fromDateKey(bKey);
+    if (!a || !b) return null;
+    return Math.round((b - a) / 86400000);
+  }
+
+  /** 还有几天到期（负数=已过期）。dueKey 为空返 null */
+  function daysUntil(dueKey, todayKey) {
+    if (!isValidDateKey(dueKey)) return null;
+    return daysBetween(todayKey, dueKey);
+  }
+
+  /* ----------------------------- 截止状态 ----------------------------- */
+
+  /**
+   * 把一个截止日期翻译成手机上好读的状态。
+   * 返回 { level, text, short, overdue, urgent }
+   *   level: none | overdue | today | tomorrow | soon | week | later
+   */
+  function dueStatus(dueKey, todayKey) {
+    if (!isValidDateKey(dueKey)) {
+      return { level: 'none', text: '', short: '', overdue: false, urgent: false, days: null };
+    }
+    var days = daysUntil(dueKey, todayKey);
+    var d = fromDateKey(dueKey);
+
+    if (days < 0) {
+      var late = -days;
+      return {
+        level: 'overdue', days: days, overdue: true, urgent: true,
+        text: late === 1 ? '昨天就到期了' : '已过 ' + late + ' 天',
+        short: '逾期 ' + late + ' 天'
+      };
+    }
+    if (days === 0) return { level: 'today', days: 0, overdue: false, urgent: true, text: '今天截止', short: '今天' };
+    if (days === 1) return { level: 'tomorrow', days: 1, overdue: false, urgent: true, text: '明天截止', short: '明天' };
+    if (days === 2) return { level: 'soon', days: 2, overdue: false, urgent: true, text: '后天截止', short: '后天' };
+    if (days <= 7) return { level: 'soon', days: days, overdue: false, urgent: true, text: '还有 ' + days + ' 天', short: days + ' 天后' };
+    if (days <= 30) return { level: 'week', days: days, overdue: false, urgent: false, text: '还有 ' + days + ' 天', short: days + ' 天后' };
+    return {
+      level: 'later', days: days, overdue: false, urgent: false,
+      text: (d.getMonth() + 1) + '月' + d.getDate() + '日截止',
+      short: (d.getMonth() + 1) + '/' + d.getDate()
+    };
+  }
+
+  /** 相对日期的人话：今天 / 昨天 / 6月3日 */
+  function relativeDate(dateKey, todayKey) {
+    var days = daysUntil(dateKey, todayKey);
+    if (days === null) return '';
+    if (days === 0) return '今天';
+    if (days === -1) return '昨天';
+    if (days === 1) return '明天';
+    var d = fromDateKey(dateKey);
+    if (!d) return dateKey;
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
+
+  /** 'YYYY-MM-DD' -> '2026年10月7日' */
+  function longDate(dateKey) {
+    var d = fromDateKey(dateKey);
+    if (!d) return '';
+    return d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日';
+  }
+
+  /* ----------------------------- 数据规范化 ----------------------------- */
+
+  function emptyState() {
+    return { version: DATA_VERSION, items: [] };
+  }
+
+  var uidCounter = 0;
+  function uid(prefix) {
+    uidCounter += 1;
+    return (prefix || 'i') + Date.now().toString(36) + uidCounter.toString(36) +
+      Math.floor(Math.random() * 1296).toString(36);
+  }
+
+  /**
+   * 清洗照片数组。
+   * 返回 { photos, dropped }：
+   *   dropped > 0 表示有照片因为格式不对或太大被丢掉。
+   *   ⚠️ 调用方必须把 dropped 变成给用户的提示，否则就是「照片静默消失」。
+   */
+  function cleanPhotosDetailed(raw) {
+    var out = [];
+    var dropped = 0;
+    var list = Array.isArray(raw) ? raw : [];
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i];
+      if (!p || typeof p !== 'object') { dropped++; continue; }
+      var data = typeof p.data === 'string' ? p.data : '';
+      // 只接受内嵌图片，绝不接受 http(s) 外链（保证完全离线）
+      if (data.indexOf('data:image/') !== 0) { dropped++; continue; }
+      if (data.length > MAX_PHOTO_CHARS) { dropped++; continue; }
+      if (out.length >= MAX_PHOTOS) { dropped++; continue; }
+      out.push({
+        id: typeof p.id === 'string' && p.id ? p.id : uid('p'),
+        data: data,
+        caption: typeof p.caption === 'string' ? p.caption.slice(0, MAX_CAPTION) : '',
+        at: typeof p.at === 'number' && isFinite(p.at) ? p.at : 0
+      });
+    }
+    return { photos: out, dropped: dropped };
+  }
+
+  /** 只要照片数组的简写（内部使用） */
+  function cleanPhotos(raw) { return cleanPhotosDetailed(raw).photos; }
+
+  /** 把 dropped 数量变成一句人话 */
+  function droppedMessage(dropped) {
+    if (!dropped) return '';
+    return dropped === 1
+      ? '有 1 张照片没能保存（格式不支持或太大），其他内容已存下'
+      : '有 ' + dropped + ' 张照片没能保存（格式不支持或太大），其他内容已存下';
+  }
+
+  /**
+   * 把任意（可能损坏 / 旧版 / 导入的）对象规范成合法 state。
+   * 永不抛异常：坏数据丢弃而不是让整个 App 打不开。
+   */
+  function normalizeState(raw) {
+    var st = emptyState();
+    if (!raw || typeof raw !== 'object') return st;
+    var list = Array.isArray(raw.items) ? raw.items : [];
+    var seen = {};
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      if (!it || typeof it !== 'object') continue;
+
+      var kind = KIND_KEYS.indexOf(it.kind) > -1 ? it.kind : 'homework';
+      var isMemo = kind === 'memo';
+      // 备忘录允许写更长的正文
+      var noteLimit = isMemo ? MAX_MEMO : MAX_NOTE;
+      var title = typeof it.title === 'string' ? it.title.trim().slice(0, MAX_TITLE) : '';
+      var photos = cleanPhotos(it.photos);
+      var note = typeof it.note === 'string' ? it.note.slice(0, noteLimit) : '';
+      // 什么都没有的条目没有意义，丢掉
+      if (!title && !note && photos.length === 0) continue;
+
+      // 只有作业才存截止日期
+      var due = kind === 'homework' && isValidDateKey(it.due) ? it.due : null;
+
+      var id = typeof it.id === 'string' && it.id ? it.id : uid();
+      if (seen[id]) id = uid();
+      seen[id] = true;
+
+      st.items.push({
+        id: id,
+        kind: kind,
+        title: title,
+        note: note,
+        due: due,
+        photos: photos,
+        done: !!it.done,
+        createdAt: typeof it.createdAt === 'number' && isFinite(it.createdAt) ? it.createdAt : 0,
+        updatedAt: typeof it.updatedAt === 'number' && isFinite(it.updatedAt) ? it.updatedAt : 0,
+        doneAt: typeof it.doneAt === 'number' && isFinite(it.doneAt) ? it.doneAt : 0
+      });
+    }
+    st.version = DATA_VERSION;
+    return st;
+  }
+
+  /* ----------------------------- 查询 ----------------------------- */
+
+  function itemsOfKind(state, kind) {
+    var list = (state && state.items) || [];
+    return list.filter(function (x) { return x.kind === kind; });
+  }
+
+  function findItem(state, id) {
+    var list = (state && state.items) || [];
+    for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+    return null;
+  }
+
+  function countPhotos(state) {
+    var n = 0;
+    ((state && state.items) || []).forEach(function (x) { n += x.photos.length; });
+    return n;
+  }
+
+  /** 估算体积（字节数，按 UTF-8 粗估）。用于提示用户快满了。 */
+  function estimateBytes(state) {
+    try {
+      var s = JSON.stringify(normalizeState(state));
+      // 中文/Base64 混合，粗略按 UTF-8 上限估算
+      var bytes = 0;
+      for (var i = 0; i < s.length; i++) {
+        var c = s.charCodeAt(i);
+        bytes += c < 128 ? 1 : (c < 2048 ? 2 : 3);
+      }
+      return bytes;
+    } catch (e) { return 0; }
+  }
+
+  function formatBytes(bytes) {
+    var n = Number(bytes) || 0;
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+    return (n / 1024 / 1024).toFixed(1) + ' MB';
+  }
+
+  /**
+   * 待完成条目按紧急度分拣。只处理未完成的。
+   * 返回 { overdue:[], today:[], soon:[], later:[], none:[] }
+   * soon = 2~7 天；later = 8 天以上
+   */
+  function bucketByUrgency(items, todayKey) {
+    var out = { overdue: [], today: [], soon: [], later: [], none: [] };
+    (items || []).forEach(function (it) {
+      if (it.done) return;
+      var st = dueStatus(it.due, todayKey);
+      if (st.level === 'none') out.none.push(it);
+      else if (st.level === 'overdue') out.overdue.push(it);
+      else if (st.level === 'today') out.today.push(it);
+      else if (st.level === 'soon' || st.level === 'tomorrow') out.soon.push(it);
+      else out.later.push(it);
+    });
+    // 每组内部按截止日期升序（没日期的放最后），再按创建时间倒序
+    ['overdue', 'today', 'soon', 'later', 'none'].forEach(function (k) {
+      out[k].sort(function (a, b) {
+        if (a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1;
+        if (a.due && !b.due) return -1;
+        if (!a.due && b.due) return 1;
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+    });
+    return out;
+  }
+
+  /**
+   * 首页要显示的内容。
+   * 返回 {
+   *   kind, pending, done, groups:[{key,title,tone,items}],
+   *   banner:{ level, text, detail } | null
+   * }
+   */
+  /** 条目是否匹配搜索词（标题 + 正文，不区分大小写） */
+  function matchesQuery(item, query) {
+    if (!query) return true;
+    var q = String(query).trim().toLowerCase();
+    if (!q) return true;
+    var hay = ((item.title || '') + '\n' + (item.note || '')).toLowerCase();
+    return hay.indexOf(q) > -1;
+  }
+
+  /**
+   * 按「今天 / 昨天 / 更早」把备忘录分组。
+   * 备忘录是随手记想法，按时间倒序最符合直觉。
+   */
+  function groupMemoByDate(items, todayKey) {
+    // 对外输入一律不抛异常（本项目约定）：null / 非数组当作空
+    if (!Array.isArray(items)) items = [];
+    var today = [], yesterday = [], earlier = [];
+    var tk = isValidDateKey(todayKey) ? todayKey : null;
+    var yk = null;
+    if (tk) {
+      var d = fromDateKey(tk);
+      d.setDate(d.getDate() - 1);
+      yk = toDateKey(d);
+    }
+    items.forEach(function (it) {
+      // 没有 createdAt 的用当天兜底
+      var day = it.createdAt ? toDateKey(new Date(it.createdAt)) : tk;
+      if (!tk || !day) { earlier.push(it); return; }
+      if (day === tk) today.push(it);
+      else if (day === yk) yesterday.push(it);
+      else earlier.push(it);
+    });
+    var groups = [];
+    if (today.length) groups.push({ key: 'today', title: '今天记的', tone: 'calm', items: today });
+    if (yesterday.length) groups.push({ key: 'yesterday', title: '昨天', tone: 'calm', items: yesterday });
+    if (earlier.length) groups.push({ key: 'earlier', title: '更早', tone: 'calm', items: earlier });
+    return groups;
+  }
+
+  function kindSummary(state, kind, todayKey, opts) {
+    opts = opts || {};
+    var all = itemsOfKind(state, kind);
+    var pending = all.filter(function (x) { return !x.done; });
+    var done = all.filter(function (x) { return x.done; });
+
+    var cfg = KINDS[kind] || KINDS.homework;
+    var groups = [];
+    var banner = null;
+
+    if (cfg.hasDue) {
+      var b = bucketByUrgency(all, todayKey);
+      var parts = [];
+      if (b.overdue.length) parts.push('逾期 ' + b.overdue.length + ' 项');
+      if (b.today.length) parts.push('今天截止 ' + b.today.length + ' 项');
+      if (parts.length) {
+        banner = {
+          level: b.overdue.length ? 'danger' : 'warn',
+          text: parts.join('，'),
+          detail: b.overdue.length
+            ? '先把逾期的补上，再看今天的。'
+            : '今天要做完的别拖到晚上。'
+        };
+      }
+      if (b.overdue.length) groups.push({ key: 'overdue', title: '已逾期', tone: 'danger', items: b.overdue });
+      if (b.today.length) groups.push({ key: 'today', title: '今天截止', tone: 'danger', items: b.today });
+      if (b.soon.length) groups.push({ key: 'soon', title: '这一周内', tone: 'warn', items: b.soon });
+      if (b.later.length) groups.push({ key: 'later', title: '以后', tone: 'calm', items: b.later });
+      if (b.none.length) groups.push({ key: 'none', title: '没填截止日期', tone: 'calm', items: b.none });
+      // 已完成的也要能被翻到，否则用户会以为记录丢了
+      var doneSorted = done.slice().sort(function (a, b2) {
+        if ((b2.doneAt || 0) !== (a.doneAt || 0)) return (b2.doneAt || 0) - (a.doneAt || 0);
+        return String(b2.id) < String(a.id) ? -1 : 1;
+      });
+      if (doneSorted.length) groups.push({ key: 'done', title: '已完成', tone: 'muted', items: doneSorted });
+    } else if (cfg.isMemo) {
+      // 备忘录：按时间倒序，按「今天 / 昨天 / 更早」分组。
+      // 搜索时把已归档的也算进来（否则会「搜不到」）；
+      // 不搜索时归档的单独收进 done 组 —— 和习题区一致，用户能翻得到，不会以为丢了。
+      var q = opts.query ? String(opts.query).trim() : '';
+      var hit = all.filter(function (x) { return matchesQuery(x, q); });
+      var byTimeDesc = hit.slice().sort(function (a, b2) {
+        if ((b2.createdAt || 0) !== (a.createdAt || 0)) return (b2.createdAt || 0) - (a.createdAt || 0);
+        return String(b2.id) < String(a.id) ? -1 : 1;
+      });
+      var memoPending = byTimeDesc.filter(function (x) { return !x.done; });
+      var memoDone = byTimeDesc.filter(function (x) { return x.done; });
+      groupMemoByDate(memoPending, todayKey).forEach(function (g) { groups.push(g); });
+      if (memoDone.length) groups.push({ key: 'done', title: '已归档', tone: 'muted', items: memoDone });
+
+      return {
+        kind: kind,
+        pendingCount: pending.length,
+        doneCount: done.length,
+        total: all.length,
+        matched: q ? hit.length : all.length,
+        query: q,
+        groups: groups,
+        banner: null
+      };
+    } else {
+      // 习题：按创建时间倒序（新拍的放上面）。createdAt 可能同毫秒，用 id 兜底保证顺序稳定。
+      var sorted = pending.slice().sort(function (a, b2) {
+        if ((b2.createdAt || 0) !== (a.createdAt || 0)) return (b2.createdAt || 0) - (a.createdAt || 0);
+        return String(b2.id) < String(a.id) ? -1 : 1;
+      });
+      var sortedDone = done.slice().sort(function (a, b2) {
+        if ((b2.doneAt || 0) !== (a.doneAt || 0)) return (b2.doneAt || 0) - (a.doneAt || 0);
+        return String(b2.id) < String(a.id) ? -1 : 1;
+      });
+      if (sorted.length) groups.push({ key: 'all', title: '最近拍的', tone: 'calm', items: sorted });
+      if (sortedDone.length) groups.push({ key: 'done', title: '已归档', tone: 'muted', items: sortedDone });
+    }
+
+    return {
+      kind: kind,
+      pendingCount: pending.length,
+      doneCount: done.length,
+      total: all.length,
+      groups: groups,
+      banner: banner
+    };
+  }
+
+  /** 有照片、且是作业的条目最多；用来给列表排序或提示 */
+  function photoStats(state) {
+    var withPhoto = 0, noPhoto = 0;
+    ((state && state.items) || []).forEach(function (x) {
+      if (x.photos.length) withPhoto++; else noPhoto++;
+    });
+    return { withPhoto: withPhoto, noPhoto: noPhoto, photos: countPhotos(state) };
+  }
+
+  /* ----------------------------- 变更操作 ----------------------------- */
+
+  /** 新增一条。返回 { state, item } 或 { error } —— 不修改入参 */
+  function addItem(state, input) {
+    input = input || {};
+    var kind = KIND_KEYS.indexOf(input.kind) > -1 ? input.kind : 'homework';
+    var noteLimit = kind === 'memo' ? MAX_MEMO : MAX_NOTE;
+    var title = typeof input.title === 'string' ? input.title.trim().slice(0, MAX_TITLE) : '';
+    var note = typeof input.note === 'string' ? input.note.slice(0, noteLimit) : '';
+    var cleaned = cleanPhotosDetailed(input.photos);
+    var photos = cleaned.photos;
+    if (!title && !note && photos.length === 0) {
+      // 有照片被丢掉时，给出更准确的原因，而不是笼统的「写点什么」
+      if (cleaned.dropped) return { error: droppedMessage(cleaned.dropped) };
+      return { error: kind === 'memo' ? '写点什么再存' : '写点什么，或者加张照片' };
+    }
+
+    var due = null;
+    if (KINDS[kind].hasDue && input.due) {
+      if (!isValidDateKey(input.due)) return { error: '截止日期不对' };
+      due = input.due;
+    }
+
+    var now = Date.now();
+    var item = {
+      id: uid(),
+      kind: kind,
+      title: title,
+      note: note,
+      due: due,
+      photos: photos,
+      done: false,
+      createdAt: now,
+      updatedAt: now,
+      doneAt: 0
+    };
+    var next = normalizeState(state);
+    next.items.push(item);
+    return { state: next, item: item, photoWarning: droppedMessage(cleaned.dropped) };
+  }
+
+  /** 修改一条。只改传入的字段。返回 { state, item } 或 { error } */
+  function updateItem(state, id, patch) {
+    var next = normalizeState(state);
+    var idx = -1;
+    for (var i = 0; i < next.items.length; i++) {
+      if (next.items[i].id === id) { idx = i; break; }
+    }
+    if (idx === -1) return { error: '这条不存在了' };
+    var old = next.items[idx];
+    patch = patch || {};
+
+    var merged = {
+      title: patch.title !== undefined ? patch.title : old.title,
+      note: patch.note !== undefined ? patch.note : old.note,
+      due: patch.due !== undefined ? patch.due : old.due,
+      photos: patch.photos !== undefined ? patch.photos : old.photos,
+      done: patch.done !== undefined ? !!patch.done : old.done
+    };
+
+    var noteLimit = old.kind === 'memo' ? MAX_MEMO : MAX_NOTE;
+    var title = typeof merged.title === 'string' ? merged.title.trim().slice(0, MAX_TITLE) : '';
+    var note = typeof merged.note === 'string' ? merged.note.slice(0, noteLimit) : '';
+    var cleaned = cleanPhotosDetailed(merged.photos);
+    var photos = cleaned.photos;
+
+    if (!title && !note && photos.length === 0) {
+      if (cleaned.dropped) return { error: droppedMessage(cleaned.dropped) };
+      return { error: old.kind === 'memo' ? '写点什么再存' : '写点什么，或者加张照片' };
+    }
+
+    var due = null;
+    if (KINDS[old.kind].hasDue && merged.due) {
+      // 允许用 '' 或 null 清空截止日期（UI 上就是清掉日期输入框）
+      if (merged.due === null || merged.due === '') due = null;
+      else if (isValidDateKey(merged.due)) due = merged.due;
+      else return { error: '截止日期不对' };
+    }
+
+    var wasDone = old.done;
+    next.items[idx] = {
+      id: old.id,
+      kind: old.kind,
+      title: title,
+      note: note,
+      due: due,
+      photos: photos,
+      done: merged.done,
+      createdAt: old.createdAt || Date.now(),
+      updatedAt: Date.now(),
+      doneAt: merged.done ? (wasDone && old.doneAt ? old.doneAt : Date.now()) : 0
+    };
+    return { state: next, item: next.items[idx], photoWarning: droppedMessage(cleaned.dropped) };
+  }
+
+  /** 勾选 / 取消完成 */
+  function toggleDone(state, id) {
+    var it = findItem(state, id);
+    if (!it) return { error: '这条不存在了' };
+    return updateItem(state, id, { done: !it.done });
+  }
+
+  function removeItem(state, id) {
+    var next = normalizeState(state);
+    next.items = next.items.filter(function (x) { return x.id !== id; });
+    return next;
+  }
+
+  function addPhoto(state, id, photo) {
+    var it = findItem(state, id);
+    if (!it) return { error: '这条不存在了' };
+    if (it.photos.length >= MAX_PHOTOS) return { error: '一条最多放 ' + MAX_PHOTOS + ' 张照片' };
+    var cleaned = cleanPhotosDetailed([photo]);
+    if (!cleaned.photos.length) {
+      return { error: cleaned.dropped ? droppedMessage(cleaned.dropped) : '照片格式不支持' };
+    }
+    var photos = it.photos.concat(cleaned.photos);
+    return updateItem(state, id, { photos: photos });
+  }
+
+  function removePhoto(state, id, photoId) {
+    var it = findItem(state, id);
+    if (!it) return { error: '这条不存在了' };
+    var photos = it.photos.filter(function (p) { return p.id !== photoId; });
+    return updateItem(state, id, { photos: photos });
+  }
+
+  /* ----------------------------- 导入 / 导出 ----------------------------- */
+
+  function serialize(state) {
+    var st = normalizeState(state);
+    return JSON.stringify({
+      app: '作业盒子',
+      version: DATA_VERSION,
+      exportedAt: new Date().toISOString(),
+      items: st.items
+    }, null, 2);
+  }
+
+  function deserialize(text) {
+    var data;
+    try { data = JSON.parse(String(text)); }
+    catch (e) { return { error: '不是合法的 JSON 文件' }; }
+    if (Array.isArray(data)) data = { items: data };
+    if (!data || typeof data !== 'object') return { error: '文件内容不是作业数据' };
+    if (!Array.isArray(data.items)) return { error: '文件里没有找到作业记录' };
+    var st = normalizeState(data);
+    if (st.items.length === 0) return { error: '文件里没有有效的记录' };
+    return { state: st };
+  }
+
+  /** CSV（给 Excel 看，不含照片） */
+  function toCSV(state) {
+    var st = normalizeState(state);
+    var rows = st.items.slice().sort(function (a, b) {
+      var ad = a.due || '9999-99-99', bd = b.due || '9999-99-99';
+      if (ad !== bd) return ad < bd ? -1 : 1;
+      return (b.createdAt || 0) - (a.createdAt || 0);
+    });
+    var lines = ['类型,标题,截止日期,状态,照片数,说明'];
+    rows.forEach(function (x) {
+      var note = (x.note || '').replace(/\r?\n/g, ' ').replace(/"/g, '""');
+      lines.push([
+        KINDS[x.kind].name,
+        '"' + (x.title || '').replace(/"/g, '""') + '"',
+        x.due || '',
+        x.done ? '已完成' : '未完成',
+        x.photos.length,
+        '"' + note + '"'
+      ].join(','));
+    });
+    return '\ufeff' + lines.join('\r\n');
+  }
+
+  return {
+    KINDS: KINDS,
+    KIND_KEYS: KIND_KEYS,
+    DATA_VERSION: DATA_VERSION,
+    MAX_PHOTOS: MAX_PHOTOS,
+    MAX_TITLE: MAX_TITLE,
+    MAX_NOTE: MAX_NOTE,
+    MAX_MEMO: MAX_MEMO,
+    MAX_PHOTO_CHARS: MAX_PHOTO_CHARS,
+    // 日期
+    pad2: pad2, toDateKey: toDateKey, fromDateKey: fromDateKey, isValidDateKey: isValidDateKey,
+    daysBetween: daysBetween, daysUntil: daysUntil, relativeDate: relativeDate, longDate: longDate,
+    // 状态
+    dueStatus: dueStatus, bucketByUrgency: bucketByUrgency, kindSummary: kindSummary,
+    matchesQuery: matchesQuery, groupMemoByDate: groupMemoByDate,
+    // 数据
+    emptyState: emptyState, normalizeState: normalizeState, uid: uid,
+    itemsOfKind: itemsOfKind, findItem: findItem, countPhotos: countPhotos,
+    estimateBytes: estimateBytes, formatBytes: formatBytes, photoStats: photoStats,
+    // 变更
+    addItem: addItem, updateItem: updateItem, toggleDone: toggleDone,
+    removeItem: removeItem, addPhoto: addPhoto, removePhoto: removePhoto,
+    // 导入导出
+    serialize: serialize, deserialize: deserialize, toCSV: toCSV
+  };
+});
+
+
+/* ---------------------------------------------------------------------------
+ * 以下为图片缩放的数学部分（由 homework-app/zoom.js 自动内联）。
+ * 单元测试：homework-app/test-zoom.js（103 项）
+ * ------------------------------------------------------------------------- */
+/* ===========================================================================
+ * 图片查看器的缩放/平移数学（纯函数，不依赖 DOM，可在 Node 里单测）
+ *
+ * 为什么单独抽出来：手势缩放最容易出的问题是「缩放中心漂移」和「图片被拖出
+ * 屏幕外找不回来」。这些都能写成纯函数测清楚，不用靠手指试。
+ *
+ * 坐标约定：
+ *   · x/y 是「图片相对容器左上角的偏移」（CSS 的 translate 值）
+ *   · scale 是缩放倍数
+ *   · offset 是触摸点相对**容器**左上角的坐标
+ *   · 图片的基准尺寸 = 容器尺寸（object-fit: contain 的视觉效果由 <img> 自己负责）
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.ZoomMath = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  var MIN_SCALE = 1;
+  var MAX_SCALE = 6;
+  /** 双击放大的目标倍数 */
+  var DOUBLE_TAP_SCALE = 2.5;
+  /** 触摸点坐标取整用，避免亚像素抖动 */
+  var EPS = 0.01;
+
+  function clamp(v, lo, hi) {
+    // 只有 NaN 算非法；±Infinity 应该被夹到边界，而不是当成非法值
+    if (typeof v !== 'number' || v !== v) return lo;
+    return v < lo ? lo : (v > hi ? hi : v);
+  }
+
+  function clampScale(s) {
+    // 只把 NaN / 非正数当非法；Infinity 交给 clamp 夹到上限
+    if (typeof s !== 'number' || s !== s || s <= 0) return MIN_SCALE;
+    return clamp(s, MIN_SCALE, MAX_SCALE);
+  }
+
+  /** 缩放后允许的偏移范围：图比容器大才能拖，否则居中（0） */
+  function clampOffset(x, y, scale, view) {
+    scale = clampScale(scale);
+    var vw = (view && view.w) || 0;
+    var vh = (view && view.h) || 0;
+    var maxX = Math.max(0, (vw * scale - vw) / 2);
+    var maxY = Math.max(0, (vh * scale - vh) / 2);
+    return { x: clamp(x, -maxX, maxX), y: clamp(y, -maxY, maxY) };
+  }
+
+  /**
+   * 以某个点为锚点把比例从 from 变到 to。
+   * 核心公式：缩放前后，锚点对应的图片位置必须保持不动。
+   *   设偏移 x、比例 s，图片坐标 u = (px - x) / s
+   *   要求 (px - x') / s' = u  =>  x' = px - (px - x) * s'/s
+   */
+  function zoomAt(x, y, from, to, px, py, view) {
+    var s1 = clampScale(from);
+    var s2 = clampScale(to);
+    var k = s2 / s1;
+    var nx = px - (px - (x || 0)) * k;
+    var ny = py - (py - (y || 0)) * k;
+    // 缩回 1 倍时强制归位，避免留下浮点残差
+    if (s2 <= MIN_SCALE + 1e-9) return { scale: MIN_SCALE, x: 0, y: 0 };
+    var c = clampOffset(nx, ny, s2, view);
+    return { scale: s2, x: c.x, y: c.y };
+  }
+
+  /** 双击：1 倍时放大到锚点，已放大时回到 1 倍居中 */
+  function doubleTap(x, y, scale, px, py, view) {
+    if (clampScale(scale) > MIN_SCALE + 0.01) {
+      return { scale: MIN_SCALE, x: 0, y: 0 };
+    }
+    return zoomAt(x, y, MIN_SCALE, DOUBLE_TAP_SCALE, px, py, view);
+  }
+
+  /**
+   * 平移：在现有偏移上叠加，并夹到合法范围。
+   * 返回值带上 scale —— 三个函数（zoomAt / doubleTap / pan）返回结构一致，
+   * 调用方可以一路 `st = Z.pan(st.x, st.y, ..., st.scale, view)` 而不会把比例丢掉。
+   * （早期版本只返回 {x,y}，结果调用方一路传下去就把 scale 丢了，手势直接失效。）
+   */
+  function pan(x, y, dx, dy, scale, view) {
+    var s = clampScale(scale);
+    var c = clampOffset((x || 0) + dx, (y || 0) + dy, s, view);
+    return { scale: s, x: c.x, y: c.y };
+  }
+
+  /** 两指距离（用于算缩放倍数） */
+  function distance(p1, p2) {
+    if (!p1 || !p2) return 0;
+    var dx = (p2.x || 0) - (p1.x || 0);
+    var dy = (p2.y || 0) - (p1.y || 0);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /** 两指中点（缩放锚点） */
+  function midpoint(p1, p2) {
+    if (!p1) return { x: 0, y: 0 };
+    if (!p2) return { x: p1.x || 0, y: p1.y || 0 };
+    return { x: ((p1.x || 0) + (p2.x || 0)) / 2, y: ((p1.y || 0) + (p2.y || 0)) / 2 };
+  }
+
+  /**
+   * 双指手势的完整一次更新。
+   * 同时处理缩放与平移（两指中点移动也算平移），这是手感自然的关键。
+   */
+  function pinch(start, current, view) {
+    var p0 = start && start.p1, q0 = start && start.p2;
+    var p1 = current && current.p1, q1 = current && current.p2;
+    var d0 = distance(p0, q0);
+    var d1 = distance(p1, q1);
+    var from = clampScale((start && start.scale) || MIN_SCALE);
+    var to = d0 > 0 ? clampScale(from * (d1 / d0)) : from;
+    var m0 = midpoint(p0, q0);
+    var m1 = midpoint(p1, q1);
+    // 先以起始中点为锚点缩放，再加上中点自身的位移
+    var z = zoomAt((start && start.x) || 0, (start && start.y) || 0, from, to, m0.x, m0.y, view);
+    var p = pan(z.x, z.y, m1.x - m0.x, m1.y - m0.y, to, view);
+    // 注意：必须把 scale 带上。pan() 只返回 {x,y}，
+    // 直接返回它会让调用方拿不到比例 —— 缩放手势就完全失效了。
+    return { scale: to, x: p.x, y: p.y };
+  }
+
+  /** 当前是否处于放大状态（决定左右滑动是"换图"还是"平移"） */
+  function isZoomed(scale) { return clampScale(scale) > MIN_SCALE + 0.01; }
+
+  /** 把一个数值夹到 [lo,hi]，用于手势阈值判定 */
+  function within(v, lo, hi) { return v >= lo && v <= hi; }
+
+  return {
+    MIN_SCALE: MIN_SCALE,
+    MAX_SCALE: MAX_SCALE,
+    DOUBLE_TAP_SCALE: DOUBLE_TAP_SCALE,
+    clamp: clamp,
+    clampScale: clampScale,
+    clampOffset: clampOffset,
+    zoomAt: zoomAt,
+    doubleTap: doubleTap,
+    pan: pan,
+    distance: distance,
+    midpoint: midpoint,
+    pinch: pinch,
+    isZoomed: isZoomed,
+    within: within
+  };
+});
+
+
+/* ============================ ② 状态与存储 ============================ */
+(function () {
+  'use strict';
+  const L = window.HomeworkLogic;
+  const KINDS = L.KINDS;
+  const STORE_KEY = 'homework-box-v1';
+
+  const el = (id) => document.getElementById(id);
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  /** 说明文字要保留换行：先转义，再把换行变成 <br> */
+  function escMultiline(s) {
+    return esc(s).replace(/\n/g, '<br>');
+  }
+
+  const todayKey = () => L.toDateKey(new Date());
+
+  /* ---------- 持久化：localStorage 不可用时降级为内存，保证不白屏 ---------- */
+  let storageOK = true;
+  try {
+    localStorage.setItem('__probe', '1');
+    localStorage.removeItem('__probe');
+  } catch (e) { storageOK = false; }
+
+  let state = L.emptyState();
+  let lastSaveError = '';
+
+  function load() {
+    if (!storageOK) return;
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      state = raw ? L.normalizeState(JSON.parse(raw)) : L.emptyState();
+    } catch (e) {
+      state = L.emptyState();       // 存档损坏也不能让 App 打不开
+      console.warn('存档读取失败，已重置：', e);
+    }
+  }
+
+  function save() {
+    if (!storageOK) return true;
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      lastSaveError = '';
+      return true;
+    } catch (e) {
+      // 照片占满配额是这里最常见的原因，给出可操作的建议
+      lastSaveError = /quota|exceed/i.test(String(e && e.name) + String(e && e.message))
+        ? '手机存储满了：删掉一些旧照片，或导出备份后清空'
+        : '保存失败，手机存储可能不可用';
+      toast(lastSaveError, true);
+      return false;
+    }
+  }
+
+  /**
+   * 提交新状态。
+   * 返回 save() 的结果：false 表示没写进存储。
+   * ⚠️ 调用方必须在 saved === false 时不显示成功提示，否则就是「假成功」。
+   */
+  function commit(next) {
+    state = next;
+    const saved = save();
+    render();
+    return saved;
+  }
+
+  /* ---------- 视图状态 ---------- */
+  let activeKind = 'homework';
+  let draft = null;                 // 弹层草稿
+  let viewerState = null;           // 照片查看器 { photos, index, scale, x, y }
+  let memoQuery = '';               // 备忘录搜索词
+  /** 手势状态的只读镜像（给测试用；真实变量在 bindViewerGestures 内部） */
+  const gestureMirror = { pointers: 0, panStart: false, gestureStart: false };
+
+  /* ============================ ③ 图片压缩 ============================ */
+  /**
+   * 把一张图片文件压成小尺寸 JPEG，避免手机存储被几张照片塞满。
+   * 长边限制 maxEdge，质量 quality。返回 dataURL 字符串。
+   */
+  function compressImage(file, maxEdge, quality) {
+    maxEdge = maxEdge || 1280;
+    quality = quality || 0.72;
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('这张图片无法识别'));
+        img.onload = () => {
+          try {
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            if (!w || !h) return reject(new Error('图片尺寸异常'));
+            const scale = Math.min(1, maxEdge / Math.max(w, h));
+            w = Math.max(1, Math.round(w * scale));
+            h = Math.max(1, Math.round(h * scale));
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            const ctx = cv.getContext('2d');
+            // 白底：PNG 透明区域转 JPEG 后会变黑，先铺白
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, w, h);
+            ctx.drawImage(img, 0, 0, w, h);
+            let out = cv.toDataURL('image/jpeg', quality);
+            // 极端情况下仍然过大就再降一档
+            if (out.length > 400000) out = cv.toDataURL('image/jpeg', 0.5);
+            if (out.length > 900000) return reject(new Error('图片太大，压不下去'));
+            resolve(out);
+          } catch (err) { reject(err); }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function addPhotosFromFiles(files) {
+    if (!draft || !files || !files.length) return;
+    let added = 0, failed = 0;
+    for (let i = 0; i < files.length; i++) {
+      if (draft.photos.length >= L.MAX_PHOTOS) { toast('一条最多 ' + L.MAX_PHOTOS + ' 张照片', true); break; }
+      try {
+        const data = await compressImage(files[i]);
+        draft.photos.push({ id: L.uid('p'), data: data, caption: '', at: Date.now() });
+        added++;
+      } catch (e) {
+        failed++;
+      }
+      renderPhotos();
+    }
+    if (added) toast(added === 1 ? '照片已加上' : `加上 ${added} 张照片`);
+    if (failed) toast(failed + ' 张照片没读成功', true);
+  }
+
+  /* ============================ ④ 渲染 ============================ */
+  function render() {
+    const tk = todayKey();
+    const d = new Date();
+    const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
+    el('todayLine').textContent = `${d.getMonth() + 1}月${d.getDate()}日 ${week}`;
+
+    // 三个区的待完成数量（显示在分段按钮上）
+    const hwSum = L.kindSummary(state, 'homework', tk);
+    const exSum = L.kindSummary(state, 'exercise', tk);
+    const memoSum = L.kindSummary(state, 'memo', tk, { query: memoQuery });
+    el('cntHomework').textContent = hwSum.pendingCount;
+    el('cntExercise').textContent = exSum.pendingCount;
+    el('cntMemo').textContent = memoSum.pendingCount;
+    el('cntHomework').style.display = hwSum.pendingCount ? '' : 'none';
+    el('cntExercise').style.display = exSum.pendingCount ? '' : 'none';
+    el('cntMemo').style.display = memoSum.pendingCount ? '' : 'none';
+
+    const sum = activeKind === 'homework' ? hwSum : (activeKind === 'exercise' ? exSum : memoSum);
+
+    // 搜索栏只在备忘录区出现（作业和习题是按截止日/时间找，不需要搜）
+    el('searchWrap').classList.toggle('show', activeKind === 'memo');
+
+    // 提醒横幅：只在作业区显示（习题没有截止日期）
+    let bannerHtml = '';
+    if (activeKind === 'homework' && hwSum.banner) {
+      const b = hwSum.banner;
+      bannerHtml = `<div class="banner ${b.level}">
+        <span class="ico">${b.level === 'danger' ? '⏰' : '📌'}</span>
+        <div><b>${esc(b.text)}</b><div class="d">${esc(b.detail)}</div></div>
+      </div>`;
+    } else if (!storageOK) {
+      bannerHtml = `<div class="banner danger"><span class="ico">🔒</span>
+        <div><b>现在不能保存数据</b><div class="d">浏览器不允许本地存储（可能是无痕模式），关掉页面就没了。请用普通模式打开。</div></div>
+      </div>`;
+    } else if (lastSaveError) {
+      bannerHtml = `<div class="banner danger"><span class="ico">💾</span>
+        <div><b>上次保存失败</b><div class="d">${esc(lastSaveError)}</div></div>
+      </div>`;
+    }
+    el('bannerHost').innerHTML = bannerHtml;
+
+    // 分段按钮状态
+    document.querySelectorAll('#seg button').forEach((b) => {
+      b.classList.toggle('on', b.dataset.kind === activeKind);
+    });
+
+    renderList(sum, tk);
+  }
+
+  /** 每个区的文案集中放这里，避免散落在各处 */
+  const KIND_UI = {
+    homework: {
+      emoji: '📘',
+      empty: '还没有作业。<br>老师布置完就点右下角 ＋ 记下来，<br>拍张照、写上截止日期。',
+      emptyBtn: '记第一样作业',
+      allDone: '作业都做完了，<br>没有待办的了。',
+      addTitle: '添加作业'
+    },
+    exercise: {
+      emoji: '✏️',
+      empty: '还没有习题。<br>上课拍的题都放这里，<br>和作业分开，不会混在一起。',
+      emptyBtn: '存第一道题',
+      allDone: '习题都处理完了，<br>没有待办的了。',
+      addTitle: '添加习题'
+    },
+    memo: {
+      emoji: '📝',
+      empty: '还没有备忘。<br>想到什么就点右下角 ＋ 记下来，<br>只写文字也行，加张照片也行。',
+      emptyBtn: '写第一条备忘',
+      allDone: '备忘都归档了，<br>没有待处理的了。',
+      addTitle: '写备忘'
+    }
+  };
+
+  function renderList(sum, tk) {
+    const scroll = el('scroll');
+    const ui = KIND_UI[activeKind] || KIND_UI.homework;
+    const searching = activeKind === 'memo' && !!memoQuery;
+
+    if (sum.total === 0) {
+      scroll.innerHTML = `<div class="empty">
+        <div class="big">${ui.emoji}</div>
+        <p>${ui.empty}</p>
+        <button class="btn-primary" id="emptyAdd">${ui.emptyBtn}</button>
+      </div>`;
+      return;
+    }
+
+    // 搜索没命中：要说清楚是"没搜到"，而不是"你还没记过东西"
+    if (searching && !sum.groups.some((g) => g.items.length > 0)) {
+      scroll.innerHTML = `<div class="empty">
+        <div class="big">🔍</div>
+        <p>没有找到包含「${esc(memoQuery)}」的备忘。</p>
+        <button class="btn-primary" id="searchClear2">清空搜索</button>
+      </div>`;
+      return;
+    }
+
+    // 有记录但都做完了：不能显示成一片空白，会让人以为数据丢了
+    const hasAnyItems = sum.groups.some((g) => g.items.length > 0);
+    if (!hasAnyItems) {
+      scroll.innerHTML = `<div class="empty">
+        <div class="big">🎉</div>
+        <p>${ui.allDone}</p>
+      </div>`;
+      return;
+    }
+
+    let html = '';
+    if (searching) {
+      html += `<div class="searchinfo">找到 ${sum.matched} 条包含「${esc(memoQuery)}」的备忘</div>`;
+    }
+    sum.groups.forEach((g) => {
+      if (!g.items.length) return;
+      if (g.key === 'done') {
+        // 已完成收进折叠区，默认不展开，避免干扰待办
+        html += `<details class="group collapsed">
+          <summary class="group-head">
+            <span class="dot"></span>${esc(g.title)}<span class="cnt">${g.items.length} 项 · 点开看</span>
+          </summary>`;
+        g.items.forEach((it) => { html += itemCard(it, tk); });
+        html += `</details>`;
+        return;
+      }
+      html += `<div class="group">
+        <div class="group-head ${g.tone === 'danger' ? 'danger' : (g.tone === 'warn' ? 'warn' : '')}">
+          <span class="dot"></span>${esc(g.title)}<span class="cnt">${g.items.length} 项</span>
+        </div>`;
+      g.items.forEach((it) => { html += itemCard(it, tk); });
+      html += `</div>`;
+    });
+    scroll.innerHTML = html;
+  }
+
+  function itemCard(it, tk) {
+    const cfg = KINDS[it.kind];
+    const ds = L.dueStatus(it.due, tk);
+    const tone = it.done ? '' : (ds.overdue ? 'tone-danger' : (ds.urgent ? 'tone-warn' : ''));
+
+    const isMemo = it.kind === 'memo';
+    /** 备忘录显示「哪天记的」，因为它的价值就在于时间点 */
+    const memoDate = isMemo ? L.relativeDate(L.toDateKey(new Date(it.createdAt || Date.now())), tk) : '';
+
+    // 标题：没写标题时用正文第一行代替，避免卡片一片空白
+    let titleHtml;
+    if (it.title) {
+      titleHtml = `<div class="t">${esc(it.title)}</div>`;
+    } else {
+      const firstLine = (it.note || '').split('\n')[0].slice(0, 40);
+      titleHtml = `<div class="t untitled">${esc(firstLine || '（只有照片）')}</div>`;
+    }
+
+    // 正文：标题已占用第一行时，正文整体显示；否则跳过第一行避免重复
+    let noteHtml = '';
+    if (it.note) {
+      // 没标题时正文被拆成「标题行 + 剩下的正文」，剩下的行数要限制得更少，
+      // 否则只有一句话的备忘会被撑成很高的卡片（中间大片空白）。
+      const memoCls = isMemo ? (' memo' + (it.title ? '' : ' loose')) : '';
+      if (it.title) {
+        noteHtml = `<div class="n${memoCls}">${escMultiline(it.note)}</div>`;
+      } else {
+        const rest = it.note.split('\n').slice(1).join('\n').trim();
+        if (rest) noteHtml = `<div class="n${memoCls}">${escMultiline(rest)}</div>`;
+      }
+    }
+
+    // 元信息胶囊
+    let chips = '';
+    if (cfg.hasDue && it.due) {
+      const cls = ds.overdue ? 'danger' : (ds.urgent ? 'warn' : 'calm');
+      chips += `<span class="chip ${cls}">🗓 ${esc(ds.short)}<span class="d">· ${esc(L.relativeDate(it.due, tk))}</span></span>`;
+    }
+    // 备忘录显示记录时间（它没有截止日期）
+    if (isMemo && memoDate) {
+      chips += `<span class="chip calm">🕐 ${esc(memoDate)}</span>`;
+    }
+    if (it.photos.length) {
+      chips += `<span class="chip ph">📷 ${it.photos.length} 张</span>`;
+    }
+    if (it.done) {
+      chips += `<span class="chip calm">✅ ${isMemo ? '已归档' : '已完成'}</span>`;
+    }
+
+    // 缩略图（最多 4 张，多的显示 +N）
+    let thumbs = '';
+    if (it.photos.length) {
+      const show = it.photos.slice(0, 3);
+      thumbs += `<div class="thumbs">`;
+      show.forEach((p, i) => {
+        thumbs += `<img src="${p.data}" alt="" data-photo="${it.id}:${i}">`;
+      });
+      if (it.photos.length > 3) {
+        thumbs += `<div class="more" data-photo="${it.id}:0">+${it.photos.length - 3}</div>`;
+      }
+      thumbs += `</div>`;
+    }
+
+    return `<div class="item ${tone} ${it.done ? 'done' : ''}" data-id="${it.id}">
+      <button class="tick" data-tick="${it.id}" aria-label="标记完成">✓</button>
+      <div class="body" data-open="${it.id}">
+        ${titleHtml}
+        ${noteHtml}
+        ${(chips || thumbs) ? `<div class="meta">${chips}</div>` : ''}
+        ${thumbs}
+      </div>
+    </div>`;
+  }
+
+  /* ---------------- 弹层 ---------------- */
+  function openSheet(opts) {
+    opts = opts || {};
+    const tk = todayKey();
+    let item = opts.id ? L.findItem(state, opts.id) : null;
+    draft = {
+      id: opts.id || null,
+      kind: item ? item.kind : (opts.kind || activeKind),
+      title: item ? item.title : '',
+      note: item ? item.note : '',
+      due: item ? (item.due || '') : '',
+      photos: item ? item.photos.map((p) => ({ id: p.id, data: p.data, caption: p.caption, at: p.at })) : [],
+      done: item ? item.done : false,
+      createdAt: item ? item.createdAt : Date.now()
+    };
+    el('sheetTitle').textContent = item ? '编辑' : '添加';
+    el('sheetDelete').style.display = item ? '' : 'none';
+    el('titleInput').value = draft.title;
+    el('noteInput').value = draft.note;
+    el('dueInput').value = draft.due;
+    el('btnDone').textContent = draft.done ? '取消完成' : '标记完成';
+    el('btnDone').classList.toggle('is-done', draft.done);
+    syncKindButtons();
+    renderPhotos();
+    el('mask').classList.add('show');
+    el('sheet').classList.add('show');
+    el('fab').classList.add('hide');
+  }
+
+  function closeSheet() {
+    el('mask').classList.remove('show');
+    el('sheet').classList.remove('show');
+    el('fab').classList.remove('hide');
+    draft = null;
+  }
+
+  function syncKindButtons() {
+    if (!draft) return;
+    document.querySelectorAll('#kindRow .kindbtn').forEach((b) => {
+      b.classList.toggle('on', b.dataset.kind === draft.kind);
+    });
+    // 只有作业有截止日期，其他类型直接隐藏这一栏
+    const hasDue = KINDS[draft.kind].hasDue;
+    el('dueField').style.display = hasDue ? '' : 'none';
+    if (!hasDue) draft.due = '';
+
+    // 备忘录：正文是主角，所以输入框加高、占位提示换掉、标题变成选填
+    const isMemo = draft.kind === 'memo';
+    el('noteInput').style.minHeight = isMemo ? '190px' : '';
+    el('noteInput').placeholder = isMemo
+      ? '想到什么就写下来…\n\n可以写好几行，也可以分条：\n· 明天问老师那道题\n· 想做个错题本'
+      : '比如：第 1-5 题，明天上课要交；或者题目要求抄下来';
+    el('titleLabel').textContent = isMemo ? '标题（选填）' : '这是什么';
+    el('titleInput').placeholder = isMemo ? '不写就用正文第一行' : '比如：数学练习册 P32';
+    el('photoLabel').textContent = isMemo
+      ? '照片（选填，想到的东西拍下来）'
+      : '照片（拍的作业 / 黑板 / 题目）';
+  }
+
+  function renderPhotos() {
+    if (!draft) return;
+    el('photoCount').textContent = draft.photos.length + ' / ' + L.MAX_PHOTOS;
+    let html = '';
+    draft.photos.forEach((p, i) => {
+      html += `<div class="photo-cell">
+        <img src="${p.data}" alt="" data-view="${i}">
+        <button class="rm" data-rm="${i}" aria-label="删掉这张">×</button>
+      </div>`;
+    });
+    if (draft.photos.length < L.MAX_PHOTOS) {
+      html += `<button class="photo-add" id="photoAdd"><span class="p">＋</span>加照片</button>`;
+    }
+    el('photoGrid').innerHTML = html;
+  }
+
+  /* ---------------- 数据弹层 ---------------- */
+  function openData() {
+    const bytes = L.estimateBytes(state);
+    const ps = L.photoStats(state);
+    const all = state.items;
+    const hw = all.filter((x) => x.kind === 'homework').length;
+    const ex = all.filter((x) => x.kind === 'exercise').length;
+    const mm = all.filter((x) => x.kind === 'memo').length;
+    // localStorage 一般给 5MB；到 80% 就提醒
+    const limit = 5 * 1024 * 1024;
+    const pct = Math.min(100, Math.round(bytes / limit * 100));
+    const nearFull = pct >= 80;
+
+    el('dataBody').innerHTML = `
+      <div class="field" style="margin-bottom:14px">
+        <div style="font-size:13px;color:var(--ink-2);line-height:1.7">
+          作业 <b>${hw}</b> 条 ｜ 习题 <b>${ex}</b> 条 ｜ 备忘 <b>${mm}</b> 条 ｜ 照片 <b>${ps.photos}</b> 张<br>
+          占用空间约 <b>${L.formatBytes(bytes)}</b>
+        </div>
+        <div style="height:7px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-top:8px">
+          <i style="display:block;height:100%;width:${pct}%;border-radius:99px;background:${nearFull ? 'var(--danger)' : 'var(--accent)'}"></i>
+        </div>
+        <div style="font-size:11.5px;color:${nearFull ? 'var(--danger)' : 'var(--ink-3)'};margin-top:6px">
+          ${nearFull
+            ? '⚠️ 快满了（浏览器一般只给 5MB）。删掉一些旧照片，或先导出备份再清空。'
+            : '浏览器一般给 5MB 空间，照片已经自动压缩过。'}
+        </div>
+      </div>
+
+      <button class="kindbtn" id="btnExportJson" style="width:100%;justify-content:flex-start;padding:13px;margin-bottom:8px">
+        📤 <span style="flex:1;text-align:left">导出备份（JSON，含照片）</span> ›
+      </button>
+      <button class="kindbtn" id="btnExportCsv" style="width:100%;justify-content:flex-start;padding:13px;margin-bottom:8px">
+        📊 <span style="flex:1;text-align:left">导出清单（CSV，不含照片）</span> ›
+      </button>
+      <button class="kindbtn" id="btnImport" style="width:100%;justify-content:flex-start;padding:13px;margin-bottom:8px">
+        📥 <span style="flex:1;text-align:left">导入备份</span> ›
+      </button>
+      <button class="kindbtn" id="btnClearDone" style="width:100%;justify-content:flex-start;padding:13px;margin-bottom:8px">
+        🧹 <span style="flex:1;text-align:left">清掉所有已完成</span> ›
+      </button>
+      <button class="kindbtn" id="btnClearAll" style="width:100%;justify-content:flex-start;padding:13px;color:var(--danger)">
+        🗑️ <span style="flex:1;text-align:left">清空全部数据</span> ›
+      </button>
+      <input type="file" id="fileImport" accept=".json,application/json" style="display:none">
+
+      <div style="font-size:12px;color:var(--ink-3);line-height:1.7;margin-top:16px">
+        🔒 <b>只存在这台手机上</b>：本应用没有任何联网代码，已用内容安全策略禁止一切外部请求，
+        不会上传、不同步、没有账号、没有广告。<br>
+        换手机前记得先「导出备份」。清除浏览器数据会连照片一起删掉。
+      </div>`;
+    el('mask2').classList.add('show');
+    el('sheet2').classList.add('show');
+  }
+
+  function closeData() {
+    el('mask2').classList.remove('show');
+    el('sheet2').classList.remove('show');
+  }
+
+  /* ============================================================================
+   * 照片查看器（支持双指缩放 / 双击放大 / 拖动 / ＋− 按钮 / 还原）
+   *
+   * 坐标约定：transform: translate(x,y) scale(s)，transform-origin 在图片中心。
+   * 所以 x/y 是「图片中心相对容器中心的偏移」，允许范围由 ZoomMath.clampOffset 算。
+   * 所有数学都在 zoom.js（纯函数、有 103 项单元测试），这里只管手势与 DOM。
+   * ========================================================================== */
+  const Z = window.ZoomMath;
+
+  /** 把当前缩放状态应用到图片上 */
+  function applyZoom() {
+    if (!viewerState) return;
+    const s = viewerState.scale || 1;
+    const x = viewerState.x || 0;
+    const y = viewerState.y || 0;
+    el('viewerImg').style.transform =
+      `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${s.toFixed(3)})`;
+    // 显示倍数（1 倍时不显示，避免干扰）
+    el('viewerZoom').textContent = s > 1.01 ? `${s.toFixed(1)}×` : '';
+    el('viewerZoomOut').disabled = s <= Z.MIN_SCALE + 0.01;
+    el('viewerBody').style.cursor = s > 1.01 ? 'grab' : 'default';
+  }
+
+  /** 查看区域的尺寸（图片基准尺寸就是它，因为 object-fit: contain） */
+  function viewSize() {
+    const r = el('viewerBody').getBoundingClientRect();
+    return { w: r.width || 1, h: r.height || 0 || 1 };
+  }
+
+  /** 重置缩放（换图、打开、还原按钮都走这里） */
+  function resetZoom() {
+    if (!viewerState) return;
+    viewerState.scale = 1;
+    viewerState.x = 0;
+    viewerState.y = 0;
+    applyZoom();
+  }
+
+  /** 按某个点缩放（px/py 是相对容器左上角的坐标） */
+  function zoomTo(scale, px, py) {
+    if (!viewerState) return;
+    const cur = { scale: viewerState.scale || 1, x: viewerState.x || 0, y: viewerState.y || 0 };
+    const v = viewSize();
+    const r = Z.zoomAt(cur.x, cur.y, cur.scale, scale, px, py, v);
+    viewerState.scale = r.scale;
+    viewerState.x = r.x;
+    viewerState.y = r.y;
+    applyZoom();
+  }
+
+  /**
+   * ＋ / − 按钮：在**当前位置**上追加缩放，而不是每次都以容器中心为锚点。
+   *
+   * 为什么这么改（真实手感问题）：若每次都锚定容器中心，连续点两下 ＋ 就会把图
+   * 顶到偏移极限 —— 此时再拖动是拖不动的（已经被夹住），用户会觉得"放大了却动不了"。
+   * 锚定「当前可见区域的中心」时，每次缩放都恰好留出可拖动的余量。
+   */
+  function zoomByCenter(factor) {
+    const v = viewSize();
+    const cur = viewerState ? (viewerState.scale || 1) : 1;
+    const anchorX = v.w / 2 + (viewerState ? (viewerState.x || 0) : 0);
+    const anchorY = v.h / 2 + (viewerState ? (viewerState.y || 0) : 0);
+    zoomTo(cur * factor, anchorX, anchorY);
+  }
+
+  /** 更新标题（图片名 + 序号 + 草稿标记） */
+  function updateViewerTitle() {
+    if (!viewerState) return;
+    const n = viewerState.photos.length;
+    const name = viewerState.label || '照片';
+    el('viewerTitle').textContent = `${name} · ${viewerState.index + 1}/${n}`;
+  }
+
+  /** 打开查看器。photos 是照片数组，label 显示在标题里 */
+  function openViewerWith(photos, index, label) {
+    if (!photos || !photos.length) return;
+    const i = Math.max(0, Math.min(index, photos.length - 1));
+    viewerState = {
+      photos: photos,
+      index: i,
+      label: label || '照片',
+      fromDraft: !!viewerState && !!viewerState.fromDraft
+    };
+    resetZoom();
+    el('viewerImg').src = photos[i].data;
+    updateViewerTitle();
+    const multi = photos.length > 1;
+    el('viewerPrev').style.visibility = multi ? '' : 'hidden';
+    el('viewerNext').style.visibility = multi ? '' : 'hidden';
+    el('viewer').classList.add('show');
+    // 容器尺寸要等显示后才有值，下一帧再校正一次
+    requestAnimationFrame(applyZoom);
+  }
+
+  function openViewer(itemId, index) {
+    const it = L.findItem(state, itemId);
+    if (!it || !it.photos.length) return;
+    openViewerWith(it.photos, index, it.title || KINDS[it.kind].name);
+  }
+
+  function moveViewer(delta) {
+    if (!viewerState) return;
+    const n = viewerState.photos.length;
+    viewerState.index = (viewerState.index + delta + n) % n;
+    el('viewerImg').src = viewerState.photos[viewerState.index].data;
+    resetZoom();               // 换图必须还原缩放，否则看下一张时位置很怪
+    updateViewerTitle();
+  }
+
+  function closeViewer() {
+    const wasDraft = !!(viewerState && viewerState.fromDraft);
+    el('viewer').classList.remove('show');
+    el('viewerImg').src = '';
+    el('viewerImg').style.transform = '';
+    viewerState = null;
+    if (wasDraft) renderPhotos();
+  }
+
+  /* ---------------- 手势绑定（指针事件，鼠标和触摸都支持） ---------------- */
+  function bindViewerGestures() {
+    const body = el('viewerBody');
+    const pointers = new Map();     // pointerId -> {x,y}（相对容器）
+    let gestureStart = null;        // 双指起始快照
+    let panStart = null;            // 单指拖动起点
+    let lastTapAt = 0, lastTapX = 0, lastTapY = 0;
+
+    function posOf(e) {
+      const r = body.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+    /** 双指快照：记录起始时的比例/偏移和两指位置 */
+    function snapshot() {
+      const pts = [...pointers.values()];
+      if (pts.length < 2) return null;
+      return {
+        scale: viewerState ? (viewerState.scale || 1) : 1,
+        x: viewerState ? (viewerState.x || 0) : 0,
+        y: viewerState ? (viewerState.y || 0) : 0,
+        p1: pts[0], p2: pts[1]
+      };
+    }
+
+    body.addEventListener('pointerdown', (e) => {
+      if (!viewerState) return;
+      body.setPointerCapture && body.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, posOf(e));
+      if (pointers.size === 1) {
+        panStart = { x: (viewerState.x || 0), y: (viewerState.y || 0), p: posOf(e) };
+      } else if (pointers.size === 2) {
+        gestureStart = snapshot();
+        panStart = null;                  // 双指时不按单指逻辑走
+      }
+      gestureMirror.pointers = pointers.size;
+      gestureMirror.panStart = !!panStart;
+      gestureMirror.gestureStart = !!gestureStart;
+      e.preventDefault();
+    });
+
+    body.addEventListener('pointermove', (e) => {
+      if (!viewerState || !pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, posOf(e));
+
+      if (pointers.size >= 2) {
+        if (!gestureStart) gestureStart = snapshot();
+        if (!gestureStart) return;
+        const pts = [...pointers.values()];
+        const r = Z.pinch(gestureStart, { p1: pts[0], p2: pts[1] }, viewSize());
+        viewerState.scale = r.scale;
+        viewerState.x = r.x;
+        viewerState.y = r.y;
+        applyZoom();
+        e.preventDefault();
+        return;
+      }
+
+      // 单指：只有放大状态才拖动看图
+      if (panStart && Z.isZoomed(viewerState.scale || 1)) {
+        const p = posOf(e);
+        const r = Z.pan(panStart.x, panStart.y, p.x - panStart.p.x, p.y - panStart.p.y,
+          viewerState.scale || 1, viewSize());
+        viewerState.x = r.x;
+        viewerState.y = r.y;
+        applyZoom();
+        e.preventDefault();
+      }
+    });
+
+    /**
+     * 收尾。
+     * keepPointer=true 表示"只把这个指针从跟踪表里清掉，不要结算手势"
+     * —— pointerleave 用它：光标移出容器不等于手势结束，
+     * 但那个指针必须被清掉，否则会变成幽灵指针，把后续单指操作误判成双指。
+     */
+    function endPointer(e, keepPointer) {
+      if (!viewerState) {
+        pointers.delete(e.pointerId);
+        gestureMirror.pointers = pointers.size;
+        return;
+      }
+      const wasSingle = pointers.size === 1;
+      const startPos = panStart ? panStart.p : null;
+      const endPos = posOf(e);
+      pointers.delete(e.pointerId);
+      if (keepPointer) {
+        gestureMirror.pointers = pointers.size;
+        return;
+      }
+      gestureMirror.pointers = pointers.size;
+      gestureMirror.panStart = !!panStart;
+      gestureMirror.gestureStart = !!gestureStart;
+
+      if (pointers.size < 2) gestureStart = null;
+
+      if (pointers.size === 0) {
+        // 单指轻点/滑动：未放大时用于双击和左右换图
+        const zoomed = Z.isZoomed(viewerState.scale || 1);
+        if (wasSingle && startPos && !zoomed) {
+          const dx = endPos.x - startPos.x;
+          const dy = endPos.y - startPos.y;
+          const moved = Math.abs(dx) > 12 || Math.abs(dy) > 12;
+          if (moved && Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(dx) > 45) {
+            // 横向滑动 -> 换图
+            moveViewer(dx < 0 ? 1 : -1);
+          } else if (!moved) {
+            // 没移动 -> 可能是双击
+            const now = Date.now();
+            const nearLast = Math.abs(endPos.x - lastTapX) < 40 && Math.abs(endPos.y - lastTapY) < 40;
+            if (now - lastTapAt < 320 && nearLast) {
+              const v = viewSize();
+              const cur = viewerState.scale || 1;
+              const r = Z.doubleTap(viewerState.x || 0, viewerState.y || 0, cur, endPos.x, endPos.y, v);
+              viewerState.scale = r.scale;
+              viewerState.x = r.x;
+              viewerState.y = r.y;
+              applyZoom();
+              lastTapAt = 0;
+            } else {
+              lastTapAt = now;
+              lastTapX = endPos.x;
+              lastTapY = endPos.y;
+            }
+          }
+        }
+        panStart = null;
+        applyZoom();
+      }
+    }
+
+    body.addEventListener('pointerup', (e) => endPointer(e, false));
+    body.addEventListener('pointercancel', (e) => endPointer(e, false));
+    // 指针离开容器：只把它从跟踪表里清掉，不结算手势。
+    // 必须无条件清理：否则会留下幽灵指针，把后续的单指操作误判成双指
+    // （曾导致「未放大时左右滑动换图」完全失效，且很难查）。
+    body.addEventListener('pointerleave', (e) => {
+      if (pointers.has(e.pointerId)) endPointer(e, true);
+    });
+
+    // 桌面端滚轮缩放（顺手支持，手机用不到）
+    body.addEventListener('wheel', (e) => {
+      if (!viewerState) return;
+      e.preventDefault();
+      const p = posOf(e);
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      zoomTo((viewerState.scale || 1) * factor, p.x, p.y);
+    }, { passive: false });
+
+    // 阻止双指手势被浏览器当成页面缩放
+    body.addEventListener('touchmove', (e) => { if (viewerState) e.preventDefault(); }, { passive: false });
+  }
+
+  /* ============================ 提示 ============================ */
+  let toastTimer = null;
+  function toast(msg, isErr) {
+    const t = el('toast');
+    t.textContent = msg;
+    t.classList.toggle('err', !!isErr);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  /* ============================ 保存 / 删除 ============================ */
+  function saveDraft() {
+    if (!draft) return;
+    const payload = {
+      kind: draft.kind,
+      title: el('titleInput').value,
+      note: el('noteInput').value,
+      due: KINDS[draft.kind].hasDue ? (el('dueInput').value || '') : '',
+      photos: draft.photos
+    };
+    if (draft.id) {
+      const r = L.updateItem(state, draft.id, payload);
+      if (r.error) { toast(r.error, true); return; }
+      const saved = commit(r.state);
+      if (!saved) return;                 // 保存失败时 save() 已给出提示，不要再喊成功
+      // 有照片被丢掉时必须说清楚，不能静默丢用户的东西
+      toast(r.photoWarning || '已保存', !!r.photoWarning);
+    } else {
+      const r = L.addItem(state, payload);
+      if (r.error) { toast(r.error, true); return; }
+      const saved = commit(r.state);
+      if (!saved) return;
+      if (r.photoWarning) toast(r.photoWarning, true);
+      else toast(draft.kind === 'exercise' ? '习题已存' : '作业已记下');
+    }
+    closeSheet();
+  }
+
+  function toggleDraftDone() {
+    if (!draft) return;
+    if (!draft.id) {
+      // 还没保存过的，直接提示先保存
+      toast('先保存，再标记完成');
+      return;
+    }
+    const r = L.toggleDone(state, draft.id);
+    if (r.error) { toast(r.error, true); return; }
+    draft.done = !draft.done;
+    const saved = commit(r.state);
+    if (!saved) return;
+    el('btnDone').textContent = draft.done ? '取消完成' : '标记完成';
+    el('btnDone').classList.toggle('is-done', draft.done);
+    toast(draft.done ? '已标记完成 🎉' : '已改回未完成');
+  }
+
+  function deleteDraft() {
+    if (!draft || !draft.id) return;
+    const it = L.findItem(state, draft.id);
+    if (!it) { closeSheet(); return; }
+    if (!confirm(`删掉「${it.title || '这条'}」吗？\n\n照片也会一起删掉，找不回来。`)) return;
+    const saved = commit(L.removeItem(state, draft.id));
+    closeSheet();
+    // 删除后如果没写进存储，界面上东西没了但重启会回来，必须说清楚
+    if (saved) toast('已删除');
+    else toast('删除没能写入存储，重启后这条可能还在', true);
+  }
+
+  /* ============================ 导出 ============================ */
+  function download(filename, text, mime) {
+    try {
+      const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1500);
+      return true;
+    } catch (err) {
+      toast('导出失败：' + err.message, true);
+      return false;
+    }
+  }
+
+  /* ============================ ⑤ 事件 ============================ */
+  function bind() {
+    // 分段切换
+    el('seg').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-kind]');
+      if (!b) return;
+      activeKind = b.dataset.kind;
+      // 切走时保留搜索词，切回来还能接着看；但输入框要同步
+      el('searchInput').value = memoQuery;
+      el('searchClear').classList.toggle('show', !!memoQuery);
+      el('scroll').scrollTop = 0;
+      render();
+    });
+
+    // 备忘录搜索
+    el('searchInput').addEventListener('input', () => {
+      memoQuery = el('searchInput').value.trim();
+      el('searchClear').classList.toggle('show', !!memoQuery);
+      render();
+    });
+    el('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.target.blur(); }
+      if (e.key === 'Escape') { el('searchInput').value = ''; memoQuery = ''; el('searchClear').classList.remove('show'); render(); }
+    });
+    el('searchClear').addEventListener('click', () => {
+      el('searchInput').value = '';
+      memoQuery = '';
+      el('searchClear').classList.remove('show');
+      render();
+    });
+
+    // 列表：勾选完成 / 打开编辑 / 看照片
+    el('scroll').addEventListener('click', (e) => {
+      if (e.target.closest('#emptyAdd')) { openSheet({ kind: activeKind }); return; }
+      if (e.target.closest('#searchClear2')) {
+        el('searchInput').value = '';
+        memoQuery = '';
+        el('searchClear').classList.remove('show');
+        render();
+        return;
+      }
+
+      const tick = e.target.closest('[data-tick]');
+      if (tick) {
+        const r = L.toggleDone(state, tick.dataset.tick);
+        if (r.error) { toast(r.error, true); return; }
+        const saved = commit(r.state);
+        if (!saved) return;
+        toast(r.state.items.find((x) => x.id === tick.dataset.tick).done ? '完成一样 🎉' : '已改回未完成');
+        return;
+      }
+
+      const ph = e.target.closest('[data-photo]');
+      if (ph) {
+        const parts = ph.dataset.photo.split(':');
+        openViewer(parts[0], parseInt(parts[1], 10) || 0);
+        return;
+      }
+
+      const open = e.target.closest('[data-open]');
+      if (open) { openSheet({ id: open.dataset.open }); return; }
+    });
+
+    el('fab').addEventListener('click', () => openSheet({ kind: activeKind }));
+
+    // 弹层
+    el('sheetCancel').addEventListener('click', closeSheet);
+    el('mask').addEventListener('click', closeSheet);
+    el('btnSave').addEventListener('click', saveDraft);
+    el('sheetDelete').addEventListener('click', deleteDraft);
+    el('btnDone').addEventListener('click', toggleDraftDone);
+
+    el('kindRow').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-kind]');
+      if (!b || !draft) return;
+      draft.kind = b.dataset.kind;
+      syncKindButtons();
+    });
+
+    el('titleInput').addEventListener('input', () => { if (draft) draft.title = el('titleInput').value; });
+    el('noteInput').addEventListener('input', () => { if (draft) draft.note = el('noteInput').value; });
+    el('dueInput').addEventListener('change', () => { if (draft) draft.due = el('dueInput').value; });
+
+    // 照片
+    el('photoGrid').addEventListener('click', (e) => {
+      const rm = e.target.closest('[data-rm]');
+      if (rm && draft) {
+        draft.photos.splice(parseInt(rm.dataset.rm, 10), 1);
+        renderPhotos();
+        return;
+      }
+      const view = e.target.closest('[data-view]');
+      if (view && draft) {
+        const i = parseInt(view.dataset.view, 10) || 0;
+        if (draft.photos[i]) {
+          viewerState = { fromDraft: true };       // 先打标记，openViewerWith 会读它
+          openViewerWith(draft.photos, i, '草稿照片');
+        }
+        return;
+      }
+      if (e.target.closest('#photoAdd')) {
+        // 优先给「拍照」，同时提供「从相册选」
+        if (confirm('要现在拍照吗？\n\n确定 = 打开相机\n取消 = 从相册选')) el('fileCamera').click();
+        else el('fileGallery').click();
+      }
+    });
+
+    const onFiles = async (e) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = '';
+      if (files.length) await addPhotosFromFiles(files);
+    };
+    el('fileCamera').addEventListener('change', onFiles);
+    el('fileGallery').addEventListener('change', onFiles);
+
+    // 照片查看器
+    bindViewerGestures();
+    el('viewerClose').addEventListener('click', closeViewer);
+    el('viewerPrev').addEventListener('click', () => moveViewer(-1));
+    el('viewerNext').addEventListener('click', () => moveViewer(1));
+    el('viewerZoomIn').addEventListener('click', () => zoomByCenter(1.5));
+    el('viewerZoomOut').addEventListener('click', () => zoomByCenter(1 / 1.5));
+    el('viewerZoomReset').addEventListener('click', resetZoom);
+    // 点背景关闭（注意：点图片本身不关，否则看细节时容易误触）
+    el('viewer').addEventListener('click', (e) => {
+      if (e.target === el('viewer')) closeViewer();
+    });
+
+    // 数据弹层
+    el('btnData').addEventListener('click', openData);
+    el('dataCancel').addEventListener('click', closeData);
+    el('mask2').addEventListener('click', closeData);
+
+    el('dataBody').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      const id = btn.id;
+
+      if (id === 'btnExportJson') {
+        if (!state.items.length) { toast('还没有数据', true); return; }
+        if (download(`作业盒子-备份-${todayKey()}.json`, L.serialize(state), 'application/json')) {
+          toast('已导出备份（含照片）');
+        }
+        return;
+      }
+      if (id === 'btnExportCsv') {
+        if (!state.items.length) { toast('还没有数据', true); return; }
+        if (download(`作业盒子-清单-${todayKey()}.csv`, L.toCSV(state).replace(/^\ufeff/, ''), 'text/csv')) {
+          toast('已导出清单');
+        }
+        return;
+      }
+      if (id === 'btnImport') { el('fileImport').click(); return; }
+      if (id === 'btnClearDone') {
+        const doneCount = state.items.filter((x) => x.done).length;
+        if (!doneCount) { toast('没有已完成的', true); return; }
+        if (!confirm(`清掉 ${doneCount} 条已完成的记录？\n\n照片也会一起删掉。`)) return;
+        const next = L.normalizeState({ items: state.items.filter((x) => !x.done) });
+        const savedOk = commit(next);
+        closeData();
+        toast(savedOk ? `清掉 ${doneCount} 条` : '清理没能写入存储', !savedOk);
+        return;
+      }
+      if (id === 'btnClearAll') {
+        if (!state.items.length) { toast('本来就是空的'); return; }
+        if (!confirm('确定清空全部作业和习题吗？\n\n不可撤销，建议先「导出备份」。')) return;
+        if (!confirm('再确认一次：照片也会一起删掉。')) return;
+        const cleared = commit(L.emptyState());
+        closeData();
+        toast(cleared ? '已清空' : '清空没能写入存储，重启后数据可能还在', !cleared);
+        return;
+      }
+    });
+
+    el('dataBody').addEventListener('change', (e) => {
+      if (e.target.id !== 'fileImport') return;
+      const f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const r = L.deserialize(reader.result);
+        if (r.error) { toast(r.error, true); return; }
+        const n = r.state.items.length;
+        if (!confirm(`文件里有 ${n} 条记录。\n\n确定用它替换当前全部数据吗？`)) return;
+        const imported = commit(r.state);
+        closeData();
+        toast(imported ? `已导入 ${n} 条` : '导入没能写入存储', !imported);
+      };
+      reader.onerror = () => toast('文件读不出来', true);
+      reader.readAsText(f);
+    });
+
+    // 电脑上也能用
+    document.addEventListener('keydown', (e) => {
+      if (el('viewer').classList.contains('show')) {
+        if (e.key === 'Escape') closeViewer();
+        if (e.key === 'ArrowLeft') moveViewer(-1);
+        if (e.key === 'ArrowRight') moveViewer(1);
+        return;
+      }
+      if (el('sheet').classList.contains('show')) {
+        if (e.key === 'Escape') closeSheet();
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveDraft();
+        return;
+      }
+      if (el('sheet2').classList.contains('show') && e.key === 'Escape') closeData();
+    });
+
+    // 从后台切回来时刷新「今天」，跨零点后逾期状态不会显示错
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+  }
+
+  /* ============================ 启动 ============================ */
+  function boot() {
+    load();
+    bind();
+    render();
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+
+  /* 供测试使用：暴露内部状态读取入口（只读） */
+  window.__homeworkDebug = {
+    getState: () => state,
+    getDraft: () => draft,
+    getActiveKind: () => activeKind,
+    compressImage: compressImage,
+    /** 查看器的实时状态（测试用，只读） */
+    getViewer: () => viewerState,
+    /** 查看区域尺寸（测试用来核对边界，避免测试里写死尺寸） */
+    getViewSize: () => viewSize(),
+    /** 当前手势状态（测试用，只读） */
+    getGesture: () => ({
+      pointers: gestureMirror.pointers,
+      panStart: gestureMirror.panStart,
+      gestureStart: gestureMirror.gestureStart
+    }),
+    /** 当前状态的序列化长度，测试用它精确推算配额 */
+    stateSize: () => JSON.stringify(state).length,
+    storageOK: () => storageOK
+  };
+})();
+</script>
+<!-- PWA 增强层：注册离线缓存、处理「安装到桌面」与系统提醒。
+     它不读写 App 的业务数据；file:// 打开时整段直接跳过。 -->
+<script>
+/* ===========================================================================
+ * 作业盒子 —— PWA 增强层（由 pwa/build-pwa.js 注入到 index.html 末尾）
+ *
+ * 职责三件：
+ *   ① 注册 Service Worker → 装到桌面后离线可用
+ *   ② 处理「安装到桌面」提示
+ *   ③ 系统提醒：打开 App 时若有逾期/今天要交的作业，发一条手机通知
+ *
+ * ⚠️ 关于 ③ 的限制（不要误解）：
+ *   浏览器不允许网页在后台定时唤醒自己，Service Worker 也没有「定时器」能力。
+ *   所以通知只可能在 App 打开、或从后台切回来时触发。
+ *   想「关掉 App 也会响」必须配推送服务器，那已经超出「纯本地」的范围了。
+ *
+ * 严格隔离：不修改 App 的业务状态，只读一份只读快照用于统计待办数量。
+ * 通过 file:// 打开时下面的判断会直接返回，App 行为与从前完全一致。
+ * ========================================================================== */
+(function () {
+  'use strict';
+  try {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+
+    var DBG = window.__homeworkDebug || null;
+    var NOTIFY_KEY = 'homework-box-notify';
+    var NOTIFIED_KEY = 'homework-box-notified';
+
+    var STYLE_BOX = [
+      'margin:0 0 12px', 'padding:12px 14px', 'border-radius:14px',
+      'background:var(--accent-soft)', 'border:1px solid var(--accent)',
+      'color:var(--ink)', 'font-size:13.5px', 'line-height:1.5',
+      'display:flex', 'gap:10px', 'align-items:flex-start'
+    ].join(';');
+
+    function todayKey() {
+      var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+    }
+
+    /* ---------- ① 离线缓存 ---------- */
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function (e) {
+        console.warn('离线缓存注册失败（不影响正常使用）：', e);
+      });
+    });
+
+    /* ---------- ② 安装到桌面 ---------- */
+    var installEvent = null;
+
+    function showInstallBanner() {
+      var host = document.querySelector('.scroll');
+      if (!host || document.querySelector('#pwa-install-banner')) return;
+      var box = document.createElement('div');
+      box.id = 'pwa-install-banner';
+      box.setAttribute('style', STYLE_BOX);
+      box.innerHTML =
+        '<span style="font-size:16px">📲</span>' +
+        '<div style="flex:1">' +
+        '<b>装到桌面，用起来更像 App</b>' +
+        '<div style="font-size:12px;color:var(--ink-2);margin-top:2px">' +
+        '装好后全屏打开、没有地址栏，断网也能用，还能打开系统提醒。</div>' +
+        '<div style="margin-top:9px;display:flex;gap:8px">' +
+        '<button id="pwa-install-go" style="background:var(--accent);color:#fff;font-weight:600;font-size:13px;padding:8px 16px;border-radius:99px">立即安装</button>' +
+        '<button id="pwa-install-hide" style="font-size:12.5px;color:var(--ink-3);padding:8px 10px">以后再说</button>' +
+        '</div></div>';
+      host.insertBefore(box, host.firstChild);
+
+      box.querySelector('#pwa-install-go').addEventListener('click', function () {
+        if (!installEvent) return;
+        installEvent.prompt();
+        installEvent.userChoice.then(function () {
+          installEvent = null;
+          var b = document.querySelector('#pwa-install-banner');
+          if (b) b.remove();
+        });
+      });
+      box.querySelector('#pwa-install-hide').addEventListener('click', function () {
+        var b = document.querySelector('#pwa-install-banner');
+        if (b) b.remove();
+      });
+    }
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      installEvent = e;
+      showInstallBanner();
+    });
+    window.addEventListener('appinstalled', function () {
+      var b = document.querySelector('#pwa-install-banner');
+      if (b) b.remove();
+    });
+
+    /* ---------- ③ 系统提醒 ---------- */
+    function notifyEnabled() {
+      try { return localStorage.getItem(NOTIFY_KEY) !== '0'; } catch (e) { return false; }
+    }
+    function setNotifyEnabled(on) {
+      try { localStorage.setItem(NOTIFY_KEY, on ? '1' : '0'); } catch (e) {}
+    }
+
+    /** 待办：未完成、有截止日期、且日期已到或已过（YYYY-MM-DD 可直接字符串比较） */
+    function pendingDue() {
+      if (!DBG || typeof DBG.getState !== 'function') return [];
+      var st = DBG.getState();
+      var tk = todayKey();
+      return (st.items || []).filter(function (it) {
+        if (it.kind !== 'homework' || it.done || !it.due) return false;
+        return it.due <= tk;
+      });
+    }
+
+    /** 同一批作业只提醒一次，避免每次切回 App 都弹 */
+    function notifyOnce() {
+      if (!notifyEnabled()) return;
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+
+      var due = pendingDue();
+      if (!due.length) return;
+
+      var stamp = due.map(function (x) { return x.id; }).sort().join(',');
+      try {
+        if (localStorage.getItem(NOTIFIED_KEY) === stamp) return;
+        localStorage.setItem(NOTIFIED_KEY, stamp);
+      } catch (e) { return; }
+
+      var tk = todayKey();
+      var overdue = due.filter(function (x) { return x.due < tk; }).length;
+      var parts = [];
+      if (overdue) parts.push('逾期 ' + overdue + ' 项');
+      if (due.length - overdue) parts.push('今天截止 ' + (due.length - overdue) + ' 项');
+
+      try {
+        new Notification('作业盒子', {
+          body: parts.join('，') + ' —— 点开看看',
+          tag: 'homework-due',
+          icon: 'icon-192.png',
+          badge: 'icon-192.png'
+        });
+      } catch (e) {}
+    }
+
+    setTimeout(notifyOnce, 1200);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) setTimeout(notifyOnce, 600);
+    });
+
+    /* ---------- ④ 在「数据与备份」里放一个开关 ---------- */
+    function notifyStateText() {
+      if (typeof Notification === 'undefined') return '本浏览器不支持';
+      var p = Notification.permission;
+      if (p === 'denied') return '已被浏览器拒绝';
+      if (p === 'granted') return notifyEnabled() ? '已开启' : '已关闭';
+      return '未开启';
+    }
+
+    function injectNotifyRow() {
+      var body = document.getElementById('dataBody');
+      if (!body || body.querySelector('#pwa-notify-row')) return;
+      var supported = typeof Notification !== 'undefined';
+      var stateText = notifyStateText();
+
+      var row = document.createElement('div');
+      row.id = 'pwa-notify-row';
+      row.setAttribute('style', [
+        'margin:0 0 14px', 'padding:12px 13px', 'border-radius:14px',
+        'background:var(--line-2)', 'border:1px solid var(--line)',
+        'font-size:13px', 'line-height:1.5'
+      ].join(';'));
+      row.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px">' +
+        '<span style="font-size:16px">🔔</span>' +
+        '<b style="flex:1">系统提醒</b>' +
+        '<span style="font-size:12px;color:var(--ink-3)">' + stateText + '</span>' +
+        '</div>' +
+        '<div style="font-size:11.5px;color:var(--ink-3);margin-top:5px">' +
+        '打开 App 时，如果有逾期或今天要交的作业，就发一条手机通知。' +
+        '<b>关掉 App 后不会响</b> —— 浏览器不允许本地应用在后台定时唤醒自己。' +
+        '</div>' +
+        '<button id="pwa-notify-btn" style="margin-top:9px;background:var(--accent);color:#fff;' +
+        'font-weight:600;font-size:12.5px;padding:7px 14px;border-radius:99px">' +
+        (stateText === '已开启' ? '关闭提醒' : '开启提醒') + '</button>';
+
+      body.insertBefore(row, body.firstChild);
+
+      row.querySelector('#pwa-notify-btn').addEventListener('click', function () {
+        if (!supported) return;
+        if (Notification.permission === 'granted' && notifyEnabled()) {
+          setNotifyEnabled(false);
+          refreshNotifyRow();
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          alert('系统通知已被拒绝。\n\n请在浏览器的「网站设置 → 通知」里允许本网站，再回来开启。');
+          return;
+        }
+        Notification.requestPermission().then(function (p) {
+          if (p === 'granted') {
+            setNotifyEnabled(true);
+            try { localStorage.removeItem(NOTIFIED_KEY); } catch (e) {}
+            notifyOnce();
+          } else {
+            alert('没有拿到通知权限。可以稍后在浏览器的网站设置里允许，再回来开启。');
+          }
+          refreshNotifyRow();
+        });
+      });
+    }
+
+    function refreshNotifyRow() {
+      var row = document.getElementById('pwa-notify-row');
+      if (row) row.remove();
+      injectNotifyRow();
+    }
+
+    // 「数据与备份」是动态填充的，所以监听它展开的时机再插入
+    var sheet2 = document.getElementById('sheet2');
+    if (sheet2) {
+      new MutationObserver(function () {
+        if (sheet2.classList.contains('show')) injectNotifyRow();
+      }).observe(sheet2, { attributes: true, attributeFilter: ['class'] });
+    }
+  } catch (e) {
+    /* PWA 增强失败绝不能影响 App 本身 */
+    try { console.warn('PWA 增强层跳过：', e); } catch (e2) {}
+  }
+})();
+</script>
+</body>
+</html>
