@@ -6,7 +6,7 @@
 'use strict';
 
 var APP = 'zuoyebox';
-var VERSION = 'e19d766d3e9a';
+var VERSION = '8160937d1564';
 var SHELL = [
   "./",
   "./index.html",

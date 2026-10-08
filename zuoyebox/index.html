@@ -24,7 +24,7 @@
   --danger:#dc2f3c; --danger-soft:#fdecec; --danger-line:#f5c2c7;
   --warn:#c2740a; --warn-soft:#fdf4e4; --warn-line:#f0d9a8;
   --ok:#12a150;
-  --homework:#4f46e5; --exercise:#0891b2;
+  --homework:#4f46e5; --exercise:#0891b2; --memo:#c2740a;
   --r-lg:20px; --r-md:14px; --r-sm:10px;
   --shadow:0 1px 2px rgba(25,28,50,.05), 0 8px 22px rgba(25,28,50,.055);
   --safe-b:env(safe-area-inset-bottom,0px);
@@ -38,7 +38,7 @@
     --danger:#ff6b74; --danger-soft:#3a1e21; --danger-line:#5c2b30;
     --warn:#e8b462; --warn-soft:#33280f; --warn-line:#4d3c18;
     --ok:#3ddc84;
-    --homework:#7c74f0; --exercise:#22b8d6;
+    --homework:#7c74f0; --exercise:#22b8d6; --memo:#e8b462;
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 22px rgba(0,0,0,.26);
   }
 }
@@ -146,7 +146,13 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
 .item .body{flex:1;min-width:0}
 .item .t{font-size:15px;font-weight:600;line-height:1.35;word-break:break-word}
-.item .t.empty{color:var(--ink-3);font-weight:500}
+/* 没写标题时，用正文第一行当标题（.untitled 这个类名不能叫 empty：
+   .empty 是空状态提示的样式，带 padding:52px 20px，会把这个标题撑得很高
+   —— 实测无标题备忘卡片被撑到 236px，真正的元凶就是这个 class 撞名）。 */
+.item .t.untitled{
+  color:var(--ink-3);font-weight:500;
+  display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .item .n{
   font-size:12.5px;color:var(--ink-3);margin-top:3px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
@@ -267,7 +273,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
 }
 .btn-done.is-done{background:var(--ok);border-color:var(--ok);color:#fff}
 
-/* ============================ 照片查看 ============================ */
+/* ============================ 照片查看（可缩放） ============================ */
 .viewer{
   position:absolute;inset:0;z-index:70;background:rgba(10,11,20,.96);
   display:none;flex-direction:column;
@@ -279,15 +285,85 @@ details.collapsed[open]>summary{margin-bottom:2px}
 }
 .viewer .vhead button{color:#fff;font-size:15px;padding:6px 10px;border-radius:8px}
 .viewer .vhead button:active{background:rgba(255,255,255,.16)}
-.viewer .vbody{flex:1;display:grid;place-items:center;padding:0 12px;min-height:0}
-.viewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:10px}
+.viewer .vhead .zoomtag{
+  font-size:12px;color:rgba(255,255,255,.65);margin-left:6px;
+}
+/* 触摸区：overflow:hidden 让放大后的图不会溢出到别处 */
+.vbody{
+  flex:1;position:relative;overflow:hidden;min-height:0;
+  touch-action:none;                    /* 自己处理手势，别让浏览器抢去滚动 */
+  -webkit-user-select:none;user-select:none;
+  display:flex;align-items:center;justify-content:center;
+  cursor:grab;
+}
+.vbody:active{cursor:grabbing}
+/* transform-origin 必须在中心：缩放平移的数学都按「相对容器中心」推导 */
+.vbody img{
+  max-width:100%;max-height:100%;object-fit:contain;display:block;
+  transform-origin:center center;
+  will-change:transform;
+  -webkit-user-drag:none;
+}
 .viewer .vfoot{
-  display:flex;gap:8px;justify-content:center;padding:12px 16px calc(14px + var(--safe-b));
+  display:flex;gap:7px;justify-content:center;align-items:center;
+  padding:12px 12px calc(14px + var(--safe-b));flex-wrap:wrap;
 }
 .viewer .vfoot button{
-  color:#fff;background:rgba(255,255,255,.14);padding:9px 18px;border-radius:99px;font-size:13.5px;
+  color:#fff;background:rgba(255,255,255,.14);padding:9px 14px;border-radius:99px;
+  font-size:13px;white-space:nowrap;
 }
 .viewer .vfoot button:active{background:rgba(255,255,255,.26)}
+.viewer .vfoot .zbtn{
+  background:rgba(255,255,255,.2);min-width:44px;padding:9px 12px;font-size:16px;font-weight:600;
+}
+/* 提示单独占一行，且用负 margin 抵消 flex 的 gap，
+   否则它会被当成第 5 个按钮参与换行，把「上一张/下一张」挤到下一行去。 */
+.viewer .vfoot .hint{
+  flex:0 0 100%;width:100%;text-align:center;color:rgba(255,255,255,.5);
+  font-size:11px;margin-top:6px;
+}
+
+/* ============================ 备忘录 ============================ */
+.seg button[data-kind="memo"].on{color:var(--memo)}
+.seg button[data-kind="memo"].on .n{background:var(--memo)}
+.kindbtn[data-kind="memo"].on{border-color:var(--memo);color:var(--memo);background:rgba(194,116,10,.1)}
+@media (prefers-color-scheme: dark){ .kindbtn[data-kind="memo"].on{background:rgba(232,180,98,.14)} }
+
+/* 搜索栏（只在备忘录区显示） */
+.searchwrap{
+  display:none;padding:0 14px 10px;background:var(--card);border-bottom:1px solid var(--line);
+}
+.searchwrap.show{display:block}
+.searchbox{
+  display:flex;align-items:center;gap:8px;background:var(--line-2);
+  border:1px solid var(--line);border-radius:12px;padding:8px 12px;
+}
+.searchbox:focus-within{border-color:var(--accent);background:var(--accent-soft)}
+.searchbox .ico{font-size:14px;color:var(--ink-3)}
+.searchbox input{
+  flex:1;min-width:0;border:0;background:transparent;outline:none;font-size:14px;
+}
+.searchbox input::placeholder{color:var(--ink-3)}
+.searchbox .clr{
+  font-size:12px;color:var(--accent);font-weight:600;padding:4px 8px;border-radius:8px;display:none;
+}
+.searchbox .clr.show{display:block}
+.searchbox .clr:active{background:var(--accent-soft)}
+/* 搜索结果的计数提示 */
+.searchinfo{
+  padding:8px 18px 0;font-size:12.5px;color:var(--ink-3);
+}
+/* 备忘录卡片：正文按原文换行，保留空行 */
+/* 备忘录卡片：正文按原文换行，允许比作业说明多几行 */
+.item .n.memo{
+  -webkit-line-clamp:4;line-height:1.6;color:var(--ink-2);font-size:13px;
+}
+/* 没写标题时，正文用第一行当标题，剩下的行数要少一点 ——
+   否则一条只有一句话的备忘会被撑到很高的卡片，中间全是空白（实测踩过）。 */
+.item .n.memo.loose{-webkit-line-clamp:2}
+.item .memo-mark{
+  font-size:11px;color:var(--memo);font-weight:600;
+}
 
 /* ============================ 提示条 ============================ */
 .toast{
@@ -323,7 +399,17 @@ details.collapsed[open]>summary{margin-bottom:2px}
   <div class="segwrap">
     <div class="seg" id="seg">
       <button data-kind="homework" class="on"><span class="e">📘</span>作业<span class="n" id="cntHomework">0</span></button>
-      <button data-kind="exercise"><span class="e">✏️</span>课上习题<span class="n" id="cntExercise">0</span></button>
+      <button data-kind="exercise"><span class="e">✏️</span>课堂习题<span class="n" id="cntExercise">0</span></button>
+      <button data-kind="memo"><span class="e">📝</span>备忘<span class="n" id="cntMemo">0</span></button>
+    </div>
+  </div>
+
+  <!-- 搜索：只在备忘录区显示。想法一多就需要找得回来。 -->
+  <div class="searchwrap" id="searchWrap">
+    <div class="searchbox">
+      <span class="ico">🔍</span>
+      <input type="search" id="searchInput" placeholder="搜标题或内容…" autocomplete="off" enterkeyhint="search">
+      <button class="clr" id="searchClear">清空</button>
     </div>
   </div>
 
@@ -343,11 +429,12 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
     <div class="kindrow" id="kindRow">
       <button class="kindbtn on" data-kind="homework">📘 作业</button>
-      <button class="kindbtn" data-kind="exercise">✏️ 课上习题</button>
+      <button class="kindbtn" data-kind="exercise">✏️ 课堂习题</button>
+      <button class="kindbtn" data-kind="memo">📝 备忘</button>
     </div>
 
     <div class="field">
-      <label for="titleInput">这是什么</label>
+      <label for="titleInput" id="titleLabel">这是什么</label>
       <input type="text" id="titleInput" maxlength="60" placeholder="比如：数学练习册 P32" autocomplete="off">
     </div>
 
@@ -357,13 +444,13 @@ details.collapsed[open]>summary{margin-bottom:2px}
     </div>
 
     <div class="field">
-      <label for="noteInput">文字说明（选填）</label>
-      <textarea id="noteInput" maxlength="2000" placeholder="比如：第 1-5 题，明天上课要交；或者题目要求抄下来"></textarea>
+      <label for="noteInput" id="noteLabel">文字说明（选填）</label>
+      <textarea id="noteInput" maxlength="5000" placeholder="比如：第 1-5 题，明天上课要交；或者题目要求抄下来"></textarea>
     </div>
 
     <div class="field" style="margin-bottom:6px">
       <div class="photo-label">
-        <span>照片（拍的作业 / 黑板 / 题目）</span>
+        <span id="photoLabel">照片（拍的作业 / 黑板 / 题目）</span>
         <span id="photoCount">0 / 30</span>
       </div>
       <div class="photo-grid" id="photoGrid"></div>
@@ -378,16 +465,20 @@ details.collapsed[open]>summary{margin-bottom:2px}
     <input type="file" id="fileGallery" accept="image/*" multiple style="display:none">
   </div>
 
-  <!-- ==================== 照片查看 ==================== -->
+  <!-- ==================== 照片查看（支持双指缩放 / 双击放大 / 拖动） ==================== -->
   <div class="viewer" id="viewer">
     <div class="vhead">
-      <span id="viewerTitle">照片</span>
+      <span><span id="viewerTitle">照片</span><span class="zoomtag" id="viewerZoom"></span></span>
       <button id="viewerClose">关闭</button>
     </div>
-    <div class="vbody"><img id="viewerImg" alt=""></div>
+    <div class="vbody" id="viewerBody"><img id="viewerImg" alt="" draggable="false"></div>
     <div class="vfoot">
+      <button class="zbtn" id="viewerZoomOut" title="缩小">−</button>
+      <button class="zbtn" id="viewerZoomReset" title="还原">1:1</button>
+      <button class="zbtn" id="viewerZoomIn" title="放大">＋</button>
       <button id="viewerPrev">‹ 上一张</button>
       <button id="viewerNext">下一张 ›</button>
+      <div class="hint">双指缩放 · 双击放大/还原 · 放大后拖动看图</div>
     </div>
   </div>
 
@@ -413,7 +504,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
  * ========================================================================== */
 /* ---------------------------------------------------------------------------
  * 以下为逻辑层（由 homework-app/logic.js 自动内联，请勿直接在此修改）。
- * 单元测试：homework-app/test-logic.js（184 项）
+ * 单元测试：homework-app/test-logic.js（241 项）
  * ------------------------------------------------------------------------- */
 /* ===========================================================================
  * 作业盒子 —— 纯逻辑层（不依赖 DOM / 网络）
@@ -434,8 +525,12 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
   var KINDS = {
     homework: { key: 'homework', name: '作业', emoji: '📘', hasDue: true },
-    exercise: { key: 'exercise', name: '课上习题', emoji: '✏️', hasDue: false }
+    exercise: { key: 'exercise', name: '课上习题', emoji: '✏️', hasDue: false },
+    memo: { key: 'memo', name: '备忘录', emoji: '📝', hasDue: false, isMemo: true }
   };
+
+  /** 合法的 kind 值，用于校验与规范化 */
+  var KIND_KEYS = ['homework', 'exercise', 'memo'];
 
   var DATA_VERSION = 1;
 
@@ -445,6 +540,8 @@ details.collapsed[open]>summary{margin-bottom:2px}
   var MAX_TITLE = 60;
   var MAX_NOTE = 2000;
   var MAX_CAPTION = 40;
+  /** 单条备忘录正文上限：比作业说明长得多，因为备忘录就是拿来写东西的 */
+  var MAX_MEMO = 5000;
 
   /* ----------------------------- 日期工具 ----------------------------- */
 
@@ -604,14 +701,17 @@ details.collapsed[open]>summary{margin-bottom:2px}
       var it = list[i];
       if (!it || typeof it !== 'object') continue;
 
-      var kind = it.kind === 'exercise' ? 'exercise' : 'homework';
+      var kind = KIND_KEYS.indexOf(it.kind) > -1 ? it.kind : 'homework';
+      var isMemo = kind === 'memo';
+      // 备忘录允许写更长的正文
+      var noteLimit = isMemo ? MAX_MEMO : MAX_NOTE;
       var title = typeof it.title === 'string' ? it.title.trim().slice(0, MAX_TITLE) : '';
       var photos = cleanPhotos(it.photos);
-      var note = typeof it.note === 'string' ? it.note.slice(0, MAX_NOTE) : '';
+      var note = typeof it.note === 'string' ? it.note.slice(0, noteLimit) : '';
       // 什么都没有的条目没有意义，丢掉
       if (!title && !note && photos.length === 0) continue;
 
-      // 习题不存截止日期
+      // 只有作业才存截止日期
       var due = kind === 'homework' && isValidDateKey(it.due) ? it.due : null;
 
       var id = typeof it.id === 'string' && it.id ? it.id : uid();
@@ -710,6 +810,45 @@ details.collapsed[open]>summary{margin-bottom:2px}
    *   banner:{ level, text, detail } | null
    * }
    */
+  /** 条目是否匹配搜索词（标题 + 正文，不区分大小写） */
+  function matchesQuery(item, query) {
+    if (!query) return true;
+    var q = String(query).trim().toLowerCase();
+    if (!q) return true;
+    var hay = ((item.title || '') + '\n' + (item.note || '')).toLowerCase();
+    return hay.indexOf(q) > -1;
+  }
+
+  /**
+   * 按「今天 / 昨天 / 更早」把备忘录分组。
+   * 备忘录是随手记想法，按时间倒序最符合直觉。
+   */
+  function groupMemoByDate(items, todayKey) {
+    // 对外输入一律不抛异常（本项目约定）：null / 非数组当作空
+    if (!Array.isArray(items)) items = [];
+    var today = [], yesterday = [], earlier = [];
+    var tk = isValidDateKey(todayKey) ? todayKey : null;
+    var yk = null;
+    if (tk) {
+      var d = fromDateKey(tk);
+      d.setDate(d.getDate() - 1);
+      yk = toDateKey(d);
+    }
+    items.forEach(function (it) {
+      // 没有 createdAt 的用当天兜底
+      var day = it.createdAt ? toDateKey(new Date(it.createdAt)) : tk;
+      if (!tk || !day) { earlier.push(it); return; }
+      if (day === tk) today.push(it);
+      else if (day === yk) yesterday.push(it);
+      else earlier.push(it);
+    });
+    var groups = [];
+    if (today.length) groups.push({ key: 'today', title: '今天记的', tone: 'calm', items: today });
+    if (yesterday.length) groups.push({ key: 'yesterday', title: '昨天', tone: 'calm', items: yesterday });
+    if (earlier.length) groups.push({ key: 'earlier', title: '更早', tone: 'calm', items: earlier });
+    return groups;
+  }
+
   function kindSummary(state, kind, todayKey, opts) {
     opts = opts || {};
     var all = itemsOfKind(state, kind);
@@ -745,6 +884,31 @@ details.collapsed[open]>summary{margin-bottom:2px}
         return String(b2.id) < String(a.id) ? -1 : 1;
       });
       if (doneSorted.length) groups.push({ key: 'done', title: '已完成', tone: 'muted', items: doneSorted });
+    } else if (cfg.isMemo) {
+      // 备忘录：按时间倒序，按「今天 / 昨天 / 更早」分组。
+      // 搜索时把已归档的也算进来（否则会「搜不到」）；
+      // 不搜索时归档的单独收进 done 组 —— 和习题区一致，用户能翻得到，不会以为丢了。
+      var q = opts.query ? String(opts.query).trim() : '';
+      var hit = all.filter(function (x) { return matchesQuery(x, q); });
+      var byTimeDesc = hit.slice().sort(function (a, b2) {
+        if ((b2.createdAt || 0) !== (a.createdAt || 0)) return (b2.createdAt || 0) - (a.createdAt || 0);
+        return String(b2.id) < String(a.id) ? -1 : 1;
+      });
+      var memoPending = byTimeDesc.filter(function (x) { return !x.done; });
+      var memoDone = byTimeDesc.filter(function (x) { return x.done; });
+      groupMemoByDate(memoPending, todayKey).forEach(function (g) { groups.push(g); });
+      if (memoDone.length) groups.push({ key: 'done', title: '已归档', tone: 'muted', items: memoDone });
+
+      return {
+        kind: kind,
+        pendingCount: pending.length,
+        doneCount: done.length,
+        total: all.length,
+        matched: q ? hit.length : all.length,
+        query: q,
+        groups: groups,
+        banner: null
+      };
     } else {
       // 习题：按创建时间倒序（新拍的放上面）。createdAt 可能同毫秒，用 id 兜底保证顺序稳定。
       var sorted = pending.slice().sort(function (a, b2) {
@@ -783,15 +947,16 @@ details.collapsed[open]>summary{margin-bottom:2px}
   /** 新增一条。返回 { state, item } 或 { error } —— 不修改入参 */
   function addItem(state, input) {
     input = input || {};
-    var kind = input.kind === 'exercise' ? 'exercise' : 'homework';
+    var kind = KIND_KEYS.indexOf(input.kind) > -1 ? input.kind : 'homework';
+    var noteLimit = kind === 'memo' ? MAX_MEMO : MAX_NOTE;
     var title = typeof input.title === 'string' ? input.title.trim().slice(0, MAX_TITLE) : '';
-    var note = typeof input.note === 'string' ? input.note.slice(0, MAX_NOTE) : '';
+    var note = typeof input.note === 'string' ? input.note.slice(0, noteLimit) : '';
     var cleaned = cleanPhotosDetailed(input.photos);
     var photos = cleaned.photos;
     if (!title && !note && photos.length === 0) {
       // 有照片被丢掉时，给出更准确的原因，而不是笼统的「写点什么」
       if (cleaned.dropped) return { error: droppedMessage(cleaned.dropped) };
-      return { error: '写点什么，或者加张照片' };
+      return { error: kind === 'memo' ? '写点什么再存' : '写点什么，或者加张照片' };
     }
 
     var due = null;
@@ -837,14 +1002,15 @@ details.collapsed[open]>summary{margin-bottom:2px}
       done: patch.done !== undefined ? !!patch.done : old.done
     };
 
+    var noteLimit = old.kind === 'memo' ? MAX_MEMO : MAX_NOTE;
     var title = typeof merged.title === 'string' ? merged.title.trim().slice(0, MAX_TITLE) : '';
-    var note = typeof merged.note === 'string' ? merged.note.slice(0, MAX_NOTE) : '';
+    var note = typeof merged.note === 'string' ? merged.note.slice(0, noteLimit) : '';
     var cleaned = cleanPhotosDetailed(merged.photos);
     var photos = cleaned.photos;
 
     if (!title && !note && photos.length === 0) {
       if (cleaned.dropped) return { error: droppedMessage(cleaned.dropped) };
-      return { error: '写点什么，或者加张照片' };
+      return { error: old.kind === 'memo' ? '写点什么再存' : '写点什么，或者加张照片' };
     }
 
     var due = null;
@@ -952,16 +1118,19 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
   return {
     KINDS: KINDS,
+    KIND_KEYS: KIND_KEYS,
     DATA_VERSION: DATA_VERSION,
     MAX_PHOTOS: MAX_PHOTOS,
     MAX_TITLE: MAX_TITLE,
     MAX_NOTE: MAX_NOTE,
+    MAX_MEMO: MAX_MEMO,
     MAX_PHOTO_CHARS: MAX_PHOTO_CHARS,
     // 日期
     pad2: pad2, toDateKey: toDateKey, fromDateKey: fromDateKey, isValidDateKey: isValidDateKey,
     daysBetween: daysBetween, daysUntil: daysUntil, relativeDate: relativeDate, longDate: longDate,
     // 状态
     dueStatus: dueStatus, bucketByUrgency: bucketByUrgency, kindSummary: kindSummary,
+    matchesQuery: matchesQuery, groupMemoByDate: groupMemoByDate,
     // 数据
     emptyState: emptyState, normalizeState: normalizeState, uid: uid,
     itemsOfKind: itemsOfKind, findItem: findItem, countPhotos: countPhotos,
@@ -971,6 +1140,157 @@ details.collapsed[open]>summary{margin-bottom:2px}
     removeItem: removeItem, addPhoto: addPhoto, removePhoto: removePhoto,
     // 导入导出
     serialize: serialize, deserialize: deserialize, toCSV: toCSV
+  };
+});
+
+
+/* ---------------------------------------------------------------------------
+ * 以下为图片缩放的数学部分（由 homework-app/zoom.js 自动内联）。
+ * 单元测试：homework-app/test-zoom.js（103 项）
+ * ------------------------------------------------------------------------- */
+/* ===========================================================================
+ * 图片查看器的缩放/平移数学（纯函数，不依赖 DOM，可在 Node 里单测）
+ *
+ * 为什么单独抽出来：手势缩放最容易出的问题是「缩放中心漂移」和「图片被拖出
+ * 屏幕外找不回来」。这些都能写成纯函数测清楚，不用靠手指试。
+ *
+ * 坐标约定：
+ *   · x/y 是「图片相对容器左上角的偏移」（CSS 的 translate 值）
+ *   · scale 是缩放倍数
+ *   · offset 是触摸点相对**容器**左上角的坐标
+ *   · 图片的基准尺寸 = 容器尺寸（object-fit: contain 的视觉效果由 <img> 自己负责）
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.ZoomMath = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  var MIN_SCALE = 1;
+  var MAX_SCALE = 6;
+  /** 双击放大的目标倍数 */
+  var DOUBLE_TAP_SCALE = 2.5;
+  /** 触摸点坐标取整用，避免亚像素抖动 */
+  var EPS = 0.01;
+
+  function clamp(v, lo, hi) {
+    // 只有 NaN 算非法；±Infinity 应该被夹到边界，而不是当成非法值
+    if (typeof v !== 'number' || v !== v) return lo;
+    return v < lo ? lo : (v > hi ? hi : v);
+  }
+
+  function clampScale(s) {
+    // 只把 NaN / 非正数当非法；Infinity 交给 clamp 夹到上限
+    if (typeof s !== 'number' || s !== s || s <= 0) return MIN_SCALE;
+    return clamp(s, MIN_SCALE, MAX_SCALE);
+  }
+
+  /** 缩放后允许的偏移范围：图比容器大才能拖，否则居中（0） */
+  function clampOffset(x, y, scale, view) {
+    scale = clampScale(scale);
+    var vw = (view && view.w) || 0;
+    var vh = (view && view.h) || 0;
+    var maxX = Math.max(0, (vw * scale - vw) / 2);
+    var maxY = Math.max(0, (vh * scale - vh) / 2);
+    return { x: clamp(x, -maxX, maxX), y: clamp(y, -maxY, maxY) };
+  }
+
+  /**
+   * 以某个点为锚点把比例从 from 变到 to。
+   * 核心公式：缩放前后，锚点对应的图片位置必须保持不动。
+   *   设偏移 x、比例 s，图片坐标 u = (px - x) / s
+   *   要求 (px - x') / s' = u  =>  x' = px - (px - x) * s'/s
+   */
+  function zoomAt(x, y, from, to, px, py, view) {
+    var s1 = clampScale(from);
+    var s2 = clampScale(to);
+    var k = s2 / s1;
+    var nx = px - (px - (x || 0)) * k;
+    var ny = py - (py - (y || 0)) * k;
+    // 缩回 1 倍时强制归位，避免留下浮点残差
+    if (s2 <= MIN_SCALE + 1e-9) return { scale: MIN_SCALE, x: 0, y: 0 };
+    var c = clampOffset(nx, ny, s2, view);
+    return { scale: s2, x: c.x, y: c.y };
+  }
+
+  /** 双击：1 倍时放大到锚点，已放大时回到 1 倍居中 */
+  function doubleTap(x, y, scale, px, py, view) {
+    if (clampScale(scale) > MIN_SCALE + 0.01) {
+      return { scale: MIN_SCALE, x: 0, y: 0 };
+    }
+    return zoomAt(x, y, MIN_SCALE, DOUBLE_TAP_SCALE, px, py, view);
+  }
+
+  /**
+   * 平移：在现有偏移上叠加，并夹到合法范围。
+   * 返回值带上 scale —— 三个函数（zoomAt / doubleTap / pan）返回结构一致，
+   * 调用方可以一路 `st = Z.pan(st.x, st.y, ..., st.scale, view)` 而不会把比例丢掉。
+   * （早期版本只返回 {x,y}，结果调用方一路传下去就把 scale 丢了，手势直接失效。）
+   */
+  function pan(x, y, dx, dy, scale, view) {
+    var s = clampScale(scale);
+    var c = clampOffset((x || 0) + dx, (y || 0) + dy, s, view);
+    return { scale: s, x: c.x, y: c.y };
+  }
+
+  /** 两指距离（用于算缩放倍数） */
+  function distance(p1, p2) {
+    if (!p1 || !p2) return 0;
+    var dx = (p2.x || 0) - (p1.x || 0);
+    var dy = (p2.y || 0) - (p1.y || 0);
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /** 两指中点（缩放锚点） */
+  function midpoint(p1, p2) {
+    if (!p1) return { x: 0, y: 0 };
+    if (!p2) return { x: p1.x || 0, y: p1.y || 0 };
+    return { x: ((p1.x || 0) + (p2.x || 0)) / 2, y: ((p1.y || 0) + (p2.y || 0)) / 2 };
+  }
+
+  /**
+   * 双指手势的完整一次更新。
+   * 同时处理缩放与平移（两指中点移动也算平移），这是手感自然的关键。
+   */
+  function pinch(start, current, view) {
+    var p0 = start && start.p1, q0 = start && start.p2;
+    var p1 = current && current.p1, q1 = current && current.p2;
+    var d0 = distance(p0, q0);
+    var d1 = distance(p1, q1);
+    var from = clampScale((start && start.scale) || MIN_SCALE);
+    var to = d0 > 0 ? clampScale(from * (d1 / d0)) : from;
+    var m0 = midpoint(p0, q0);
+    var m1 = midpoint(p1, q1);
+    // 先以起始中点为锚点缩放，再加上中点自身的位移
+    var z = zoomAt((start && start.x) || 0, (start && start.y) || 0, from, to, m0.x, m0.y, view);
+    var p = pan(z.x, z.y, m1.x - m0.x, m1.y - m0.y, to, view);
+    // 注意：必须把 scale 带上。pan() 只返回 {x,y}，
+    // 直接返回它会让调用方拿不到比例 —— 缩放手势就完全失效了。
+    return { scale: to, x: p.x, y: p.y };
+  }
+
+  /** 当前是否处于放大状态（决定左右滑动是"换图"还是"平移"） */
+  function isZoomed(scale) { return clampScale(scale) > MIN_SCALE + 0.01; }
+
+  /** 把一个数值夹到 [lo,hi]，用于手势阈值判定 */
+  function within(v, lo, hi) { return v >= lo && v <= hi; }
+
+  return {
+    MIN_SCALE: MIN_SCALE,
+    MAX_SCALE: MAX_SCALE,
+    DOUBLE_TAP_SCALE: DOUBLE_TAP_SCALE,
+    clamp: clamp,
+    clampScale: clampScale,
+    clampOffset: clampOffset,
+    zoomAt: zoomAt,
+    doubleTap: doubleTap,
+    pan: pan,
+    distance: distance,
+    midpoint: midpoint,
+    pinch: pinch,
+    isZoomed: isZoomed,
+    within: within
   };
 });
 
@@ -1048,7 +1368,10 @@ details.collapsed[open]>summary{margin-bottom:2px}
   /* ---------- 视图状态 ---------- */
   let activeKind = 'homework';
   let draft = null;                 // 弹层草稿
-  let viewerState = null;           // 照片查看器 { photos, index }
+  let viewerState = null;           // 照片查看器 { photos, index, scale, x, y }
+  let memoQuery = '';               // 备忘录搜索词
+  /** 手势状态的只读镜像（给测试用；真实变量在 bindViewerGestures 内部） */
+  const gestureMirror = { pointers: 0, panStart: false, gestureStart: false };
 
   /* ============================ ③ 图片压缩 ============================ */
   /**
@@ -1117,15 +1440,21 @@ details.collapsed[open]>summary{margin-bottom:2px}
     const week = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getDay()];
     el('todayLine').textContent = `${d.getMonth() + 1}月${d.getDate()}日 ${week}`;
 
-    // 两个区的待完成数量（显示在分段按钮上）
+    // 三个区的待完成数量（显示在分段按钮上）
     const hwSum = L.kindSummary(state, 'homework', tk);
     const exSum = L.kindSummary(state, 'exercise', tk);
+    const memoSum = L.kindSummary(state, 'memo', tk, { query: memoQuery });
     el('cntHomework').textContent = hwSum.pendingCount;
     el('cntExercise').textContent = exSum.pendingCount;
+    el('cntMemo').textContent = memoSum.pendingCount;
     el('cntHomework').style.display = hwSum.pendingCount ? '' : 'none';
     el('cntExercise').style.display = exSum.pendingCount ? '' : 'none';
+    el('cntMemo').style.display = memoSum.pendingCount ? '' : 'none';
 
-    const sum = activeKind === 'homework' ? hwSum : exSum;
+    const sum = activeKind === 'homework' ? hwSum : (activeKind === 'exercise' ? exSum : memoSum);
+
+    // 搜索栏只在备忘录区出现（作业和习题是按截止日/时间找，不需要搜）
+    el('searchWrap').classList.toggle('show', activeKind === 'memo');
 
     // 提醒横幅：只在作业区显示（习题没有截止日期）
     let bannerHtml = '';
@@ -1154,17 +1483,51 @@ details.collapsed[open]>summary{margin-bottom:2px}
     renderList(sum, tk);
   }
 
+  /** 每个区的文案集中放这里，避免散落在各处 */
+  const KIND_UI = {
+    homework: {
+      emoji: '📘',
+      empty: '还没有作业。<br>老师布置完就点右下角 ＋ 记下来，<br>拍张照、写上截止日期。',
+      emptyBtn: '记第一样作业',
+      allDone: '作业都做完了，<br>没有待办的了。',
+      addTitle: '添加作业'
+    },
+    exercise: {
+      emoji: '✏️',
+      empty: '还没有习题。<br>上课拍的题都放这里，<br>和作业分开，不会混在一起。',
+      emptyBtn: '存第一道题',
+      allDone: '习题都处理完了，<br>没有待办的了。',
+      addTitle: '添加习题'
+    },
+    memo: {
+      emoji: '📝',
+      empty: '还没有备忘。<br>想到什么就点右下角 ＋ 记下来，<br>只写文字也行，加张照片也行。',
+      emptyBtn: '写第一条备忘',
+      allDone: '备忘都归档了，<br>没有待处理的了。',
+      addTitle: '写备忘'
+    }
+  };
+
   function renderList(sum, tk) {
     const scroll = el('scroll');
+    const ui = KIND_UI[activeKind] || KIND_UI.homework;
+    const searching = activeKind === 'memo' && !!memoQuery;
 
     if (sum.total === 0) {
-      const isHw = activeKind === 'homework';
       scroll.innerHTML = `<div class="empty">
-        <div class="big">${isHw ? '📘' : '✏️'}</div>
-        <p>${isHw
-          ? '还没有作业。<br>老师布置完就点右下角 ＋ 记下来，<br>拍张照、写上截止日期。'
-          : '还没有习题。<br>上课拍的题都放这里，<br>和作业分开，不会混在一起。'}</p>
-        <button class="btn-primary" id="emptyAdd">${isHw ? '记第一样作业' : '存第一道题'}</button>
+        <div class="big">${ui.emoji}</div>
+        <p>${ui.empty}</p>
+        <button class="btn-primary" id="emptyAdd">${ui.emptyBtn}</button>
+      </div>`;
+      return;
+    }
+
+    // 搜索没命中：要说清楚是"没搜到"，而不是"你还没记过东西"
+    if (searching && !sum.groups.some((g) => g.items.length > 0)) {
+      scroll.innerHTML = `<div class="empty">
+        <div class="big">🔍</div>
+        <p>没有找到包含「${esc(memoQuery)}」的备忘。</p>
+        <button class="btn-primary" id="searchClear2">清空搜索</button>
       </div>`;
       return;
     }
@@ -1174,12 +1537,15 @@ details.collapsed[open]>summary{margin-bottom:2px}
     if (!hasAnyItems) {
       scroll.innerHTML = `<div class="empty">
         <div class="big">🎉</div>
-        <p>${activeKind === 'homework' ? '作业' : '习题'}都做完了，<br>没有待办的了。</p>
+        <p>${ui.allDone}</p>
       </div>`;
       return;
     }
 
     let html = '';
+    if (searching) {
+      html += `<div class="searchinfo">找到 ${sum.matched} 条包含「${esc(memoQuery)}」的备忘</div>`;
+    }
     sum.groups.forEach((g) => {
       if (!g.items.length) return;
       if (g.key === 'done') {
@@ -1207,23 +1573,30 @@ details.collapsed[open]>summary{margin-bottom:2px}
     const ds = L.dueStatus(it.due, tk);
     const tone = it.done ? '' : (ds.overdue ? 'tone-danger' : (ds.urgent ? 'tone-warn' : ''));
 
-    // 标题：没写标题时用说明的第一行代替，避免卡片一片空白
+    const isMemo = it.kind === 'memo';
+    /** 备忘录显示「哪天记的」，因为它的价值就在于时间点 */
+    const memoDate = isMemo ? L.relativeDate(L.toDateKey(new Date(it.createdAt || Date.now())), tk) : '';
+
+    // 标题：没写标题时用正文第一行代替，避免卡片一片空白
     let titleHtml;
     if (it.title) {
       titleHtml = `<div class="t">${esc(it.title)}</div>`;
     } else {
       const firstLine = (it.note || '').split('\n')[0].slice(0, 40);
-      titleHtml = `<div class="t empty">${esc(firstLine || '（只有照片）')}</div>`;
+      titleHtml = `<div class="t untitled">${esc(firstLine || '（只有照片）')}</div>`;
     }
 
-    // 说明：标题已占用第一行时，说明整体显示；否则跳过第一行避免重复
+    // 正文：标题已占用第一行时，正文整体显示；否则跳过第一行避免重复
     let noteHtml = '';
     if (it.note) {
+      // 没标题时正文被拆成「标题行 + 剩下的正文」，剩下的行数要限制得更少，
+      // 否则只有一句话的备忘会被撑成很高的卡片（中间大片空白）。
+      const memoCls = isMemo ? (' memo' + (it.title ? '' : ' loose')) : '';
       if (it.title) {
-        noteHtml = `<div class="n">${escMultiline(it.note)}</div>`;
+        noteHtml = `<div class="n${memoCls}">${escMultiline(it.note)}</div>`;
       } else {
         const rest = it.note.split('\n').slice(1).join('\n').trim();
-        if (rest) noteHtml = `<div class="n">${escMultiline(rest)}</div>`;
+        if (rest) noteHtml = `<div class="n${memoCls}">${escMultiline(rest)}</div>`;
       }
     }
 
@@ -1233,11 +1606,15 @@ details.collapsed[open]>summary{margin-bottom:2px}
       const cls = ds.overdue ? 'danger' : (ds.urgent ? 'warn' : 'calm');
       chips += `<span class="chip ${cls}">🗓 ${esc(ds.short)}<span class="d">· ${esc(L.relativeDate(it.due, tk))}</span></span>`;
     }
+    // 备忘录显示记录时间（它没有截止日期）
+    if (isMemo && memoDate) {
+      chips += `<span class="chip calm">🕐 ${esc(memoDate)}</span>`;
+    }
     if (it.photos.length) {
       chips += `<span class="chip ph">📷 ${it.photos.length} 张</span>`;
     }
     if (it.done) {
-      chips += `<span class="chip calm">✅ 已完成</span>`;
+      chips += `<span class="chip calm">✅ ${isMemo ? '已归档' : '已完成'}</span>`;
     }
 
     // 缩略图（最多 4 张，多的显示 +N）
@@ -1306,10 +1683,22 @@ details.collapsed[open]>summary{margin-bottom:2px}
     document.querySelectorAll('#kindRow .kindbtn').forEach((b) => {
       b.classList.toggle('on', b.dataset.kind === draft.kind);
     });
-    // 习题没有截止日期，直接隐藏这一栏
+    // 只有作业有截止日期，其他类型直接隐藏这一栏
     const hasDue = KINDS[draft.kind].hasDue;
     el('dueField').style.display = hasDue ? '' : 'none';
     if (!hasDue) draft.due = '';
+
+    // 备忘录：正文是主角，所以输入框加高、占位提示换掉、标题变成选填
+    const isMemo = draft.kind === 'memo';
+    el('noteInput').style.minHeight = isMemo ? '190px' : '';
+    el('noteInput').placeholder = isMemo
+      ? '想到什么就写下来…\n\n可以写好几行，也可以分条：\n· 明天问老师那道题\n· 想做个错题本'
+      : '比如：第 1-5 题，明天上课要交；或者题目要求抄下来';
+    el('titleLabel').textContent = isMemo ? '标题（选填）' : '这是什么';
+    el('titleInput').placeholder = isMemo ? '不写就用正文第一行' : '比如：数学练习册 P32';
+    el('photoLabel').textContent = isMemo
+      ? '照片（选填，想到的东西拍下来）'
+      : '照片（拍的作业 / 黑板 / 题目）';
   }
 
   function renderPhotos() {
@@ -1335,6 +1724,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
     const all = state.items;
     const hw = all.filter((x) => x.kind === 'homework').length;
     const ex = all.filter((x) => x.kind === 'exercise').length;
+    const mm = all.filter((x) => x.kind === 'memo').length;
     // localStorage 一般给 5MB；到 80% 就提醒
     const limit = 5 * 1024 * 1024;
     const pct = Math.min(100, Math.round(bytes / limit * 100));
@@ -1343,7 +1733,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
     el('dataBody').innerHTML = `
       <div class="field" style="margin-bottom:14px">
         <div style="font-size:13px;color:var(--ink-2);line-height:1.7">
-          作业 <b>${hw}</b> 条 ｜ 习题 <b>${ex}</b> 条 ｜ 照片 <b>${ps.photos}</b> 张<br>
+          作业 <b>${hw}</b> 条 ｜ 习题 <b>${ex}</b> 条 ｜ 备忘 <b>${mm}</b> 条 ｜ 照片 <b>${ps.photos}</b> 张<br>
           占用空间约 <b>${L.formatBytes(bytes)}</b>
         </div>
         <div style="height:7px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-top:8px">
@@ -1387,16 +1777,104 @@ details.collapsed[open]>summary{margin-bottom:2px}
     el('sheet2').classList.remove('show');
   }
 
-  /* ---------------- 照片查看器 ---------------- */
+  /* ============================================================================
+   * 照片查看器（支持双指缩放 / 双击放大 / 拖动 / ＋− 按钮 / 还原）
+   *
+   * 坐标约定：transform: translate(x,y) scale(s)，transform-origin 在图片中心。
+   * 所以 x/y 是「图片中心相对容器中心的偏移」，允许范围由 ZoomMath.clampOffset 算。
+   * 所有数学都在 zoom.js（纯函数、有 103 项单元测试），这里只管手势与 DOM。
+   * ========================================================================== */
+  const Z = window.ZoomMath;
+
+  /** 把当前缩放状态应用到图片上 */
+  function applyZoom() {
+    if (!viewerState) return;
+    const s = viewerState.scale || 1;
+    const x = viewerState.x || 0;
+    const y = viewerState.y || 0;
+    el('viewerImg').style.transform =
+      `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px) scale(${s.toFixed(3)})`;
+    // 显示倍数（1 倍时不显示，避免干扰）
+    el('viewerZoom').textContent = s > 1.01 ? `${s.toFixed(1)}×` : '';
+    el('viewerZoomOut').disabled = s <= Z.MIN_SCALE + 0.01;
+    el('viewerBody').style.cursor = s > 1.01 ? 'grab' : 'default';
+  }
+
+  /** 查看区域的尺寸（图片基准尺寸就是它，因为 object-fit: contain） */
+  function viewSize() {
+    const r = el('viewerBody').getBoundingClientRect();
+    return { w: r.width || 1, h: r.height || 0 || 1 };
+  }
+
+  /** 重置缩放（换图、打开、还原按钮都走这里） */
+  function resetZoom() {
+    if (!viewerState) return;
+    viewerState.scale = 1;
+    viewerState.x = 0;
+    viewerState.y = 0;
+    applyZoom();
+  }
+
+  /** 按某个点缩放（px/py 是相对容器左上角的坐标） */
+  function zoomTo(scale, px, py) {
+    if (!viewerState) return;
+    const cur = { scale: viewerState.scale || 1, x: viewerState.x || 0, y: viewerState.y || 0 };
+    const v = viewSize();
+    const r = Z.zoomAt(cur.x, cur.y, cur.scale, scale, px, py, v);
+    viewerState.scale = r.scale;
+    viewerState.x = r.x;
+    viewerState.y = r.y;
+    applyZoom();
+  }
+
+  /**
+   * ＋ / − 按钮：在**当前位置**上追加缩放，而不是每次都以容器中心为锚点。
+   *
+   * 为什么这么改（真实手感问题）：若每次都锚定容器中心，连续点两下 ＋ 就会把图
+   * 顶到偏移极限 —— 此时再拖动是拖不动的（已经被夹住），用户会觉得"放大了却动不了"。
+   * 锚定「当前可见区域的中心」时，每次缩放都恰好留出可拖动的余量。
+   */
+  function zoomByCenter(factor) {
+    const v = viewSize();
+    const cur = viewerState ? (viewerState.scale || 1) : 1;
+    const anchorX = v.w / 2 + (viewerState ? (viewerState.x || 0) : 0);
+    const anchorY = v.h / 2 + (viewerState ? (viewerState.y || 0) : 0);
+    zoomTo(cur * factor, anchorX, anchorY);
+  }
+
+  /** 更新标题（图片名 + 序号 + 草稿标记） */
+  function updateViewerTitle() {
+    if (!viewerState) return;
+    const n = viewerState.photos.length;
+    const name = viewerState.label || '照片';
+    el('viewerTitle').textContent = `${name} · ${viewerState.index + 1}/${n}`;
+  }
+
+  /** 打开查看器。photos 是照片数组，label 显示在标题里 */
+  function openViewerWith(photos, index, label) {
+    if (!photos || !photos.length) return;
+    const i = Math.max(0, Math.min(index, photos.length - 1));
+    viewerState = {
+      photos: photos,
+      index: i,
+      label: label || '照片',
+      fromDraft: !!viewerState && !!viewerState.fromDraft
+    };
+    resetZoom();
+    el('viewerImg').src = photos[i].data;
+    updateViewerTitle();
+    const multi = photos.length > 1;
+    el('viewerPrev').style.visibility = multi ? '' : 'hidden';
+    el('viewerNext').style.visibility = multi ? '' : 'hidden';
+    el('viewer').classList.add('show');
+    // 容器尺寸要等显示后才有值，下一帧再校正一次
+    requestAnimationFrame(applyZoom);
+  }
+
   function openViewer(itemId, index) {
     const it = L.findItem(state, itemId);
     if (!it || !it.photos.length) return;
-    viewerState = { photos: it.photos, index: Math.max(0, Math.min(index, it.photos.length - 1)) };
-    el('viewerTitle').textContent = (it.title || '照片') + ' · ' + (viewerState.index + 1) + '/' + it.photos.length;
-    el('viewerImg').src = viewerState.photos[viewerState.index].data;
-    el('viewerPrev').style.visibility = viewerState.photos.length > 1 ? '' : 'hidden';
-    el('viewerNext').style.visibility = viewerState.photos.length > 1 ? '' : 'hidden';
-    el('viewer').classList.add('show');
+    openViewerWith(it.photos, index, it.title || KINDS[it.kind].name);
   }
 
   function moveViewer(delta) {
@@ -1404,14 +1882,169 @@ details.collapsed[open]>summary{margin-bottom:2px}
     const n = viewerState.photos.length;
     viewerState.index = (viewerState.index + delta + n) % n;
     el('viewerImg').src = viewerState.photos[viewerState.index].data;
-    const t = el('viewerTitle').textContent.replace(/\s·\s\d+\/\d+$/, '');
-    el('viewerTitle').textContent = t + ' · ' + (viewerState.index + 1) + '/' + n;
+    resetZoom();               // 换图必须还原缩放，否则看下一张时位置很怪
+    updateViewerTitle();
   }
 
   function closeViewer() {
+    const wasDraft = !!(viewerState && viewerState.fromDraft);
     el('viewer').classList.remove('show');
     el('viewerImg').src = '';
+    el('viewerImg').style.transform = '';
     viewerState = null;
+    if (wasDraft) renderPhotos();
+  }
+
+  /* ---------------- 手势绑定（指针事件，鼠标和触摸都支持） ---------------- */
+  function bindViewerGestures() {
+    const body = el('viewerBody');
+    const pointers = new Map();     // pointerId -> {x,y}（相对容器）
+    let gestureStart = null;        // 双指起始快照
+    let panStart = null;            // 单指拖动起点
+    let lastTapAt = 0, lastTapX = 0, lastTapY = 0;
+
+    function posOf(e) {
+      const r = body.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+    /** 双指快照：记录起始时的比例/偏移和两指位置 */
+    function snapshot() {
+      const pts = [...pointers.values()];
+      if (pts.length < 2) return null;
+      return {
+        scale: viewerState ? (viewerState.scale || 1) : 1,
+        x: viewerState ? (viewerState.x || 0) : 0,
+        y: viewerState ? (viewerState.y || 0) : 0,
+        p1: pts[0], p2: pts[1]
+      };
+    }
+
+    body.addEventListener('pointerdown', (e) => {
+      if (!viewerState) return;
+      body.setPointerCapture && body.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, posOf(e));
+      if (pointers.size === 1) {
+        panStart = { x: (viewerState.x || 0), y: (viewerState.y || 0), p: posOf(e) };
+      } else if (pointers.size === 2) {
+        gestureStart = snapshot();
+        panStart = null;                  // 双指时不按单指逻辑走
+      }
+      gestureMirror.pointers = pointers.size;
+      gestureMirror.panStart = !!panStart;
+      gestureMirror.gestureStart = !!gestureStart;
+      e.preventDefault();
+    });
+
+    body.addEventListener('pointermove', (e) => {
+      if (!viewerState || !pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, posOf(e));
+
+      if (pointers.size >= 2) {
+        if (!gestureStart) gestureStart = snapshot();
+        if (!gestureStart) return;
+        const pts = [...pointers.values()];
+        const r = Z.pinch(gestureStart, { p1: pts[0], p2: pts[1] }, viewSize());
+        viewerState.scale = r.scale;
+        viewerState.x = r.x;
+        viewerState.y = r.y;
+        applyZoom();
+        e.preventDefault();
+        return;
+      }
+
+      // 单指：只有放大状态才拖动看图
+      if (panStart && Z.isZoomed(viewerState.scale || 1)) {
+        const p = posOf(e);
+        const r = Z.pan(panStart.x, panStart.y, p.x - panStart.p.x, p.y - panStart.p.y,
+          viewerState.scale || 1, viewSize());
+        viewerState.x = r.x;
+        viewerState.y = r.y;
+        applyZoom();
+        e.preventDefault();
+      }
+    });
+
+    /**
+     * 收尾。
+     * keepPointer=true 表示"只把这个指针从跟踪表里清掉，不要结算手势"
+     * —— pointerleave 用它：光标移出容器不等于手势结束，
+     * 但那个指针必须被清掉，否则会变成幽灵指针，把后续单指操作误判成双指。
+     */
+    function endPointer(e, keepPointer) {
+      if (!viewerState) {
+        pointers.delete(e.pointerId);
+        gestureMirror.pointers = pointers.size;
+        return;
+      }
+      const wasSingle = pointers.size === 1;
+      const startPos = panStart ? panStart.p : null;
+      const endPos = posOf(e);
+      pointers.delete(e.pointerId);
+      if (keepPointer) {
+        gestureMirror.pointers = pointers.size;
+        return;
+      }
+      gestureMirror.pointers = pointers.size;
+      gestureMirror.panStart = !!panStart;
+      gestureMirror.gestureStart = !!gestureStart;
+
+      if (pointers.size < 2) gestureStart = null;
+
+      if (pointers.size === 0) {
+        // 单指轻点/滑动：未放大时用于双击和左右换图
+        const zoomed = Z.isZoomed(viewerState.scale || 1);
+        if (wasSingle && startPos && !zoomed) {
+          const dx = endPos.x - startPos.x;
+          const dy = endPos.y - startPos.y;
+          const moved = Math.abs(dx) > 12 || Math.abs(dy) > 12;
+          if (moved && Math.abs(dx) > Math.abs(dy) * 1.6 && Math.abs(dx) > 45) {
+            // 横向滑动 -> 换图
+            moveViewer(dx < 0 ? 1 : -1);
+          } else if (!moved) {
+            // 没移动 -> 可能是双击
+            const now = Date.now();
+            const nearLast = Math.abs(endPos.x - lastTapX) < 40 && Math.abs(endPos.y - lastTapY) < 40;
+            if (now - lastTapAt < 320 && nearLast) {
+              const v = viewSize();
+              const cur = viewerState.scale || 1;
+              const r = Z.doubleTap(viewerState.x || 0, viewerState.y || 0, cur, endPos.x, endPos.y, v);
+              viewerState.scale = r.scale;
+              viewerState.x = r.x;
+              viewerState.y = r.y;
+              applyZoom();
+              lastTapAt = 0;
+            } else {
+              lastTapAt = now;
+              lastTapX = endPos.x;
+              lastTapY = endPos.y;
+            }
+          }
+        }
+        panStart = null;
+        applyZoom();
+      }
+    }
+
+    body.addEventListener('pointerup', (e) => endPointer(e, false));
+    body.addEventListener('pointercancel', (e) => endPointer(e, false));
+    // 指针离开容器：只把它从跟踪表里清掉，不结算手势。
+    // 必须无条件清理：否则会留下幽灵指针，把后续的单指操作误判成双指
+    // （曾导致「未放大时左右滑动换图」完全失效，且很难查）。
+    body.addEventListener('pointerleave', (e) => {
+      if (pointers.has(e.pointerId)) endPointer(e, true);
+    });
+
+    // 桌面端滚轮缩放（顺手支持，手机用不到）
+    body.addEventListener('wheel', (e) => {
+      if (!viewerState) return;
+      e.preventDefault();
+      const p = posOf(e);
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      zoomTo((viewerState.scale || 1) * factor, p.x, p.y);
+    }, { passive: false });
+
+    // 阻止双指手势被浏览器当成页面缩放
+    body.addEventListener('touchmove', (e) => { if (viewerState) e.preventDefault(); }, { passive: false });
   }
 
   /* ============================ 提示 ============================ */
@@ -1506,13 +2139,40 @@ details.collapsed[open]>summary{margin-bottom:2px}
       const b = e.target.closest('button[data-kind]');
       if (!b) return;
       activeKind = b.dataset.kind;
+      // 切走时保留搜索词，切回来还能接着看；但输入框要同步
+      el('searchInput').value = memoQuery;
+      el('searchClear').classList.toggle('show', !!memoQuery);
       el('scroll').scrollTop = 0;
+      render();
+    });
+
+    // 备忘录搜索
+    el('searchInput').addEventListener('input', () => {
+      memoQuery = el('searchInput').value.trim();
+      el('searchClear').classList.toggle('show', !!memoQuery);
+      render();
+    });
+    el('searchInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.target.blur(); }
+      if (e.key === 'Escape') { el('searchInput').value = ''; memoQuery = ''; el('searchClear').classList.remove('show'); render(); }
+    });
+    el('searchClear').addEventListener('click', () => {
+      el('searchInput').value = '';
+      memoQuery = '';
+      el('searchClear').classList.remove('show');
       render();
     });
 
     // 列表：勾选完成 / 打开编辑 / 看照片
     el('scroll').addEventListener('click', (e) => {
       if (e.target.closest('#emptyAdd')) { openSheet({ kind: activeKind }); return; }
+      if (e.target.closest('#searchClear2')) {
+        el('searchInput').value = '';
+        memoQuery = '';
+        el('searchClear').classList.remove('show');
+        render();
+        return;
+      }
 
       const tick = e.target.closest('[data-tick]');
       if (tick) {
@@ -1566,14 +2226,9 @@ details.collapsed[open]>summary{margin-bottom:2px}
       const view = e.target.closest('[data-view]');
       if (view && draft) {
         const i = parseInt(view.dataset.view, 10) || 0;
-        const p = draft.photos[i];
-        if (p) {
-          el('viewerImg').src = p.data;
-          el('viewerTitle').textContent = '草稿照片 · ' + (i + 1) + '/' + draft.photos.length;
-          el('viewerPrev').style.visibility = draft.photos.length > 1 ? '' : 'hidden';
-          el('viewerNext').style.visibility = draft.photos.length > 1 ? '' : 'hidden';
-          viewerState = { photos: draft.photos, index: i, fromDraft: true };
-          el('viewer').classList.add('show');
+        if (draft.photos[i]) {
+          viewerState = { fromDraft: true };       // 先打标记，openViewerWith 会读它
+          openViewerWith(draft.photos, i, '草稿照片');
         }
         return;
       }
@@ -1593,19 +2248,16 @@ details.collapsed[open]>summary{margin-bottom:2px}
     el('fileGallery').addEventListener('change', onFiles);
 
     // 照片查看器
-    el('viewerClose').addEventListener('click', () => {
-      const wasDraft = viewerState && viewerState.fromDraft;
-      closeViewer();
-      if (wasDraft) renderPhotos();
-    });
+    bindViewerGestures();
+    el('viewerClose').addEventListener('click', closeViewer);
     el('viewerPrev').addEventListener('click', () => moveViewer(-1));
     el('viewerNext').addEventListener('click', () => moveViewer(1));
+    el('viewerZoomIn').addEventListener('click', () => zoomByCenter(1.5));
+    el('viewerZoomOut').addEventListener('click', () => zoomByCenter(1 / 1.5));
+    el('viewerZoomReset').addEventListener('click', resetZoom);
+    // 点背景关闭（注意：点图片本身不关，否则看细节时容易误触）
     el('viewer').addEventListener('click', (e) => {
-      if (e.target === el('viewer') || e.target.classList.contains('vbody')) {
-        const wasDraft = viewerState && viewerState.fromDraft;
-        closeViewer();
-        if (wasDraft) renderPhotos();
-      }
+      if (e.target === el('viewer')) closeViewer();
     });
 
     // 数据弹层
@@ -1709,6 +2361,16 @@ details.collapsed[open]>summary{margin-bottom:2px}
     getDraft: () => draft,
     getActiveKind: () => activeKind,
     compressImage: compressImage,
+    /** 查看器的实时状态（测试用，只读） */
+    getViewer: () => viewerState,
+    /** 查看区域尺寸（测试用来核对边界，避免测试里写死尺寸） */
+    getViewSize: () => viewSize(),
+    /** 当前手势状态（测试用，只读） */
+    getGesture: () => ({
+      pointers: gestureMirror.pointers,
+      panStart: gestureMirror.panStart,
+      gestureStart: gestureMirror.gestureStart
+    }),
     /** 当前状态的序列化长度，测试用它精确推算配额 */
     stateSize: () => JSON.stringify(state).length,
     storageOK: () => storageOK
