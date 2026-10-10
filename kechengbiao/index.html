@@ -1,0 +1,3829 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0f766e">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="课程表 —— 完全离线的课表，支持从教务系统导出的 PDF 导入">
+<!-- 完全离线：禁止一切外部资源，绝不联网。
+     PWA 版需要放开 manifest / service worker，由 pwa/build-pwa.js 在构建时
+     用放松版【替换】这一行（不能追加：多条 CSP 叠加生效，旧的那条会拦死）。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: 'self'; manifest-src 'self'; worker-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<!-- PWA 声明：由 pwa/build-pwa.js 注入。通过 file:// 打开时这些会被忽略。 -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>课程表</title>
+<style>
+/* ============================ 设计变量 ============================ */
+:root{
+  --bg:#f5f7f7; --card:#ffffff; --ink:#15201f; --ink-2:#52605e; --ink-3:#8d9a98;
+  --line:#e4eae9; --line-2:#f0f4f3;
+  --accent:#0f766e; --accent-2:#0b5f59; --accent-soft:#e6f2f1;
+  --danger:#dc2f3c; --danger-soft:#fdecec;
+  --warn:#b45309; --warn-soft:#fef3e2;
+  --ok:#128a5b;
+
+  --r-sm:8px; --r-md:12px; --r-lg:18px;
+  --shadow:0 1px 2px rgba(16,32,30,.05), 0 6px 18px rgba(16,32,30,.06);
+  --shadow-lg:0 -8px 36px rgba(16,32,30,.16);
+
+  --safe-t:env(safe-area-inset-top,0px);
+  --safe-b:env(safe-area-inset-bottom,0px);
+  /* 课表格子的行高：用 dvh 让一屏正好放下，不用滚动 */
+  --row-h:42px;
+  --time-w:36px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0e1413; --card:#171f1e; --ink:#e8eeed; --ink-2:#a3b1af; --ink-3:#6d7c7a;
+    --line:#26302e; --line-2:#1d2625;
+    --accent:#37b3a8; --accent-2:#2b9c92; --accent-soft:#14302d;
+    --danger:#f2606b; --danger-soft:#3a1c1f;
+    --warn:#e8a33d; --warn-soft:#33270f;
+    --ok:#38c08a;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.35);
+    --shadow-lg:0 -8px 36px rgba(0,0,0,.5);
+  }
+}
+
+/* ============================ 基础 ============================ */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;height:100%;overflow:hidden}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",
+    "Helvetica Neue",Helvetica,sans-serif;
+  font-size:15px;line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0}
+input,textarea,select{font:inherit;color:inherit}
+
+#app{
+  display:flex;flex-direction:column;
+  height:100%;max-width:560px;margin:0 auto;
+  background:var(--bg);position:relative;
+}
+
+/* ============================ 顶栏 ============================ */
+.topbar{
+  flex:0 0 auto;background:var(--card);
+  padding:calc(var(--safe-t) + 10px) 14px 10px;
+  border-bottom:1px solid var(--line);
+}
+.topbar .row1{display:flex;align-items:center;gap:10px}
+.topbar .title{font-size:19px;font-weight:700;letter-spacing:-.2px}
+.topbar .sub{font-size:12px;color:var(--ink-3);margin-top:1px}
+.topbar .spacer{flex:1}
+.iconbtn{
+  width:34px;height:34px;border-radius:10px;display:grid;place-items:center;
+  font-size:17px;color:var(--ink-2);
+}
+.iconbtn:active{background:var(--line-2)}
+.iconbtn.badge{position:relative}
+.iconbtn.badge::after{
+  content:'';position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:99px;
+  background:var(--danger);border:1.5px solid var(--card);
+}
+
+/* ============================ 周次条 ============================ */
+.weekbar{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  padding:8px 12px;background:var(--card);border-bottom:1px solid var(--line);
+}
+.weekbar .nav{
+  width:32px;height:32px;border-radius:9px;display:grid;place-items:center;
+  font-size:18px;color:var(--ink-2);background:var(--line-2);
+}
+.weekbar .nav:active{background:var(--accent-soft);color:var(--accent)}
+.weekbar .nav:disabled{opacity:.35}
+.weekbar .center{flex:1;text-align:center;min-width:0}
+.weekbar .wk{font-size:15px;font-weight:700}
+.weekbar .wk .this{color:var(--accent)}
+.weekbar .range{font-size:11.5px;color:var(--ink-3);margin-top:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.weekbar .todaybtn{
+  font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);
+  padding:6px 11px;border-radius:99px;white-space:nowrap;
+}
+.weekbar .todaybtn:active{transform:scale(.96)}
+
+/* ============================ 课表网格 ============================ */
+/* 课表区：优先让整张表一屏放下；放不下时（矮屏/窄屏）允许纵向滚动，
+   绝不裁掉内容 —— 之前 gridwrap 是 overflow:hidden，小屏上第 9~11 节直接看不见。 */
+.gridwrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;background:var(--card);
+  -webkit-overflow-scrolling:touch}
+/* ⚠️ 列数必须精确：时间列 + 天数。
+   表头要占满这些列，否则浏览器会补出「隐式列」，
+   表现为表头重叠、日期挤到第一行（踩过这个坑）。 */
+.grid{
+  display:grid;
+  grid-template-columns:var(--time-w) repeat(5, minmax(0,1fr));
+  /* 行高由 fitGridRows() 按可用高度算出来，保证一屏尽量放下。
+     下限 30px（再小就看不清课名了），放不下就靠外层纵向滚动。 */
+  grid-auto-rows:minmax(30px, var(--row-h));
+  min-height:100%;
+}
+.grid.weekend{grid-template-columns:var(--time-w) repeat(7, minmax(0,1fr))}
+
+/* 表头（星期）—— 显式指定列，避免被自动放置到错误位置 */
+.ghead{
+  background:var(--card);
+  border-bottom:1px solid var(--line);border-right:1px solid var(--line-2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:5px 1px;grid-row:1;
+}
+.ghead:last-child{border-right:0}
+.ghead .d{font-size:12.5px;font-weight:600;color:var(--ink-2)}
+.ghead .dt{font-size:10px;color:var(--ink-3);margin-top:1px}
+.ghead.today .d{color:var(--accent)}
+.ghead.today .dt{color:var(--accent);font-weight:600}
+.ghead.corner{font-size:10px;color:var(--ink-3);font-weight:500}
+
+/* 节次时间列 */
+.gtime{
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line-2);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:9.5px;color:var(--ink-3);line-height:1.25;padding:1px 0;
+}
+.gtime .n{font-size:11.5px;font-weight:700;color:var(--ink-2)}
+.gtime .t{font-size:9px}
+
+/* 时段分隔行 */
+.gsep{
+  grid-column:1 / -1;background:var(--line-2);
+  display:flex;align-items:center;gap:6px;padding:0 10px;
+  font-size:10.5px;font-weight:600;color:var(--ink-3);letter-spacing:.5px;
+  border-bottom:1px solid var(--line);
+}
+.gsep::after{content:'';flex:1;height:1px;background:var(--line)}
+
+/* 空格子（画网格线） */
+.gcell{border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.gcell.lastcol{border-right:0}
+
+/* 课程卡片：用 grid 定位，跨节次 */
+.course{
+  margin:2px;border-radius:9px;padding:5px 6px;overflow:hidden;
+  text-align:left;display:flex;flex-direction:column;gap:1px;
+  background:var(--c-bg);border-left:3px solid var(--c-fg);
+  color:var(--c-ink);min-height:0;
+}
+.course:active{filter:brightness(.96)}
+.course .cn{
+  font-size:11.5px;font-weight:600;line-height:1.25;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;
+  word-break:break-word;
+}
+.course .cr{
+  font-size:9.5px;color:var(--c-fg);opacity:.9;margin-top:auto;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+/* 只占 1 格的课：内容更紧凑 */
+.course.one .cn{-webkit-line-clamp:2;font-size:11px}
+.course.one .cr{display:none}
+
+/* 10 套配色，按课程名散列分配（同一门课永远同色） */
+.c0{--c-bg:#e6f2f1;--c-fg:#0f766e;--c-ink:#0b4f4a}
+.c1{--c-bg:#eae9fb;--c-fg:#4f46e5;--c-ink:#3730b5}
+.c2{--c-bg:#fdeef0;--c-fg:#be123c;--c-ink:#8f0f2e}
+.c3{--c-bg:#fdf2e3;--c-fg:#b45309;--c-ink:#8a3f07}
+.c4{--c-bg:#e8f4e9;--c-fg:#15803d;--c-ink:#0f5f2d}
+.c5{--c-bg:#e7f1fb;--c-fg:#1d4ed8;--c-ink:#173da8}
+.c6{--c-bg:#f3ebfa;--c-fg:#7e22ce;--c-ink:#601a9e}
+.c7{--c-bg:#fdeff7;--c-fg:#be185d;--c-ink:#931347}
+.c8{--c-bg:#e9f4f8;--c-fg:#0e7490;--c-ink:#0a5a70}
+.c9{--c-bg:#f1f3e8;--c-fg:#4d7c0f;--c-ink:#3b600b}
+@media (prefers-color-scheme: dark){
+  .c0{--c-bg:#12302d;--c-fg:#4fc7bb;--c-ink:#c8ebe7}
+  .c1{--c-bg:#1e1c46;--c-fg:#8d86f5;--c-ink:#d8d5fb}
+  .c2{--c-bg:#3a1a22;--c-fg:#f2607a;--c-ink:#fbd3da}
+  .c3{--c-bg:#38280f;--c-fg:#e0a24a;--c-ink:#f7e2c2}
+  .c4{--c-bg:#13301d;--c-fg:#4fbf76;--c-ink:#c9ecd6}
+  .c5{--c-bg:#152747;--c-fg:#6fa0f0;--c-ink:#cfe0fb}
+  .c6{--c-bg:#2a1638;--c-fg:#c084f0;--c-ink:#ecd8fb}
+  .c7{--c-bg:#3a1628;--c-fg:#f06fa8;--c-ink:#fbd0e2}
+  .c8{--c-bg:#0f2c34;--c-fg:#49b5d0;--c-ink:#c6e7f0}
+  .c9{--c-bg:#252c12;--c-fg:#a3c94f;--c-ink:#e0ecc4}
+}
+
+/* ============================ 空状态 ============================ */
+.empty{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:40px 24px;text-align:center;color:var(--ink-3);
+}
+.empty .big{font-size:44px;line-height:1}
+.empty p{margin:0;font-size:14px;line-height:1.7;color:var(--ink-2)}
+.empty .hint{font-size:12.5px;color:var(--ink-3)}
+
+/* ============================ 底部按钮 ============================ */
+.fab{
+  position:absolute;right:16px;bottom:calc(18px + var(--safe-b));z-index:20;
+  width:52px;height:52px;border-radius:18px;background:var(--accent);color:#fff;
+  font-size:26px;line-height:1;display:grid;place-items:center;
+  box-shadow:0 8px 22px rgba(15,118,110,.36);transition:.18s;
+}
+.fab:active{transform:scale(.94)}
+.fab.hide{transform:scale(0);opacity:0;pointer-events:none}
+
+/* ============================ 弹层 ============================ */
+.mask{
+  position:absolute;inset:0;background:rgba(10,20,19,.42);z-index:30;
+  opacity:0;pointer-events:none;transition:.2s;
+}
+.mask.show{opacity:1;pointer-events:auto}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;z-index:31;background:var(--card);
+  border-radius:22px 22px 0 0;padding:8px 16px calc(14px + var(--safe-b));
+  max-height:92%;overflow-y:auto;box-shadow:var(--shadow-lg);
+  /* 隐藏态：translateY(102%) 只是移出屏幕，但 102% 的余量会让弹层**顶边**
+     在屏幕底部露出一条（实测截图里能看到「设置与数据」的按钮和详情页的按钮）。
+     所以必须同时用 visibility 彻底藏住，不能只靠位移。
+     visibility 参与过渡，且延迟到位移动画结束才生效，动画依旧顺滑。 */
+  transform:translateY(102%);visibility:hidden;
+  transition:transform .28s cubic-bezier(.22,.9,.25,1), visibility 0s linear .28s;
+}
+.sheet.show{
+  transform:translateY(0);visibility:visible;
+  transition:transform .28s cubic-bezier(.22,.9,.25,1), visibility 0s;
+}
+.sheet-handle{width:38px;height:4px;border-radius:99px;background:var(--line);margin:2px auto 10px}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sheet-head .st{font-size:16px;font-weight:700}
+.sheet-head .cancel{font-size:14px;color:var(--ink-2);padding:6px 8px;border-radius:8px;min-width:44px}
+.sheet-head .cancel:active{background:var(--line-2)}
+
+.field{margin-bottom:11px}
+.field label{display:block;font-size:12px;color:var(--ink-3);margin-bottom:5px;font-weight:500}
+.field input,.field textarea,.field select{
+  width:100%;border:1px solid var(--line);background:var(--line-2);border-radius:var(--r-md);
+  padding:10px 12px;font-size:15px;outline:none;
+}
+.field input:focus,.field textarea:focus,.field select:focus{
+  border-color:var(--accent);background:var(--accent-soft);
+}
+.field input::placeholder,.field textarea::placeholder{color:var(--ink-3)}
+
+/* 星期选择 */
+.dayrow{display:flex;gap:5px;flex-wrap:wrap}
+.daybtn{
+  flex:1;min-width:38px;padding:9px 0;border-radius:var(--r-sm);background:var(--line-2);
+  border:1.5px solid transparent;font-size:13px;font-weight:600;color:var(--ink-2);
+  text-align:center;
+}
+.daybtn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+
+/* 节次选择 */
+.pergrid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.perbtn{
+  padding:9px 0;border-radius:var(--r-sm);background:var(--line-2);
+  border:1.5px solid transparent;font-size:13px;font-weight:600;color:var(--ink-2);
+  text-align:center;
+}
+.perbtn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.perhint{font-size:11.5px;color:var(--ink-3);margin-top:6px}
+
+/* 周次输入 */
+.weekinput{
+  display:flex;gap:8px;align-items:center;
+}
+.weekinput input{flex:1}
+.weekquick{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.weekquick button{
+  font-size:12px;padding:6px 11px;border-radius:99px;background:var(--line-2);
+  color:var(--ink-2);font-weight:500;
+}
+.weekquick button:active{background:var(--accent-soft);color:var(--accent)}
+
+/* 底部操作按钮 */
+.sheet-actions{display:flex;gap:8px;margin-top:14px}
+.btn-save{
+  flex:1;background:var(--accent);color:#fff;font-weight:600;font-size:15px;
+  padding:13px;border-radius:var(--r-md);box-shadow:0 6px 16px rgba(15,118,110,.26);
+}
+.btn-save:active{transform:scale(.98)}
+.btn-save:disabled{opacity:.5;box-shadow:none}
+.btn-ghost{
+  flex:0 0 auto;padding:13px 16px;border-radius:var(--r-md);background:var(--line-2);
+  font-size:14px;font-weight:600;color:var(--ink-2);border:1px solid var(--line);
+}
+.btn-danger{color:var(--danger)}
+
+/* ============================ 课程详情 ============================ */
+.detail-row{
+  display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line-2);
+  font-size:14px;
+}
+.detail-row:last-of-type{border-bottom:0}
+.detail-row .k{flex:0 0 62px;color:var(--ink-3);font-size:13px}
+.detail-row .v{flex:1;word-break:break-word}
+.detail-badge{
+  display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;
+  background:var(--accent-soft);color:var(--accent);margin-left:6px;
+}
+.detail-badge.warn{background:var(--warn-soft);color:var(--warn)}
+
+/* ============================ 导入预览 ============================ */
+.import-summary{
+  background:var(--accent-soft);border-radius:var(--r-md);padding:11px 13px;margin-bottom:12px;
+  font-size:13.5px;color:var(--ink);line-height:1.6;
+}
+.import-summary b{color:var(--accent)}
+.import-summary .warnline{color:var(--warn);font-size:12.5px;margin-top:5px}
+.import-list{max-height:44vh;overflow-y:auto;margin:-4px 0 4px;border-radius:var(--r-md)}
+.import-item{
+  display:flex;gap:9px;align-items:flex-start;padding:9px 10px;
+  border-bottom:1px solid var(--line-2);cursor:pointer;
+}
+.import-item:last-child{border-bottom:0}
+.import-item .ck{
+  flex:0 0 20px;width:20px;height:20px;border-radius:6px;border:2px solid var(--line);
+  display:grid;place-items:center;font-size:12px;color:transparent;margin-top:1px;
+}
+.import-item.on .ck{background:var(--accent);border-color:var(--accent);color:#fff}
+.import-item .body{flex:1;min-width:0}
+.import-item .nm{font-size:14px;font-weight:600;line-height:1.3}
+.import-item .mt{font-size:12px;color:var(--ink-3);margin-top:3px}
+.import-item .mt .dg{color:var(--accent);font-weight:600}
+.import-skipped{
+  font-size:12.5px;color:var(--warn);background:var(--warn-soft);
+  border-radius:var(--r-sm);padding:9px 11px;margin-top:8px;line-height:1.6;
+}
+.mode-row{display:flex;gap:8px;margin:12px 0 4px}
+.mode-btn{
+  flex:1;padding:11px 10px;border-radius:var(--r-md);background:var(--line-2);
+  border:1.5px solid transparent;text-align:left;
+}
+.mode-btn.on{background:var(--accent-soft);border-color:var(--accent)}
+.mode-btn .t{font-size:13.5px;font-weight:600}
+.mode-btn .d{font-size:11.5px;color:var(--ink-3);margin-top:2px;line-height:1.4}
+
+/* ============================ 设置 / 数据 ============================ */
+.card{
+  background:var(--line-2);border-radius:var(--r-md);padding:12px 13px;margin-bottom:10px;
+}
+.card .ct{font-size:13px;font-weight:700;margin-bottom:8px}
+.card .cd{font-size:12px;color:var(--ink-3);line-height:1.65}
+.stat-line{font-size:13.5px;line-height:1.9}
+.stat-line b{color:var(--accent)}
+.listbtn{
+  display:flex;align-items:center;gap:10px;width:100%;padding:13px 13px;text-align:left;
+  background:var(--line-2);border-radius:var(--r-md);margin-bottom:8px;font-size:14px;
+}
+.listbtn:active{background:var(--accent-soft)}
+.listbtn .e{font-size:17px}
+.listbtn .tx{flex:1;font-weight:500}
+.listbtn .sub{font-size:11.5px;color:var(--ink-3);font-weight:400;display:block;margin-top:1px}
+.listbtn .arrow{color:var(--ink-3);font-size:15px}
+.listbtn.danger .tx{color:var(--danger)}
+
+/* ============================ 提示条 ============================ */
+.toast{
+  position:absolute;left:50%;bottom:calc(88px + var(--safe-b));transform:translate(-50%,14px);
+  background:rgba(21,32,31,.95);color:#fff;font-size:13.5px;padding:10px 18px;
+  border-radius:99px;z-index:60;opacity:0;pointer-events:none;transition:.22s;
+  max-width:88%;text-align:center;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.err{background:var(--danger)}
+@media (prefers-color-scheme: dark){
+  .toast{background:rgba(232,238,237,.95);color:#15201f}
+  .toast.err{background:var(--danger);color:#fff}
+}
+
+/* 横幅提醒（保存失败等） */
+.banner{
+  display:flex;gap:9px;align-items:flex-start;padding:10px 12px;margin:0 12px 8px;
+  border-radius:var(--r-md);font-size:13px;line-height:1.5;background:var(--warn-soft);
+  color:var(--warn);border:1px solid transparent;
+}
+.banner.danger{background:var(--danger-soft);color:var(--danger)}
+.banner .ico{font-size:15px;line-height:1.3}
+
+/* ============================ 下一节课提示 ============================ */
+.nextclass{
+  flex:0 0 auto;display:flex;align-items:center;gap:9px;
+  margin:0 12px 8px;padding:9px 12px;border-radius:var(--r-md);
+  background:var(--accent-soft);color:var(--accent-2);font-size:13px;
+}
+.nextclass .e{font-size:15px}
+.nextclass .tx{flex:1;min-width:0;font-weight:600;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nextclass .tm{font-size:12px;opacity:.85;white-space:nowrap}
+
+/* 窄屏适配 */
+@media (max-width:360px){
+  :root{--row-h:38px;--time-w:30px}
+  .course .cn{font-size:10.5px}
+  .ghead .d{font-size:11.5px}
+  .weekbar .range{display:none}
+}
+/* 矮屏：行高压小，保证一屏放下 */
+@media (max-height:700px){
+  :root{--row-h:34px}
+}
+@media (max-height:600px){
+  :root{--row-h:30px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ==================== 顶栏 ==================== -->
+  <header class="topbar">
+    <div class="row1">
+      <div>
+        <div class="title" id="semTitle">课程表</div>
+        <div class="sub" id="semSub">还没有导入课表</div>
+      </div>
+      <div class="spacer"></div>
+      <button class="iconbtn" id="btnData" aria-label="设置与数据">⚙️</button>
+    </div>
+  </header>
+  <div id="bannerHost"></div>
+
+  <!-- ==================== 周次条 ==================== -->
+  <div class="weekbar" id="weekBar">
+    <button class="nav" id="weekPrev" aria-label="上一周">‹</button>
+    <div class="center">
+      <div class="wk" id="weekLabel">第 1 周</div>
+      <div class="range" id="weekRange"></div>
+    </div>
+    <button class="nav" id="weekNext" aria-label="下一周">›</button>
+    <button class="todaybtn" id="btnToday">本周</button>
+  </div>
+
+  <!-- ==================== 下一节课 ==================== -->
+  <div id="nextHost"></div>
+
+  <!-- ==================== 课表 ==================== -->
+  <div class="gridwrap" id="gridWrap">
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" style="display:none"></div>
+  </div>
+
+  <button class="fab" id="fab" aria-label="手动添加课程">＋</button>
+
+  <!-- ==================== 遮罩与弹层 ====================
+       注意：这些必须放在 #app **内部**。
+       它们用 position:absolute; left:0; right:0 定位，是相对「最近的定位祖先」。
+       放在 #app 外面时，定位祖先是视口 —— 而 #app 有 max-width:560px，
+       在大屏上弹层会比 App 还宽（踩过这个坑：测量时报 59 个越界元素）。 -->
+  <div class="mask" id="mask"></div>
+
+<!-- 添加 / 编辑课程 -->
+<div class="sheet" id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <button class="cancel" id="sheetDelete" style="visibility:hidden">删除</button>
+    <span class="st" id="sheetTitle">添加课程</span>
+    <button class="cancel" id="sheetCancel">取消</button>
+  </div>
+
+  <div class="field">
+    <label for="nameInput">课程名</label>
+    <input type="text" id="nameInput" maxlength="80" placeholder="比如：积分变换与复变函数" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label>星期</label>
+    <div class="dayrow" id="dayRow"></div>
+  </div>
+
+  <div class="field">
+    <label>节次（可多选，连堂就选两节）</label>
+    <div class="pergrid" id="perGrid"></div>
+    <div class="perhint" id="perHint"></div>
+  </div>
+
+  <div class="field">
+    <label for="weeksInput">周次</label>
+    <div class="weekinput">
+      <input type="text" id="weeksInput" placeholder="比如：1-16周、1-15周(单)、4-7周,9-13周" autocomplete="off">
+    </div>
+    <div class="weekquick" id="weekQuick"></div>
+    <div class="perhint" id="weeksHint"></div>
+  </div>
+
+  <div class="field">
+    <label for="roomInput">教室（选填）</label>
+    <input type="text" id="roomInput" maxlength="60" placeholder="比如：明理2-304" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="teacherInput">教师（选填）</label>
+    <input type="text" id="teacherInput" maxlength="40" placeholder="比如：赵国平" autocomplete="off">
+  </div>
+
+  <div class="field">
+    <label for="noteInput">备注（选填）</label>
+    <textarea id="noteInput" maxlength="500" rows="2" placeholder="比如：要带计算器"></textarea>
+  </div>
+
+  <div class="sheet-actions">
+    <button class="btn-save" id="btnSave">保存</button>
+  </div>
+</div>
+
+<!-- 导入预览 -->
+<div class="sheet" id="sheetImport">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <span class="st">导入预览</span>
+    <button class="cancel" id="importCancel">取消</button>
+  </div>
+  <div id="importBody"></div>
+  <div class="sheet-actions">
+    <button class="btn-save" id="importConfirm">导入</button>
+  </div>
+</div>
+
+<!-- 课程详情 -->
+<div class="sheet" id="sheetDetail">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <span class="st" id="detailTitle">课程详情</span>
+    <button class="cancel" id="detailClose">关闭</button>
+  </div>
+  <div id="detailBody"></div>
+  <div class="sheet-actions">
+    <button class="btn-ghost btn-danger" id="detailDelete">删除</button>
+    <button class="btn-save" id="detailEdit">编辑</button>
+  </div>
+</div>
+
+<!-- 设置与数据 -->
+<div class="sheet" id="sheetData">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <span class="st">设置与数据</span>
+    <button class="cancel" id="dataCancel">关闭</button>
+  </div>
+  <div id="dataBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<input type="file" id="filePdf" accept=".pdf,application/pdf" style="display:none">
+<input type="file" id="fileJson" accept=".json,application/json" style="display:none">
+
+</div><!-- /#app -->
+
+<script>
+/* ---------------------------------------------------------------------------
+ * 以下为逻辑层（由 course-app/logic.js 自动内联，请勿直接在此修改）。
+ * 单元测试：test-logic.js（280 项）
+ * ------------------------------------------------------------------------- */
+/* ===========================================================================
+ * 课程表 —— 纯逻辑层（不依赖 DOM，可在 Node 里直接单测）
+ * 运行环境：既可被内联进单文件页面，也可在 Node 里 require（UMD）。
+ *
+ * ⚠️ 本文件会被原样内联进 HTML 的脚本块里，所以**绝对不能出现字面的
+ *    script 开标签或闭标签**（哪怕写在注释里也不行）——浏览器的 HTML 解析器
+ *    只看字节，不认识 JS 注释，会提前把脚本块截断，整个页面直接白屏。
+ *    build.js 里有针对这一点的强制检查。
+ *
+ * 这个文件只做「数据」相关的事：日期、周次、节次、冲突、学期。
+ * 不碰界面、不碰网络、不碰文件。
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.ScheduleLogic = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  /* ============================================================================
+   * 厦门理工学院作息时间表
+   * 来源：教务处官网「作息时间表」页面（路径 /info/1072/5617.htm）。
+   * 这里刻意不写完整网址 —— 成品里出现 http(s) 字样会让
+   * 「完全离线、不含外链」的自动检查误报。要查证就去教务处官网搜「作息时间表」。
+   * 上午 4 节、下午 4 节、晚上 3 节，共 11 节，已核对与官方一致。
+   * ========================================================================== */
+  var DEFAULT_PERIODS = [
+    { n: 1, start: '08:20', end: '09:05', slot: 'morning' },
+    { n: 2, start: '09:10', end: '09:55', slot: 'morning' },
+    { n: 3, start: '10:15', end: '11:00', slot: 'morning' },
+    { n: 4, start: '11:05', end: '11:50', slot: 'morning' },
+    { n: 5, start: '14:20', end: '15:05', slot: 'afternoon' },
+    { n: 6, start: '15:10', end: '15:55', slot: 'afternoon' },
+    { n: 7, start: '16:15', end: '17:00', slot: 'afternoon' },
+    { n: 8, start: '17:05', end: '17:50', slot: 'afternoon' },
+    { n: 9, start: '18:30', end: '19:15', slot: 'evening' },
+    { n: 10, start: '19:20', end: '20:05', slot: 'evening' },
+    { n: 11, start: '20:10', end: '20:55', slot: 'evening' }
+  ];
+
+  /**
+   * 网课时段的起始节次。
+   * 用户已确认：第 12~14 节是网课（场地为高校邦平台），「不用排，等于没有」。
+   * 解析时一律丢弃，也不导出到日历。
+   */
+  var ONLINE_PERIOD_FROM = 12;
+
+  var DAY_NAMES = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+  var DAY_FULL = ['', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日'];
+  var DATA_VERSION = 1;
+  var MAX_NAME = 80;
+  var MAX_TEACHER = 40;
+  var MAX_ROOM = 60;
+  var MAX_NOTE = 500;
+  var MAX_WEEKS = 30;
+
+  /* ----------------------------- 基础工具 ----------------------------- */
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /** Date -> 'YYYY-MM-DD'（本地时间，不用 toISOString 以免时区偏移） */
+  function toDateKey(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  /** 'YYYY-MM-DD' -> Date（本地零点）；非法返回 null */
+  function fromDateKey(s) {
+    if (typeof s !== 'string') return null;
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    var dt = new Date(y, mo - 1, d);
+    // 回读校验，挡掉 2 月 30 日这种
+    if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+    return dt;
+  }
+
+  function isValidDateKey(s) { return fromDateKey(s) !== null; }
+
+  /**
+   * 'HH:MM' -> 一天内的分钟数；非法返回 null
+   * 顺便挡掉 25:00 这种。
+   */
+  function parseTime(s) {
+    if (typeof s !== 'string') return null;
+    var m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+    if (!m) return null;
+    var h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return h * 60 + mi;
+  }
+
+  function padTime(s) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim());
+    if (!m) return null;
+    return pad2(+m[1]) + ':' + m[2];
+  }
+
+  function uid(prefix) {
+    return (prefix || 'id') + '_' + Date.now().toString(36) + '_' +
+      Math.random().toString(36).slice(2, 8);
+  }
+
+  /* ----------------------------- 日期与周次 ----------------------------- */
+
+  /**
+   * 把任意日期对齐到「那一周的周一」。
+   * 为什么需要：用户填学期起始日时可能填成周三，而第 1 周必须从周一起算，
+   * 否则整个学期的周次都会错位。
+   */
+  function mondayOf(dateKey) {
+    var d = fromDateKey(dateKey);
+    if (!d) return null;
+    var dow = d.getDay();                 // 0=周日
+    var diff = dow === 0 ? -6 : 1 - dow;  // 周日要回退 6 天
+    d.setDate(d.getDate() + diff);
+    return toDateKey(d);
+  }
+
+  /**
+   * 两个日期相差几天（b - a）。用「本地零点」的差值再四舍五入，
+   * 这样跨夏令时也不会差一天。
+   */
+  function daysBetween(aKey, bKey) {
+    var a = fromDateKey(aKey), b = fromDateKey(bKey);
+    if (!a || !b) return null;
+    return Math.round((b - a) / 86400000);
+  }
+
+  /**
+   * 计算某天是第几教学周（从 1 开始）。
+   * 开学前返回 <= 0 的数，用来判断"还没开学"。
+   */
+  function weekOfDate(dateKey, semesterStartKey) {
+    var start = mondayOf(semesterStartKey);
+    if (!start) return null;
+    var diff = daysBetween(start, dateKey);
+    if (diff === null) return null;
+    return Math.floor(diff / 7) + 1;
+  }
+
+  /** 第 n 周对应的一周日期（周一到周日） */
+  function weekDates(week, semesterStartKey) {
+    var start = mondayOf(semesterStartKey);
+    if (!start) return null;
+    var d = fromDateKey(start);
+    d.setDate(d.getDate() + (week - 1) * 7);
+    var out = [];
+    for (var i = 0; i < 7; i++) {
+      out.push(toDateKey(d));
+      d.setDate(d.getDate() + 1);
+    }
+    return out;
+  }
+
+  /**
+   * 展开周次写法成具体周次数组。
+   *
+   * 已确认需要覆盖的全部写法（来自真实课表 PDF 实测）：
+   *   '1-18周'              -> [1..18]
+   *   '13周'                -> [13]
+   *   '1-15周(单)'          -> [1,3,5,...,15]
+   *   '2-16周(双)'          -> [2,4,6,...,16]
+   *   '4-7周,9-13周'        -> [4,5,6,7,9,10,11,12,13]
+   *   '4-7周,9-13周(单)'    -> [5,7,9,11,13]（(单) 作用于整串）
+   *
+   * 另外兼容几种常见变体（别的学校/别的学期可能出现）：
+   *   '第1-16周'、'1,3,5周'、'1-16周(单周)'、全角逗号
+   *
+   * 返回 { weeks: number[], oddEven: 'odd'|'even'|null, ok: boolean }
+   */
+  function expandWeeks(text, maxWeek) {
+    var limit = maxWeek || MAX_WEEKS;
+    var result = { weeks: [], oddEven: null, ok: false };
+    if (typeof text !== 'string') return result;
+
+    var s = text.trim()
+      .replace(/[（]/g, '(').replace(/[）]/g, ')')
+      .replace(/[，、；;]/g, ',')
+      // 全角连字符/破折号统一成半角减号，否则 '1－16周' 会被当成两个孤立数字
+      .replace(/[－—–−ー]/g, '-')
+      .replace(/\s+/g, '');
+
+    if (!s) return result;
+
+    // 单双周标记：可能写在整串末尾 '1-16周(单)'，也可能写在某一段后面
+    var oddEven = null;
+    if (/\(单/.test(s)) oddEven = 'odd';
+    else if (/\(双/.test(s)) oddEven = 'even';
+    result.oddEven = oddEven;
+
+    // 去掉「周」字和括号内容，只留数字与分隔符
+    var nums = s.replace(/第/g, '')
+      .replace(/周/g, ',')                       // '1-16周,2-3周' -> 段落分隔
+      .replace(/\([^)]*\)/g, ',')
+      .replace(/[^\d,\-]/g, ',');
+
+    var set = {};
+    nums.split(',').forEach(function (part) {
+      part = part.trim();
+      if (!part) return;
+      var range = /^(\d+)-(\d+)$/.exec(part);
+      if (range) {
+        var a = +range[1], b = +range[2];
+        if (a > b) { var t = a; a = b; b = t; }     // 容错：写反了也对
+        for (var i = a; i <= b; i++) if (i >= 1 && i <= limit) set[i] = 1;
+      } else if (/^\d+$/.test(part)) {
+        var n = +part;
+        if (n >= 1 && n <= limit) set[n] = 1;
+      }
+    });
+
+    var weeks = Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+
+    // 单双周过滤
+    if (oddEven === 'odd') weeks = weeks.filter(function (w) { return w % 2 === 1; });
+    else if (oddEven === 'even') weeks = weeks.filter(function (w) { return w % 2 === 0; });
+
+    result.weeks = weeks;
+    result.ok = weeks.length > 0;
+    return result;
+  }
+
+  /**
+   * 把周次数组压回紧凑写法（用于列表展示和 .ics 的 SUMMARY）。
+   * 连续 3 周以上才合并成区间，否则逐个列出，避免 '1-2周' 这种反而更长。
+   */
+  function compactWeeks(weeks) {
+    if (!Array.isArray(weeks) || !weeks.length) return '';
+    var w = weeks.slice().sort(function (a, b) { return a - b; });
+    var parts = [];
+    var start = w[0], prev = w[0];
+    var flush = function () {
+      if (prev - start >= 2) parts.push(start + '-' + prev + '周');
+      else if (prev === start) parts.push(String(start) + '周');
+      else { parts.push(String(start) + '周'); parts.push(String(prev) + '周'); }
+    };
+    for (var i = 1; i < w.length; i++) {
+      if (w[i] === prev + 1) { prev = w[i]; continue; }
+      flush(); start = prev = w[i];
+    }
+    flush();
+    return parts.join(',');
+  }
+
+  /* ----------------------------- 节次与作息 ----------------------------- */
+
+  /** 取某一节的时间；越界返回 null */
+  function periodInfo(n, periods) {
+    var list = periods || DEFAULT_PERIODS;
+    for (var i = 0; i < list.length; i++) if (list[i].n === n) return list[i];
+    return null;
+  }
+
+  /**
+   * 一节课（可能跨多节）的起止时间。
+   * 例：[1,2] -> { start:'08:20', end:'09:55' }
+   */
+  function spanTime(periodNums, periods) {
+    if (!Array.isArray(periodNums) || !periodNums.length) return null;
+    var sorted = periodNums.slice().sort(function (a, b) { return a - b; });
+    var first = periodInfo(sorted[0], periods);
+    var last = periodInfo(sorted[sorted.length - 1], periods);
+    if (!first || !last) return null;
+    return { start: first.start, end: last.end, from: sorted[0], to: sorted[sorted.length - 1] };
+  }
+
+  /** '08:20' + '09:55' -> '08:20–09:55'（用 en dash，比波浪号好看） */
+  function formatSpan(span) {
+    if (!span) return '';
+    return span.start + '–' + span.end;
+  }
+
+  /** 这一节属于上午/下午/晚上 */
+  function slotOf(n, periods) {
+    var p = periodInfo(n, periods);
+    return p ? p.slot : null;
+  }
+
+  /* ----------------------------- 状态与规范化 ----------------------------- */
+
+  function emptyState() {
+    return {
+      version: DATA_VERSION,
+      semesters: [],
+      activeSemesterId: null,
+      periods: DEFAULT_PERIODS.map(function (p) { return { n: p.n, start: p.start, end: p.end, slot: p.slot }; }),
+      courses: [],
+      settings: {
+        remindMinutes: 10,      // 提前多少分钟提醒
+        showWeekend: false,     // 你的课表周末没课，默认不显示
+        colorSeed: 0
+      }
+    };
+  }
+
+  function clampStr(s, max) {
+    return typeof s === 'string' ? s.trim().slice(0, max) : '';
+  }
+
+  /** 规范化一条课程；不合法返回 null */
+  function normalizeCourse(raw, semesterId) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    var name = clampStr(raw.name, MAX_NAME);
+    if (!name) return null;
+
+    var day = Math.round(Number(raw.day));
+    if (!(day >= 1 && day <= 7)) return null;
+
+    // 节次：去重、排序、只保留 1..11（网课段整条丢弃）
+    var periods = [];
+    if (Array.isArray(raw.periods)) {
+      var seen = {};
+      raw.periods.forEach(function (p) {
+        var n = Math.round(Number(p));
+        if (n >= 1 && n < ONLINE_PERIOD_FROM && !seen[n]) { seen[n] = 1; periods.push(n); }
+      });
+    }
+    periods.sort(function (a, b) { return a - b; });
+    if (!periods.length) return null;
+
+    var weeks = [];
+    if (Array.isArray(raw.weeks)) {
+      var ws = {};
+      raw.weeks.forEach(function (w) {
+        var n = Math.round(Number(w));
+        if (n >= 1 && n <= MAX_WEEKS) ws[n] = 1;
+      });
+      weeks = Object.keys(ws).map(Number).sort(function (a, b) { return a - b; });
+    }
+    if (!weeks.length) return null;
+
+    return {
+      id: typeof raw.id === 'string' && raw.id ? raw.id : uid('c'),
+      semesterId: raw.semesterId || semesterId || null,
+      name: name,
+      teacher: clampStr(raw.teacher, MAX_TEACHER),
+      room: clampStr(raw.room, MAX_ROOM),
+      day: day,
+      periods: periods,
+      weeks: weeks,
+      weeksRaw: clampStr(raw.weeksRaw, 40),   // 保留原始写法，便于排查解析问题
+      note: clampStr(raw.note, MAX_NOTE),
+      color: Number.isFinite(raw.color) ? (Math.abs(Math.round(raw.color)) % 12) : 0
+    };
+  }
+
+  function normalizeSemester(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    var start = mondayOf(raw.startDate);
+    if (!start) return null;
+    return {
+      id: typeof raw.id === 'string' && raw.id ? raw.id : uid('s'),
+      name: clampStr(raw.name, 40) || '未命名学期',
+      startDate: start,
+      totalWeeks: Math.min(MAX_WEEKS, Math.max(1, Math.round(Number(raw.totalWeeks)) || 20))
+    };
+  }
+
+  /** 把任意输入修成合法状态；坏数据一律丢弃，绝不让 App 打不开 */
+  function normalizeState(raw) {
+    var base = emptyState();
+    if (!raw || typeof raw !== 'object') return base;
+
+    var semesters = [];
+    var seenS = {};
+    (Array.isArray(raw.semesters) ? raw.semesters : []).forEach(function (s) {
+      var n = normalizeSemester(s);
+      if (!n || seenS[n.id]) return;
+      seenS[n.id] = 1;
+      semesters.push(n);
+    });
+
+    var periods = [];
+    (Array.isArray(raw.periods) ? raw.periods : []).forEach(function (p) {
+      var n = Math.round(Number(p && p.n));
+      var st = padTime(p && p.start), en = padTime(p && p.end);
+      if (!n || !st || !en) return;
+      periods.push({ n: n, start: st, end: en, slot: clampStr(p.slot, 12) || 'morning' });
+    });
+    if (!periods.length) periods = base.periods;
+    periods.sort(function (a, b) { return a.n - b.n; });
+
+    var courses = [];
+    var seenC = {};
+    (Array.isArray(raw.courses) ? raw.courses : []).forEach(function (c) {
+      var n = normalizeCourse(c, c && c.semesterId);
+      if (!n || seenC[n.id]) return;
+      seenC[n.id] = 1;
+      courses.push(n);
+    });
+
+    var activeId = typeof raw.activeSemesterId === 'string' ? raw.activeSemesterId : null;
+    if (!semesters.some(function (s) { return s.id === activeId; })) {
+      activeId = semesters.length ? semesters[0].id : null;
+    }
+
+    var st = raw.settings && typeof raw.settings === 'object' ? raw.settings : {};
+    var rm = Math.round(Number(st.remindMinutes));
+
+    return {
+      version: DATA_VERSION,
+      semesters: semesters,
+      activeSemesterId: activeId,
+      periods: periods,
+      courses: courses,
+      settings: {
+        remindMinutes: (rm >= 0 && rm <= 60) ? rm : 10,
+        showWeekend: !!st.showWeekend,
+        colorSeed: Number.isFinite(st.colorSeed) ? Math.abs(Math.round(st.colorSeed)) % 12 : 0
+      }
+    };
+  }
+
+  /* ----------------------------- 查询 ----------------------------- */
+
+  function activeSemester(state) {
+    if (!state || !Array.isArray(state.semesters)) return null;
+    for (var i = 0; i < state.semesters.length; i++) {
+      if (state.semesters[i].id === state.activeSemesterId) return state.semesters[i];
+    }
+    return state.semesters[0] || null;
+  }
+
+  function coursesOf(state, semesterId) {
+    // 对外输入一律不抛异常（本项目约定）：null / 缺字段当作空
+    if (!state || !Array.isArray(state.courses)) return [];
+    var sid = semesterId || (activeSemester(state) || {}).id;
+    return state.courses.filter(function (c) { return c.semesterId === sid; });
+  }
+
+  /** 某周某天的课，按起始节次排序 */
+  function coursesAt(state, day, week, semesterId) {
+    return coursesOf(state, semesterId)
+      .filter(function (c) { return c.day === day && c.weeks.indexOf(week) > -1; })
+      .sort(function (a, b) { return a.periods[0] - b.periods[0]; });
+  }
+
+  /** 这一周里实际有课的节次范围，用于压缩课表高度 */
+  function usedPeriods(state, week, semesterId) {
+    var set = {};
+    coursesOf(state, semesterId).forEach(function (c) {
+      if (c.weeks.indexOf(week) === -1) return;
+      c.periods.forEach(function (p) { set[p] = 1; });
+    });
+    return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  /** 一天的课占用了哪些节次（用于检测冲突） */
+  function occupancy(state, day, week, semesterId) {
+    var map = {};
+    coursesOf(state, semesterId).forEach(function (c) {
+      if (c.day !== day || c.weeks.indexOf(week) === -1) return;
+      c.periods.forEach(function (p) { (map[p] = map[p] || []).push(c); });
+    });
+    return map;
+  }
+
+  /**
+   * 找出时间冲突的课（同一节次被两门课占用）。
+   * 教务系统一般不会给冲突课表，但手工加课或解析出错时能帮上忙。
+   */
+  function findConflicts(state, semesterId) {
+    var list = coursesOf(state, semesterId);
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      for (var j = i + 1; j < list.length; j++) {
+        var a = list[i], b = list[j];
+        if (a.day !== b.day) continue;
+        var overlap = a.periods.filter(function (p) { return b.periods.indexOf(p) > -1; });
+        if (!overlap.length) continue;
+        var sameWeeks = a.weeks.filter(function (w) { return b.weeks.indexOf(w) > -1; });
+        if (!sameWeeks.length) continue;
+        out.push({ a: a, b: b, periods: overlap, weeks: sameWeeks });
+      }
+    }
+    return out;
+  }
+
+  /* ----------------------------- 当前时间 ----------------------------- */
+
+  /**
+   * 根据「现在」推算教学周与星期。
+   * now 传 Date 或时间戳；返回 { week, day, dateKey, beforeTerm, afterTerm }
+   */
+  function nowPosition(state, now) {
+    var sem = activeSemester(state);
+    var d = now instanceof Date ? now : new Date(now === undefined ? Date.now() : now);
+    var dateKey = toDateKey(d);
+    var dow = d.getDay();
+    var day = dow === 0 ? 7 : dow;         // 周日算第 7 天
+    var out = { week: null, day: day, dateKey: dateKey, beforeTerm: false, afterTerm: false };
+    if (!sem) return out;
+
+    var week = weekOfDate(dateKey, sem.startDate);
+    if (week === null) return out;
+    if (week < 1) { out.beforeTerm = true; out.week = 1; return out; }
+    if (week > sem.totalWeeks) { out.afterTerm = true; out.week = sem.totalWeeks; return out; }
+    out.week = week;
+    return out;
+  }
+
+  /**
+   * 找「下一节课」。
+   * 返回 { course, dateKey, day, period, startMin, minutesUntil } 或 null
+   * 只往前找 lookaheadDays 天。
+   */
+  function nextClass(state, now, lookaheadDays) {
+    var sem = activeSemester(state);
+    if (!sem) return null;
+    var d = now instanceof Date ? now : new Date(now === undefined ? Date.now() : now);
+    var nowMin = d.getHours() * 60 + d.getMinutes();
+    var limit = lookaheadDays || 7;
+
+    for (var offset = 0; offset <= limit; offset++) {
+      var probe = new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
+      var key = toDateKey(probe);
+      var week = weekOfDate(key, sem.startDate);
+      if (week === null || week < 1 || week > sem.totalWeeks) continue;
+      var dow = probe.getDay();
+      var day = dow === 0 ? 7 : dow;
+
+      var list = coursesAt(state, day, week);
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        var p = periodInfo(c.periods[0], state.periods);
+        if (!p) continue;
+        var startMin = parseTime(p.start);
+        if (startMin === null) continue;
+        // 今天的课要排除已经开始的
+        if (offset === 0 && startMin <= nowMin) continue;
+        return {
+          course: c,
+          dateKey: key,
+          day: day,
+          period: c.periods[0],
+          start: p.start,
+          minutesUntil: (offset * 1440) + startMin - nowMin
+        };
+      }
+    }
+    return null;
+  }
+
+  /* ----------------------------- 导入 ----------------------------- */
+
+  /**
+   * 合并一批解析出来的课程。
+   *
+   * mode:
+   *   'replace' —— 清掉该学期原有课程，整批替换（默认，符合"重新导入"的直觉）
+   *   'append'  —— 追加，跳过与本学期已有课程「同名+同天+同节次」的重复项
+   *
+   * 返回 { state, added, replaced, skipped, conflicts }
+   */
+  function importCourses(state, semesterId, incoming, mode) {
+    var next = normalizeState(state);
+    var sid = semesterId || (activeSemester(next) || {}).id;
+    if (!sid) return { state: next, added: 0, replaced: 0, skipped: 0, conflicts: [], error: '还没有学期' };
+
+    var cleaned = [];
+    var dropped = 0;
+    (Array.isArray(incoming) ? incoming : []).forEach(function (raw) {
+      var c = normalizeCourse(raw, sid);
+      if (c) cleaned.push(c); else dropped++;
+    });
+
+    var existing;
+    if (mode === 'append') {
+      existing = next.courses.slice();
+    } else {
+      existing = next.courses.filter(function (c) { return c.semesterId !== sid; });
+    }
+
+    var sig = function (c) { return c.name + '|' + c.day + '|' + c.periods.join(',') + '|' + c.weeks.join(','); };
+    var have = {};
+    existing.forEach(function (c) { if (c.semesterId === sid) have[sig(c)] = 1; });
+
+    var added = 0, skipped = 0;
+    cleaned.forEach(function (c) {
+      var s = sig(c);
+      if (mode === 'append' && have[s]) { skipped++; return; }
+      have[s] = 1;
+      existing.push(c);
+      added++;
+    });
+
+    next.courses = existing;
+    var conflicts = findConflicts(next, sid);
+    return {
+      state: next,
+      added: added,
+      skipped: skipped + dropped,
+      replaced: mode === 'append' ? 0 : cleaned.length - added,
+      conflicts: conflicts,
+      skippedOnline: dropped
+    };
+  }
+
+  /* ----------------------------- 单条增删改 ----------------------------- */
+
+  function findCourse(state, id) {
+    if (!state || !Array.isArray(state.courses)) return null;
+    for (var i = 0; i < state.courses.length; i++) {
+      if (state.courses[i].id === id) return state.courses[i];
+    }
+    return null;
+  }
+
+  /** 新增一门课；返回 { state, course } 或 { error } —— 不修改入参 */
+  function addCourse(state, input) {
+    var next = normalizeState(state);
+    var sem = activeSemester(next);
+    if (!sem) return { error: '还没有学期，先到设置里建一个' };
+
+    var c = normalizeCourse(input, sem.id);
+    if (!c) return { error: '课程信息不完整（需要课程名、星期、节次、周次）' };
+
+    // 纯网课（节次全在网课段）会被 normalizeCourse 丢掉
+    next.courses = next.courses.concat([c]);
+    return { state: next, course: c };
+  }
+
+  /** 修改一门课。只覆盖传入的字段；返回 { state, course } 或 { error } */
+  function updateCourse(state, id, patch) {
+    var next = normalizeState(state);
+    var old = findCourse(next, id);
+    if (!old) return { error: '这门课不存在了' };
+
+    patch = patch || {};
+    var merged = {
+      id: old.id,
+      semesterId: old.semesterId,
+      name: patch.name !== undefined ? patch.name : old.name,
+      teacher: patch.teacher !== undefined ? patch.teacher : old.teacher,
+      room: patch.room !== undefined ? patch.room : old.room,
+      day: patch.day !== undefined ? patch.day : old.day,
+      periods: patch.periods !== undefined ? patch.periods : old.periods,
+      weeks: patch.weeks !== undefined ? patch.weeks : old.weeks,
+      weeksRaw: patch.weeksRaw !== undefined ? patch.weeksRaw : old.weeksRaw,
+      note: patch.note !== undefined ? patch.note : old.note,
+      color: old.color
+    };
+
+    var c = normalizeCourse(merged, old.semesterId);
+    if (!c) return { error: '改完之后信息不完整了（课程名、节次、周次都得有）' };
+
+    next.courses = next.courses.map(function (x) { return x.id === id ? c : x; });
+    return { state: next, course: c };
+  }
+
+  function removeCourse(state, id) {
+    var next = normalizeState(state);
+    if (!findCourse(next, id)) return { error: '这门课不存在了' };
+    next.courses = next.courses.filter(function (c) { return c.id !== id; });
+    return { state: next };
+  }
+
+  /** 清掉某个学期里所有已结束的课（week > totalWeeks 的不会有），目前用于「清空学期」 */
+  function clearSemester(state, semesterId) {
+    var next = normalizeState(state);
+    var sid = semesterId || (activeSemester(next) || {}).id;
+    next.courses = next.courses.filter(function (c) { return c.semesterId !== sid; });
+    return { state: next };
+  }
+
+  /* ----------------------------- 界面装配 ----------------------------- */
+
+  /**
+   * 把一周的课表算成界面能直接渲染的结构。
+   *
+   * 这是界面层唯一的「数据入口」——界面不做任何计算，只负责画。
+   * 课程按「起始节次」放置，并给出跨几节（一大节跨 2 节）。
+   *
+   * 返回 {
+   *   week, days:[{day,name,dateKey,isToday}],
+   *   rows:[{period,start,end,slot} | {break:true,label}],
+   *   cells:{ 'day-period': {courses:[...], occupied:bool} },
+   *   starts:[{course, day, row}],        // 需要画卡片的格子
+   *   count
+   * }
+   */
+  function weekLayout(state, week, options) {
+    var opt = options || {};
+    var sem = activeSemester(state);
+    var days = [];
+    var todayKey = opt.todayKey || toDateKey(new Date());
+    var w = Math.max(1, Math.round(Number(week)) || 1);
+
+    // 日期：能算就算，算不出就只显示星期
+    var dates = sem ? weekDates(week, sem.startDate) : null;
+    // ⚠️ 这里必须是 5 或 7 —— 不能返回 6。
+    // 界面用 grid-template-columns 定义了「时间列 + 5 天」共 6 列，
+    // 表头还要占 1 格；天数若不是 5/7，多出来的格子会被浏览器塞成自动列，
+    // 导致表头重叠、日期跑到第一行（踩过这个坑）。
+    var dayCount = opt.showWeekend ? 7 : 5;
+    if (!opt.showWeekend) {
+      // 周末有课就自动显示出来
+      for (var d = 6; d <= 7; d++) {
+        if (coursesAt(state, d, week).length) dayCount = 7;
+      }
+    }
+    for (var i = 1; i <= dayCount; i++) {
+      days.push({
+        day: i,
+        name: DAY_NAMES[i],
+        full: DAY_FULL[i],
+        dateKey: dates ? dates[i - 1] : null,
+        isToday: !!(dates && dates[i - 1] === todayKey)
+      });
+    }
+
+    // 行：作息表 + 小节之间的课间
+    var periods = (state && Array.isArray(state.periods) && state.periods.length ? state.periods : DEFAULT_PERIODS)
+      .slice().sort(function (a, b) { return a.n - b.n; });
+    var rows = [];
+    var lastSlot = null;
+    periods.forEach(function (p) {
+      if (p.n >= ONLINE_PERIOD_FROM) return;              // 网课段不显示
+      if (lastSlot && p.slot !== lastSlot) {
+        rows.push({ separator: true, label: p.slot === 'afternoon' ? '下午' : '晚上' });
+      }
+      rows.push({ period: p.n, start: p.start, end: p.end, slot: p.slot });
+      lastSlot = p.slot;
+    });
+    // 行号（用于 grid-row 定位）：**第 1 行留给表头**，所以从 2 开始。
+    // 跳过分隔行也要占一行（分隔行自己有 rowIndex）。
+    var rowOfPeriod = {};
+    var r = 2;
+    rows.forEach(function (row) {
+      if (row.separator) { row.rowIndex = r++; return; }
+      rowOfPeriod[row.period] = r;
+      row.rowIndex = r;
+      r++;
+    });
+
+    // 撒课程
+    var cells = {};
+    var starts = [];
+    var count = 0;
+    days.forEach(function (d) {
+      coursesAt(state, d.day, week).forEach(function (c) {
+        count++;
+        var first = c.periods[0];
+        var last = c.periods[c.periods.length - 1];
+        var rowStart = rowOfPeriod[first];
+        var rowEnd = rowOfPeriod[last];
+        if (rowStart === undefined) return;
+        if (rowEnd === undefined) rowEnd = rowStart;
+        var span = rowEnd - rowStart + 1;
+        starts.push({ course: c, day: d.day, rowStart: rowStart, span: span });
+        c.periods.forEach(function (p) {
+          cells[d.day + '-' + p] = { courses: (cells[d.day + '-' + p] || { courses: [] }).courses.concat([c]), occupied: true };
+        });
+      });
+    });
+
+    return {
+      week: week,
+      days: days,
+      rows: rows,
+      rowOfPeriod: rowOfPeriod,
+      cells: cells,
+      starts: starts,
+      count: count,
+      totalWeeks: sem ? sem.totalWeeks : 20,
+      semester: sem
+    };
+  }
+
+  /** 某周的日期范围文字，如 '8月31日 – 9月6日' */
+  function weekRangeText(week, semesterStartKey) {
+    var dates = weekDates(week, semesterStartKey);
+    if (!dates) return '';
+    var a = fromDateKey(dates[0]), b = fromDateKey(dates[6]);
+    if (!a || !b) return '';
+    return (a.getMonth() + 1) + '月' + a.getDate() + '日 – ' +
+      (b.getMonth() + 1) + '月' + b.getDate() + '日';
+  }
+
+  /**
+   * 稳定地把课程名映射到一个配色索引。
+   * 同一门课永远同一个颜色，不用存到数据里。
+   */
+  function colorOf(name) {
+    var s = String(name || '');
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 100000;
+    return h % 10;
+  }
+
+  /* ----------------------------- 序列化 ----------------------------- */
+
+  function serialize(state) {
+    return JSON.stringify(normalizeState(state));
+  }
+
+  function deserialize(json) {
+    if (typeof json !== 'string' || !json.trim()) return emptyState();
+    try {
+      var raw = JSON.parse(json);
+      return normalizeState(raw);
+    } catch (e) {
+      return emptyState();
+    }
+  }
+
+  return {
+    // 常量
+    DEFAULT_PERIODS: DEFAULT_PERIODS,
+    ONLINE_PERIOD_FROM: ONLINE_PERIOD_FROM,
+    DAY_NAMES: DAY_NAMES,
+    DAY_FULL: DAY_FULL,
+    DATA_VERSION: DATA_VERSION,
+    MAX_WEEKS: MAX_WEEKS,
+    // 工具
+    pad2: pad2, toDateKey: toDateKey, fromDateKey: fromDateKey, isValidDateKey: isValidDateKey,
+    parseTime: parseTime, padTime: padTime, uid: uid,
+    // 日期与周次
+    mondayOf: mondayOf, daysBetween: daysBetween, weekOfDate: weekOfDate, weekDates: weekDates,
+    expandWeeks: expandWeeks, compactWeeks: compactWeeks,
+    // 节次
+    periodInfo: periodInfo, spanTime: spanTime, formatSpan: formatSpan, slotOf: slotOf,
+    // 状态
+    emptyState: emptyState, normalizeState: normalizeState, normalizeCourse: normalizeCourse,
+    normalizeSemester: normalizeSemester,
+    // 查询
+    activeSemester: activeSemester, coursesOf: coursesOf, coursesAt: coursesAt,
+    usedPeriods: usedPeriods, occupancy: occupancy, findConflicts: findConflicts,
+    nowPosition: nowPosition, nextClass: nextClass,
+    // 单条增删改
+    findCourse: findCourse, addCourse: addCourse, updateCourse: updateCourse,
+    removeCourse: removeCourse, clearSemester: clearSemester,
+    // 界面装配
+    weekLayout: weekLayout, weekRangeText: weekRangeText, colorOf: colorOf,
+    // 导入
+    importCourses: importCourses,
+    // 序列化
+    serialize: serialize, deserialize: deserialize
+  };
+});
+
+
+/* ---------------------------------------------------------------------------
+ * 以下为PDF 解析（由 course-app/pdf.js 自动内联，请勿直接在此修改）。
+ * 单元测试：test-pdf.js（113 项）
+ * ------------------------------------------------------------------------- */
+/* ===========================================================================
+ * 课表 PDF 解析器 —— 纯逻辑层（不依赖 DOM）
+ *
+ * 专门针对「强智教务系统 + iText 生成」的课表 PDF。
+ * 真实样本见 course-app-fixtures/sample-schedule.pdf（厦门理工学院）。
+ *
+ * ── 这份 PDF 的关键特征（实测得出，改动前务必先读） ──
+ *  · 字体编码 STSong-Light-UniGB-UCS2-H：文字本身就是 Unicode（UCS-2 大端双字节），
+ *    所以**不需要**解析 CIDToGIDMap / ToUnicode CMap —— 这是最省事的情况。
+ *    千万不要用 latin1 单字节解码，会出乱码。
+ *  · 内容流开头有 `0 1 -1 0 595 0 cm`（整页旋转 90°），但**不要应用它**：
+ *    文字操作符 Tm 的坐标本来就在「未旋转的用户空间」里，表格在那里是正的
+ *    （星期表头 x 递增、y 相同）。多应用一次旋转会把坐标搞乱。
+ *  · 一格的文字会按视觉换行切成多段（每段约 9~12 字），要按 y 相邻合并。
+ *  · 节次行的 y 间距不均匀（105/105/147），必须靠节次标签定位，不能按等距算。
+ *  · 教师字段前缀是「教幢:」而不是「教师:」。
+ *
+ * ── 协作者注意 ──
+ * 解压用的是 zlib。Node 下有 zlib 模块；浏览器下用原生 DecompressionStream
+ * （Chrome 80+ / Safari 16.4+ / Firefox 113+）。所以主入口是 async 的。
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.SchedulePdf = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  /* ---------------------------- 字节工具 ---------------------------- */
+
+  /** latin1 字符串（每个字符一个字节） */
+  function bytesToLatin1(bytes) {
+    var out = '';
+    var CHUNK = 8192;
+    for (var i = 0; i < bytes.length; i += CHUNK) {
+      out += String.fromCharCode.apply(null, bytes.subarray
+        ? bytes.subarray(i, Math.min(i + CHUNK, bytes.length))
+        : Array.prototype.slice.call(bytes, i, Math.min(i + CHUNK, bytes.length)));
+    }
+    return out;
+  }
+
+  function indexOfStr(hay, needle, from) {
+    return hay.indexOf(needle, from || 0);
+  }
+
+  /* ---------------------------- 解压 ---------------------------- */
+
+  /**
+   * 用浏览器原生 API 解压一次。
+   * 失败返回 null（不抛），由调用方决定要不要换参数重试。
+   */
+  async function inflateViaStream(bytes, fmt) {
+    if (typeof DecompressionStream !== 'function') return null;
+    if (typeof Blob !== 'function' || typeof Response !== 'function') return null;
+    try {
+      var ds = new DecompressionStream(fmt);
+      var stream = new Blob([bytes]).stream().pipeThrough(ds);
+      var buf = await new Response(stream).arrayBuffer();
+      return new Uint8Array(buf);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * zlib(deflate) 解压。
+   * Node 下走 zlib；浏览器下走 DecompressionStream。
+   * 解压失败返回 null（调用方当作"未压缩"处理）。
+   *
+   * ⚠️ 浏览器分支必须对**尾随字节**容错：
+   * PDF 的 `stream … endstream` 之间，压缩数据后面常常跟着一个换行符
+   * （规范允许）。Chrome 的 DecompressionStream('deflate') 会因此抛
+   *   TypeError: Trailing junk found after the end of the compressed stream
+   * 从而整体解压失败 —— 于是 PDF 一个字都提不出来，
+   * 表现为"整份 PDF 都没找到星期表头"（实测踩过这个坑）。
+   * 这里逐个剥掉末尾的空白字节重试，并额外试一次 deflate-raw。
+   */
+  async function inflate(bytes) {
+    // Node
+    if (typeof require === 'function') {
+      try {
+        var zlib = require('zlib');
+        return new Uint8Array(zlib.inflateSync(Buffer.from(bytes)));
+      } catch (e) { /* 落到浏览器路径 */ }
+    }
+    // 浏览器：原样 + 逐级剥掉末尾空白，各试一次
+    var candidates = [bytes];
+    var trimmed = bytes;
+    for (var i = 0; i < 4 && trimmed.length > 1; i++) {
+      var last = trimmed[trimmed.length - 1];
+      if (last === 10 || last === 13 || last === 32) {          // \n \r 空格
+        trimmed = trimmed.subarray(0, trimmed.length - 1);
+        candidates.push(trimmed);
+      } else break;
+    }
+    for (var c = 0; c < candidates.length; c++) {
+      var r = await inflateViaStream(candidates[c], 'deflate');
+      if (r) return r;
+      r = await inflateViaStream(candidates[c], 'deflate-raw');
+      if (r) return r;
+    }
+    return null;
+  }
+
+  /* ---------------------------- 内容流提取 ---------------------------- */
+
+  /** 找出所有 stream…endstream 的字节区间 */
+  function findStreams(raw) {
+    var out = [];
+    var idx = 0;
+    while (true) {
+      var s = indexOfStr(raw, 'stream', idx);
+      if (s < 0) break;
+      var ds = s + 6;
+      if (raw[ds] === '\r') ds++;
+      if (raw[ds] === '\n') ds++;
+      var e = indexOfStr(raw, 'endstream', ds);
+      if (e < 0) break;
+      out.push({ start: ds, end: e });
+      idx = e + 9;
+    }
+    return out;
+  }
+
+  /* ---------------------------- PDF 字符串 ---------------------------- */
+
+  /** 还原 PDF 字符串里的转义（\ooo 八进制等）成字节数组 */
+  function unescapePdfString(str) {
+    var bytes = [];
+    for (var i = 0; i < str.length; i++) {
+      var c = str[i];
+      if (c !== '\\') { bytes.push(c.charCodeAt(0) & 0xff); continue; }
+      var n = str[i + 1];
+      if (n >= '0' && n <= '7') {
+        var oct = '', j = i + 1;
+        while (j < str.length && oct.length < 3 && str[j] >= '0' && str[j] <= '7') { oct += str[j]; j++; }
+        bytes.push(parseInt(oct, 8) & 0xff);
+        i = j - 1;
+      } else if (n === 'n') { bytes.push(10); i++; }
+      else if (n === 'r') { bytes.push(13); i++; }
+      else if (n === 't') { bytes.push(9); i++; }
+      else if (n === 'b') { bytes.push(8); i++; }
+      else if (n === 'f') { bytes.push(12); i++; }
+      else if (n === '\n') { i++; }                        // 行继续符
+      else { bytes.push(n.charCodeAt(0) & 0xff); i++; }
+    }
+    return bytes;
+  }
+
+  /**
+   * UniGB-UCS2-H 编码：每 2 字节一个大端 Unicode 码位。
+   * 若长度为奇数则最后一个字节按单字节处理（容错）。
+   */
+  function decodeUcs2(bytes) {
+    var codes = [];
+    var i = 0;
+    for (; i + 1 < bytes.length; i += 2) codes.push((bytes[i] << 8) | bytes[i + 1]);
+    if (i < bytes.length) codes.push(bytes[i]);
+    // 分批 fromCharCode，避免参数过多爆栈（大表格文字很多）
+    var out = '';
+    var CHUNK = 4096;
+    for (var k = 0; k < codes.length; k += CHUNK) {
+      out += String.fromCharCode.apply(null, codes.slice(k, k + CHUNK));
+    }
+    return out;
+  }
+
+  /* ---------------------------- 文字项提取 ---------------------------- */
+
+  /**
+   * 从内容流里提取文字项，保留 Tm/Td 的原始坐标。
+   * 坐标不应用 cm 变换 —— 见文件头说明。
+   */
+  function extractTextItems(content) {
+    var s = content;
+    var out = [];
+    var re = /(?:(?:(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+Tm)|(?:(-?[\d.]+)\s+(-?[\d.]+)\s+Td)|(?:\/([A-Za-z0-9]+)\s+([\d.]+)\s+Tf)|(?:\(((?:\\.|[^\\)])*)\)\s*Tj)|(?:\[((?:[^\]\\]|\\.)*)\]\s*TJ))/g;
+    var m, tx = 0, ty = 0, size = 0, font = null;
+
+    while ((m = re.exec(s)) !== null) {
+      if (m[1] !== undefined) { tx = +m[5]; ty = +m[6]; }
+      else if (m[7] !== undefined) { tx += +m[7]; ty += +m[8]; }
+      else if (m[9] !== undefined) { font = m[9]; size = +m[10]; }
+      else {
+        var txt = '';
+        if (m[11] !== undefined) txt = decodeUcs2(unescapePdfString(m[11]));
+        else if (m[12] !== undefined) {
+          // TJ 数组：字符串与字距调整数字混排，只取字符串
+          var r2 = /\(((?:\\.|[^\\)])*)\)/g, m2;
+          while ((m2 = r2.exec(m[12])) !== null) txt += decodeUcs2(unescapePdfString(m2[1]));
+        }
+        if (txt) out.push({ x: tx, y: ty, size: size, font: font, text: txt });
+      }
+    }
+    return out;
+  }
+
+  /* ---------------------------- 表格结构 ---------------------------- */
+
+  var DAY_RE = /^星期([一二三四五六日天])$/;
+  var DAY_NUM = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7 };
+
+  /** 找出星期表头：返回 [{day, x, y}] */
+  function findDayHeaders(items) {
+    var out = [];
+    var seen = {};
+    items.forEach(function (it) {
+      var m = DAY_RE.exec(it.text.trim());
+      if (!m) return;
+      var day = DAY_NUM[m[1]];
+      // 同一星期可能被重复画（跨页/表头重复），取最靠上（y 最大）的那次
+      if (seen[day] === undefined || it.y > seen[day].y) {
+        seen[day] = { day: day, x: it.x, y: it.y };
+      }
+    });
+    Object.keys(seen).forEach(function (k) { out.push(seen[k]); });
+    out.sort(function (a, b) { return a.x - b.x; });
+    return out;
+  }
+
+  /**
+   * 找出节次标签：x 小于第一个星期表头、内容是纯数字的那些文字。
+   * 返回 [{n, x, y}]，按 y 从大到小（即从上到下）。
+   */
+  function findPeriodLabels(items, firstDayX) {
+    var out = [];
+    var seen = {};
+    items.forEach(function (it) {
+      if (it.x >= firstDayX - 5) return;
+      var t = it.text.trim();
+      if (!/^\d{1,2}$/.test(t)) return;
+      var n = +t;
+      if (n < 1 || n > 20) return;
+      if (seen[n] === undefined || it.y > seen[n].y) seen[n] = { n: n, x: it.x, y: it.y };
+    });
+    Object.keys(seen).forEach(function (k) { out.push(seen[k]); });
+    out.sort(function (a, b) { return b.y - a.y; });
+    return out;
+  }
+
+  /**
+   * 把片段按 y 相邻合并成「课程块」。
+   * 视觉换行会让一格的文字被切成多段，同一段的 y 差很小（约 12），
+   * 而不同课程块之间会有一个明显的间隔。
+   */
+  function mergeFragments(frags, gap) {
+    var g = gap === undefined ? 15 : gap;
+    var sorted = frags.slice().sort(function (a, b) { return b.y - a.y; });
+    var blocks = [];
+    var cur = null;
+    sorted.forEach(function (f) {
+      if (cur && Math.abs(cur.lastY - f.y) < g) {
+        cur.text += f.text;
+        cur.lastY = f.y;
+        cur.size = Math.max(cur.size, f.size || 0);
+      } else {
+        cur = { text: f.text, lastY: f.y, top: f.y, size: f.size || 0 };
+        blocks.push(cur);
+      }
+    });
+    return blocks;
+  }
+
+  /**
+   * 把同一视觉行的碎片拼回一整行。
+   *
+   * 为什么必须有这一步：一格里有**两门课**时，PDF 是按「行」交错输出的 ——
+   * 同一视觉行的两门课各自贡献一个碎片，两个碎片的 y 几乎相同（差 0.5 甚至 0）。
+   * 若直接按 y 排序拼接，就会把两门课的文字串成一句胡话。
+   * 先把 y 相近（≤ tol）的碎片归为一行、按 x 排序拼接，才能得到正确的整行。
+   */
+  function groupIntoLines(frags, tol) {
+    var t = tol === undefined ? 3 : tol;
+    var sorted = frags.slice().sort(function (a, b) { return b.y - a.y; });
+    var lines = [];
+    var cur = null;
+    sorted.forEach(function (f) {
+      if (cur && Math.abs(cur.y - f.y) <= t) {
+        cur.parts.push(f);
+        // 用碎片自身的 y 做代表（保留小数，便于后续按精确间隔切块）
+      } else {
+        cur = { y: f.y, parts: [f] };
+        lines.push(cur);
+      }
+    });
+    return lines.map(function (ln) {
+      ln.parts.sort(function (a, b) { return a.x - b.x; });
+      return {
+        y: ln.y,
+        size: Math.max.apply(null, ln.parts.map(function (p) { return p.size || 0; })),
+        text: ln.parts.map(function (p) { return p.text; }).join(''),
+        x: Math.min.apply(null, ln.parts.map(function (p) { return p.x; }))
+      };
+    });
+  }
+
+  /**
+   * 把一列的所有行整理成「课程块」。
+   *
+   * 真实结构（逐行看是干净的，实测确认）：
+   *   积分变换与复变函数★          ← size=9，课程名
+   *   (1-2节)1-3周/场地:明理2-     ← size=8，以节次标记开头
+   *   304/教师:赵国平/教学班        ← 说明的换行续行
+   *   ...
+   *   马克思主义基本原理★          ← 下一门课（size=9）
+   *   (5-6节)17-18周/场地:明理2-
+   *   ...
+   *
+   * 关键点：
+   *   ① 课程边界认「size 较大的行」（课程名），**不能**只按 `(x-y节)` 切 ——
+   *      因为课程名永远在节次行之前，按节次切会把课程名甩给上一门课。
+   *   ② 两门课之间**没有空行**，间隔靠 y 间距区分不可靠，
+   *      所以字号是最稳的判据（课程名 9，说明 8）。
+   *   ③ 课程名的换行续行要用 size=8 的行来拼（例如「大学物理实验Ⅰ（下」+「）☆」）。
+   */
+  function buildCourseBlocks(lineList) {
+    var lines = lineList.slice().sort(function (a, b) { return b.y - a.y; });
+
+    // 找所有「候选课程名行」：字号较大，且不是没有节次标记的说明续行
+    var nameIdx = [];
+    lines.forEach(function (ln, i) {
+      if (isNameLine(ln, lines, i)) nameIdx.push(i);
+    });
+
+    // 没有任何大字号行时，退化为「按节次标记切」
+    if (!nameIdx.length) return legacySplit(lines);
+
+    var blocks = [];
+    for (var k = 0; k < nameIdx.length; k++) {
+      var start = nameIdx[k];
+      var end = (k + 1 < nameIdx.length) ? nameIdx[k + 1] : lines.length;
+      var body = lines.slice(start, end);
+      var block = assembleBlock(body);
+      if (block) blocks.push(block);
+    }
+    return blocks;
+  }
+
+  /**
+   * 判断某一行是不是「课程名行」。
+   *
+   * 最可靠的判据是**位置**：课程名永远是每个课程块的**第一行**。
+   * 所以这里只判断「它有没有资格当块首」：
+   *   ① 自身不含节次标记 —— 节次行是块内第二行
+   *   ② 往下 3 行内必须出现节次行
+   *
+   * 为什么不再用字号：实测发现课程名换行时（「马克思主义基本原理」+「/选课备注…」），
+   * 名字行与续行**同为 size 8**，字号根本区分不出来（这个判据试过，漏了 3 门课）。
+   * 位置判据不受换行影响。
+   */
+  function isNameLine(ln, lines, i) {
+    if (/\(\d+(?:-\d+)?节\)/.test(ln.text)) return false;
+    for (var k = 1; k <= 3 && i + k < lines.length; k++) {
+      if (/^\/?\(\d+(?:-\d+)?节\)/.test(lines[i + k].text)) return true;
+    }
+    return false;
+  }
+
+  /** 把一段行组装成课程块：抽课程名 + 合并说明 */
+  function assembleBlock(body) {
+    if (!body.length) return null;
+
+    // 节次行 = 第一行以 (x-y节) 开头的行
+    var detailStart = -1;
+    for (var i = 0; i < body.length; i++) {
+      if (/^\/?\(\d+(?:-\d+)?节\)/.test(body[i].text)) { detailStart = i; break; }
+    }
+    if (detailStart < 0) {
+      // 退化：任何位置出现节次标记也行
+      for (var j = 0; j < body.length; j++) {
+        if (/\(\d+(?:-\d+)?节\)/.test(body[j].text)) { detailStart = j; break; }
+      }
+    }
+    if (detailStart < 0) return null;                 // 没有节次标记 -> 不是课程
+
+    /*
+     * 课程名：取节次行**前面那一段连续的行**。
+     * 但必须从后往前只取「紧跟节次行」的连续片段 ——
+     * 因为节次行之前可能还残留着上一门课的换行续行（实测出现过：
+     * 「马克思主义基本原理★」上面粘着「/选课备注:/课程学时组成」）。
+     * 判据：课程名行不含 `/` 和 `:`，遇到这样的行就停止回溯。
+     */
+    var nameParts = [];
+    for (var k = detailStart - 1; k >= 0; k--) {
+      var t = body[k].text;
+      if (t.indexOf('/') > -1 || t.indexOf(':') > -1 || t.indexOf('：') > -1) break;
+      nameParts.unshift(t);
+    }
+    var name = nameParts.join('').replace(/[★☆◆◇○●]/g, '').trim();
+
+    var text = body.map(function (l) { return l.text; }).join('');
+    return {
+      text: text,
+      name: name,
+      // 节次行之后的部分是说明（用于取场地/教室）
+      detail: body.slice(detailStart).map(function (l) { return l.text; }).join(''),
+      top: body[0].y,
+      bottom: body[body.length - 1].y
+    };
+  }
+
+  /** 退化路径：没有字号信息时，按 `(x-y节)` 标记切分 */
+  function legacySplit(lines) {
+    var chunks = [];
+    var cur = null;
+    lines.forEach(function (ln) {
+      if (/\(\d+(?:-\d+)?节\)/.test(ln.text)) {
+        if (cur) chunks.push(cur);
+        cur = [ln];
+      } else if (cur) cur.push(ln);
+      else cur = [ln];
+    });
+    if (cur) chunks.push(cur);
+    return chunks.map(assembleBlock).filter(Boolean);
+  }
+
+  /* ---------------------------- 表格线（单元格边界） ---------------------------- */
+
+  /**
+   * 解析内容流里的表格线（`x y w h re` 矩形命令）。
+   *
+   * 这是**整份解析里最关键的一步**。
+   * 起初我靠文字启发式猜格子（按 y 间距、按字号、按位置），全都不可靠 ——
+   * 因为一格里有**多门课**时，PDF 是按「行」交错输出的，同一视觉行的两门课
+   * 各自贡献一个碎片，靠文字根本分不清谁属于谁。
+   *
+   * 而这份 PDF（iText 生成）把每个单元格的边框都画了出来：
+   *   大矩形 = 一门课的格子（可能跨 1~2 节）
+   *   小矩形 h≈15/16 = 表头或节次行
+   * 用矩形边界切分，文字归属就完全确定了。
+   *
+   * 注意：矩形的坐标与文字 Tm 的坐标在**同一个用户空间**（都不含 cm 旋转），
+   * 所以可以直接比较，不要做变换。
+   */
+  function parseRects(content) {
+    var out = [];
+    var re = /(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+re\b/g;
+    var m;
+    while ((m = re.exec(content)) !== null) {
+      var x = +m[1], y = +m[2], w = +m[3], h = +m[4];
+      if (w <= 0 || h <= 0) continue;
+      out.push({ x: x, y: y, w: w, h: h, top: y + h, bottom: y, right: x + w });
+    }
+    return out;
+  }
+
+  /**
+   * 从矩形里筛出「课表格子」。
+   *
+   * 判据（针对这份 PDF 实测得出）：
+   *   · 宽度等于课表列宽（同一列的所有格子宽度一致，取众数）
+   *   · 高度大于 40 —— 排除表头行（h≈15）和节次行
+   *   · x 落在某个星期列上，且不在节次列（最左边）
+   */
+  function pickCourseCells(rects, days) {
+    if (!rects.length || !days.length) return [];
+
+    // 列宽取众数
+    var wCount = {};
+    rects.forEach(function (r) {
+      var k = r.w.toFixed(1);
+      wCount[k] = (wCount[k] || 0) + 1;
+    });
+    var colW = +Object.keys(wCount).sort(function (a, b) { return wCount[b] - wCount[a]; })[0];
+
+    var dayXs = days.map(function (d) { return d.x; });
+    var out = [];
+    rects.forEach(function (r) {
+      if (Math.abs(r.w - colW) > 1.5) return;          // 不是课表列宽
+      if (r.h < 40) return;                            // 表头/节次行
+      // 找出这个矩形属于哪一天：矩形的左边贴着某列的起点（列起点 = 星期表头 x - 6 左右）
+      var day = null, best = 1e9;
+      days.forEach(function (d) {
+        // 日历列的 x 起点：表头 x - 文字内边距（实测约 34）
+        var start = d.x - 34;
+        var diff = Math.abs(r.x - start);
+        if (diff < best) { best = diff; day = d.day; }
+      });
+      if (!day || best > 20) return;
+      out.push({ day: day, x: r.x, w: r.w, top: r.top, bottom: r.bottom, h: r.h });
+    });
+    return out;
+  }
+
+  /**
+   * 把文字碎片塞进矩形格子里。
+   * 返回 { '天-顶y': [行...] }，行已按 y 排序并拼好。
+   *
+   * ⚠️ x 的右边界必须用**矩形真实宽度**（cell.x + cell.w），
+   * 不能写死一个大数字 —— 这里踩过坑：写死 120 时宽度只有 103.85，
+   * 结果把右边一列的文字也抓了进来，两门课的内容搅在一起。
+   */
+  function fillCells(cells, items) {
+    var filled = {};
+    cells.forEach(function (cell) {
+      var frags = items.filter(function (it) {
+        return it.x >= cell.x - 2 && it.x < cell.x + cell.w &&
+          it.y <= cell.top + 1 && it.y >= cell.bottom - 1;
+      });
+      if (!frags.length) return;
+      filled[cell.day + '@' + cell.top.toFixed(1)] = {
+        cell: cell,
+        lines: groupIntoLines(frags)
+      };
+    });
+    return filled;
+  }
+
+  /**
+   * 把整页文字还原成课表格子。
+   *
+   * ⚠️ 表头必须由外部传入（refDays）：
+   * 实测这份 PDF **只有第 1 页画了星期表头**，第 2 页（承载下午/晚上的课）
+   * 没有表头。若每页各自找表头，第 2 页就会失败、课全丢（踩过这个坑）。
+   * 各页共用同一套列坐标，所以表头可以跨页复用。
+   */
+  function buildGrid(items, content, refDays) {
+    var days = (refDays && refDays.length >= 5) ? refDays : findDayHeaders(items);
+    if (days.length < 5) {
+      return { days: days, columns: {}, error: '没找到完整的星期表头（至少需要 5 天）' };
+    }
+    var periods = findPeriodLabels(items, days[0].x);
+
+    var rects = content ? parseRects(content) : [];
+    var cells = pickCourseCells(rects, days);
+
+    if (cells.length) {
+      // 几何路径：每个格子就是一门课（或空）
+      var filled = fillCells(cells, items);
+      var columns = {};
+      Object.keys(filled).forEach(function (k) {
+        var f = filled[k];
+        var block = assembleBlock(f.lines);
+        if (!block) return;                      // 没节次标记 -> 不是课程（例如标题文字）
+        (columns[f.cell.day] = columns[f.cell.day] || []).push(block);
+      });
+      // 每列按位置从上到下排序
+      Object.keys(columns).forEach(function (d) {
+        columns[d].sort(function (a, b) { return b.top - a.top; });
+      });
+      return { days: days, periods: periods, columns: columns, usedRects: true, cellCount: cells.length };
+    }
+
+    // 退化路径：没有表格线时按列 + 启发式
+    var colRange = days.map(function (d, i) {
+      var hi = i + 1 < days.length ? days[i + 1].x - 6 : d.x + 200;
+      return { day: d.day, lo: d.x - 6, hi: hi };
+    });
+    var headerY = Math.max.apply(null, days.map(function (d) { return d.y; }));
+    var columns2 = {};
+    colRange.forEach(function (col) {
+      var frags = items.filter(function (it) {
+        if (it.x < col.lo || it.x >= col.hi) return false;
+        if (it.y >= headerY - 2) return false;
+        if (DAY_RE.test(it.text.trim())) return false;
+        return true;
+      });
+      if (!frags.length) return;
+      columns2[col.day] = buildCourseBlocks(groupIntoLines(frags));
+    });
+    return { days: days, periods: periods, columns: columns2, usedRects: false };
+  }
+
+  /**
+   * 按「页」提取：每页单独取文字项、矩形、内容流。
+   * 必须分页 —— 矩形坐标是页内坐标，跨页混在一起会张冠李戴。
+   */
+  async function extractPages(bytes) {
+    var raw = bytesToLatin1(bytes);
+    var ranges = findStreams(raw);
+    var pages = [];
+    for (var i = 0; i < ranges.length; i++) {
+      var chunk = bytes.subarray(ranges[i].start, ranges[i].end);
+      var inflated = await inflate(chunk);
+      var content = bytesToLatin1(inflated || chunk);
+      pages.push({
+        content: content,
+        items: extractTextItems(content),
+        rects: parseRects(content)
+      });
+    }
+    return pages;
+  }
+
+  /**
+   * 解析整份 PDF。
+   *
+   * ⚠️ 关键：**三页共用同一套坐标空间，但各承载不同的节次区间**。
+   *   第 1 页：节次标签 1,2,3,4（上午）
+   *   第 2 页：节次标签 5~13（下午+晚上+网课）
+   *   第 3 页：节次标签 14（只有标题，无课）
+   * 若把各页的「同一位置格子」合并，就会把不同节次的课混在一起
+   * （实测踩过：周1 出现了两门不同的课挤在一格里）。
+   *
+   * 正确做法：**按「节次 → 页」路由** —— 先用各页的节次标签建立节次到页的映射，
+   * 再只从文字里写出 `(x-y节)` 的那一页取课程。课程自带的节次比几何位置可靠。
+   */
+  async function parsePdf(bytes) {
+    var pages = await extractPages(bytes);
+
+    var days = [];
+    var periodPage = {};          // 节次 -> 页码
+    var columns = {};
+    var usedRects = false;
+    var cellCount = 0;
+    var skipped = 0;
+
+    // 先把各页的表头汇总：只有第 1 页画了表头，其它页要复用
+    pages.forEach(function (pg) {
+      if (!days.length && pg.items.length) {
+        var d = findDayHeaders(pg.items);
+        if (d.length >= 5) days = d;
+      }
+    });
+    if (!days.length) {
+      return { days: [], columns: {}, error: '整份 PDF 都没找到星期表头', pageCount: pages.length };
+    }
+
+    // 各页的节次标签 -> 建立「节次属于哪一页」的映射
+    pages.forEach(function (pg, pi) {
+      if (!pg.items.length) return;
+      findPeriodLabels(pg.items, days[0].x).forEach(function (p) {
+        if (periodPage[p.n] === undefined) periodPage[p.n] = pi;
+      });
+    });
+
+    pages.forEach(function (pg, pi) {
+      if (!pg.items.length || !pg.rects.length) return;
+      var g = buildGrid(pg.items, pg.content, days);
+      if (!g.usedRects) return;
+      usedRects = true;
+      cellCount += (g.cellCount || 0);
+
+      Object.keys(g.columns || {}).forEach(function (dayKey) {
+        g.columns[dayKey].forEach(function (block) {
+          // 从文字里读出节次，判断它属于哪一页；不属于本页 -> 丢弃（避免重复）
+          var m = /\((\d+)(?:-(\d+))?节\)/.exec(block.text);
+          if (!m) return;
+          var start = +m[1];
+          var owner = periodPage[start];
+          if (owner !== undefined && owner !== pi) { skipped++; return; }
+          (columns[dayKey] = columns[dayKey] || []).push(block);
+        });
+      });
+    });
+
+    // 去重：同一天 + 同节次 + 同课程名（同页内一般不会重复，防跨页兜底）
+    var seen = {};
+    Object.keys(columns).forEach(function (d) {
+      columns[d] = columns[d].filter(function (b) {
+        var m = /\((\d+)(?:-(\d+))?节\)/.exec(b.text);
+        var key = d + '|' + (m ? m[0] : '?') + '|' + b.name;
+        if (seen[key]) return false;
+        seen[key] = 1;
+        return true;
+      });
+      columns[d].sort(function (a, b) { return b.top - a.top; });
+    });
+
+    return {
+      days: days,
+      periodPage: periodPage,
+      columns: columns,
+      usedRects: usedRects,
+      cellCount: cellCount,
+      skippedOtherPage: skipped,
+      pageCount: pages.length,
+      error: days.length < 5 ? '没找到完整的星期表头（至少需要 5 天）' : null
+    };
+  }
+
+  return {
+    // 底层（测试用）
+    bytesToLatin1: bytesToLatin1,
+    findStreams: findStreams,
+    unescapePdfString: unescapePdfString,
+    decodeUcs2: decodeUcs2,
+    extractTextItems: extractTextItems,
+    findDayHeaders: findDayHeaders,
+    findPeriodLabels: findPeriodLabels,
+    mergeFragments: mergeFragments,
+    groupIntoLines: groupIntoLines,
+    buildCourseBlocks: buildCourseBlocks,
+    parseRects: parseRects,
+    pickCourseCells: pickCourseCells,
+    fillCells: fillCells,
+    buildGrid: buildGrid,
+    extractPages: extractPages,
+    parsePdf: parsePdf,
+    inflate: inflate
+  };
+});
+
+
+/* ---------------------------------------------------------------------------
+ * 以下为字段解析（由 course-app/parsers.js 自动内联，请勿直接在此修改）。
+ * 单元测试：test-pdf.js（113 项）
+ * ------------------------------------------------------------------------- */
+/* ===========================================================================
+ * 课表字段解析器 —— 把 PDF 格子里的文字变成课程对象
+ *
+ * 输入是 pdf.js 抽出的「课程块」，形如：
+ *   {
+ *     name: '游泳（上）',
+ *     text: '游泳（上）(7-8节)1-16周/场地:综合体育馆-游泳馆场地2/教师:李猷/教学班:...'
+ *   }
+ *
+ * 输出是 logic.js 能吃的课程对象：
+ *   { name, teacher, room, day, periods:[7,8], weeks:[...], weeksRaw:'1-16周' }
+ *
+ * ── 强智课表 PDF 的字段格式（实测）──
+ *   节次：(1-2节) / (13-13节)          —— 起止相同的写法真实存在，必须支持
+ *   周次：1-18周 / 13周 / 1-15周(单) / 2-16周(双) / 4-7周,9-13周 / 4-7周,9-13周(单)
+ *   场地：场地:明理9-510
+ *   教师：教师:赵威  —— 但**有的 PDF 写成「教幢:」**，两种都要认
+ *
+ * ── 踩过的坑 ──
+ *   格子里的文字会按列宽换行，被切成多段后拼回来，
+ *   于是出现「场地:明理2-」+ 下一段以「:理论:48」开头 的假边界。
+ *   所以字段值要在**下一个真字段关键词**处截止，不能只在 '/' 处切。
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.ScheduleParsers = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  /** 已知的字段关键词（用于界定每个字段值的结束位置） */
+  var FIELD_KEYS = ['场地', '教师', '教幢', '教学班', '考核方式', '选课备注',
+    '课程学时组成', '周学时', '总学时', '学分'];
+
+  /** 构造一个「到下一个字段关键词或斜杠为止」的正则 */
+  function fieldRe(key) {
+    var others = FIELD_KEYS.filter(function (k) { return k !== key; }).join('|');
+    return new RegExp(key + '[：:]\\s*([^/]*?)(?=\\s*(?:' + others + ')[：:]|/|$)');
+  }
+
+  var RE_ROOM = fieldRe('场地');
+  var RE_TEACHER_A = fieldRe('教师');
+  var RE_TEACHER_B = fieldRe('教幢');
+
+  /**
+   * 解析节次。支持 (1-2节) 与 (13-13节)。
+   * 返回 { periods:[..], raw:'1-2节' } 或 null
+   */
+  function parsePeriods(text) {
+    var m = /\((\d+)(?:-(\d+))?节\)/.exec(text);
+    if (!m) return null;
+    var a = +m[1];
+    var b = m[2] === undefined ? a : +m[2];
+    if (!(a >= 1) || !(b >= 1)) return null;
+    if (b < a) { var t = a; a = b; b = t; }
+
+    var periods = [];
+    for (var i = a; i <= b; i++) periods.push(i);
+    return { periods: periods, raw: m[0] };
+  }
+
+  /**
+   * 解析周次原文：取节次标记之后、第一个 '/' 之前的部分。
+   * 例：'(1-2节)1-3周/场地:...' -> '1-3周'
+   */
+  function parseWeeksRaw(text) {
+    var i = text.indexOf('节)');
+    if (i < 0) return '';
+    var rest = text.slice(i + 2);
+    var slash = rest.indexOf('/');
+    if (slash > -1) rest = rest.slice(0, slash);
+    // 去掉可能残留的字段名
+    rest = rest.replace(/(场地|教师|教幢|教学班)[：:].*$/, '');
+    return rest.trim();
+  }
+
+  /** 取字段值，顺便清掉空白 */
+  function grab(re, text) {
+    var m = re.exec(text);
+    if (!m) return '';
+    return String(m[1] || '').replace(/\s+/g, '').trim();
+  }
+
+  /**
+   * 解析一个课程块。
+   *
+   * @param block  pdf.js 的课程块 { name, text }
+   * @param day    星期几（1~7），由所在的列决定
+   * @param expandWeeks  周次展开函数（来自 logic.js），注入以便单测
+   * @param onlineFrom   网课起始节次（默认 12），>= 该值的课程返回 null
+   * @returns 课程对象 或 null（不是有效课程）
+   */
+  function parseBlock(block, day, expandWeeks, onlineFrom) {
+    if (!block || typeof block.text !== 'string') return null;
+    var text = block.text;
+    var limit = onlineFrom === undefined ? 12 : onlineFrom;
+
+    var per = parsePeriods(text);
+    if (!per) return null;
+
+    // 网课段整条丢弃（用户已确认第 12~14 节是网课，不用排）
+    if (per.periods[0] >= limit) return null;
+    // 跨到网课段的（例如 11-13 节）：砍掉网课部分，只留有效节次
+    var periods = per.periods.filter(function (n) { return n < limit; });
+    if (!periods.length) return null;
+
+    var weeksRaw = parseWeeksRaw(text);
+    if (!weeksRaw) return null;
+
+    var ex = expandWeeks(weeksRaw);
+    if (!ex || !ex.ok) return null;
+
+    var name = (block.name || '').trim();
+    if (!name) return null;
+
+    return {
+      name: name,
+      teacher: grab(RE_TEACHER_A, text) || grab(RE_TEACHER_B, text),
+      room: grab(RE_ROOM, text),
+      day: day,
+      periods: periods,
+      weeks: ex.weeks,
+      weeksRaw: weeksRaw
+    };
+  }
+
+  /**
+   * 解析整张网格（pdf.js 的 buildGrid/parsePdf 结果）。
+   *
+   * @returns { courses:[...], stats:{ total, online, badWeek, badPeriod, badName } }
+   */
+  function parseGrid(grid, expandWeeks, onlineFrom) {
+    var out = [];
+    var stats = { total: 0, online: 0, badWeek: 0, badPeriod: 0, badName: 0, ok: 0 };
+    if (!grid || !grid.columns) return { courses: out, stats: stats };
+
+    var limit = onlineFrom === undefined ? 12 : onlineFrom;
+
+    Object.keys(grid.columns).forEach(function (dayKey) {
+      var day = +dayKey;
+      grid.columns[dayKey].forEach(function (block) {
+        stats.total++;
+
+        var per = parsePeriods(block.text);
+        if (!per) { stats.badPeriod++; return; }
+        if (per.periods[0] >= limit) { stats.online++; return; }
+
+        var weeksRaw = parseWeeksRaw(block.text);
+        if (!weeksRaw) { stats.badWeek++; return; }
+        var ex = expandWeeks(weeksRaw);
+        if (!ex.ok) { stats.badWeek++; return; }
+
+        var name = (block.name || '').trim();
+        if (!name) { stats.badName++; return; }
+
+        var periods = per.periods.filter(function (n) { return n < limit; });
+        if (!periods.length) { stats.online++; return; }
+
+        out.push({
+          name: name,
+          teacher: grab(RE_TEACHER_A, block.text) || grab(RE_TEACHER_B, block.text),
+          room: grab(RE_ROOM, block.text),
+          day: day,
+          periods: periods,
+          weeks: ex.weeks,
+          weeksRaw: weeksRaw
+        });
+        stats.ok++;
+      });
+    });
+
+    return { courses: out, stats: stats };
+  }
+
+  return {
+    FIELD_KEYS: FIELD_KEYS,
+    parsePeriods: parsePeriods,
+    parseWeeksRaw: parseWeeksRaw,
+    parseBlock: parseBlock,
+    parseGrid: parseGrid
+  };
+});
+
+
+/* ============================ ② 状态与存储 ============================ */
+(function () {
+  'use strict';
+  var L = window.ScheduleLogic;
+  var Pdf = window.SchedulePdf;
+  var Parsers = window.ScheduleParsers;
+  var STORE_KEY = 'course-app-v1';
+
+  var el = function (id) { return document.getElementById(id); };
+
+  function esc(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function escMultiline(s) {
+    return esc(s).replace(/\n/g, '<br>');
+  }
+  function todayKey() { return L.toDateKey(new Date()); }
+
+  /* ---------------------------- 存储 ---------------------------- */
+  var state = L.emptyState();
+  var storageOK = true;
+  var lastSaveError = '';
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      state = raw ? L.normalizeState(JSON.parse(raw)) : L.emptyState();
+    } catch (e) {
+      state = L.emptyState();
+      console.warn('存档读取失败，已重置：', e);
+    }
+  }
+
+  function save() {
+    if (!storageOK) return true;
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      lastSaveError = '';
+      window.__saveLog = (window.__saveLog || []).concat([{ ok: true }]);
+      return true;
+    } catch (e) {
+      lastSaveError = /quota|exceed/i.test(String(e && e.name) + String(e && e.message))
+        ? '手机存储满了，保存不了。可以删掉一些旧学期再试。'
+        : '保存失败，这次改动没有写进手机。';
+      window.__saveLog = (window.__saveLog || []).concat([{ ok: false, name: e && e.name, msg: e && e.message }]);
+      return false;
+    }
+  }
+
+  /**
+   * 提交新状态。
+   * 返回 save() 的结果：false 表示没写进存储。
+   * ⚠️ 调用方必须在 saved === false 时不显示成功提示，否则就是「假成功」。
+   *
+   * 注意这里同时调了 renderBanner()：保存失败时 lastSaveError 会被设置，
+   * 必须重新渲染横幅才能让用户看到原因。之前只调 render()，
+   * 结果保存失败界面上什么都不显示（踩过这个坑）。
+   */
+  function commit(next) {
+    state = next;
+    var saved = save();
+    render();
+    renderBanner();
+    return saved;
+  }
+
+  /* ---------------------------- 视图状态 ---------------------------- */
+  var currentWeek = 1;          // 当前显示的周次
+  var draft = null;             // 添加/编辑草稿
+  var importDraft = null;       // 导入预览
+  var detailCourse = null;      // 正在看详情的课程
+  var userPickedWeek = false;   // 用户是否手动切过周
+
+  /* ============================ ③ 渲染 ============================ */
+  function render() {
+    var sem = L.activeSemester(state);
+
+    // 顶栏
+    el('semTitle').textContent = sem ? sem.name : '课程表';
+    el('semSub').textContent = sem
+      ? (sem.totalWeeks + ' 周 ｜ 共 ' + L.coursesOf(state).length + ' 门课')
+      : '还没有导入课表';
+
+    // 周次：没手动切过就跟着今天走
+    var pos = L.nowPosition(state);
+    if (!userPickedWeek && pos.week) currentWeek = pos.week;
+    if (sem) currentWeek = Math.min(Math.max(1, currentWeek), sem.totalWeeks);
+    else currentWeek = Math.max(1, currentWeek);
+
+    var lay = L.weekLayout(state, currentWeek);
+    el('weekLabel').innerHTML = '第 ' + lay.week + ' 周' +
+      (pos.week === lay.week && !pos.beforeTerm && !pos.afterTerm ? '<span class="this"> · 本周</span>' : '');
+    el('weekRange').textContent = sem ? L.weekRangeText(lay.week, sem.startDate) : '';
+    el('weekPrev').disabled = lay.week <= 1;
+    el('weekNext').disabled = !!sem && lay.week >= sem.totalWeeks;
+
+    // 下一节课
+    renderNextClass();
+
+    // 课表本体
+    if (!L.coursesOf(state).length) {
+      el('grid').style.display = 'none';
+      el('empty').style.display = '';
+      el('empty').innerHTML = '<div class="big">📅</div>' +
+        '<p>还没有课表。<br>点右下角 ＋ 手动加，<br>或者到设置里导入教务系统导出的 PDF。</p>' +
+        '<p class="hint">也可以在设置里「导入课表 PDF」</p>';
+      el('fab').classList.remove('hide');
+      return;
+    }
+
+    el('grid').style.display = '';
+    el('empty').style.display = 'none';
+    renderGrid(lay);
+    el('fab').classList.remove('hide');
+  }
+
+  function renderGrid(lay) {
+    var grid = el('grid');
+    var nDays = lay.days.length;
+    grid.className = 'grid' + (nDays > 5 ? ' weekend' : '');
+
+    var html = '';
+    // 表头行：显式给每个格子指定列，不依赖自动放置
+    html += '<div class="ghead corner" style="grid-row:1;grid-column:1">节次</div>';
+    lay.days.forEach(function (d, di) {
+      html += '<div class="ghead' + (d.isToday ? ' today' : '') +
+        '" style="grid-row:1;grid-column:' + (di + 2) + '">' +
+        '<span class="d">' + esc(d.name) + '</span>' +
+        (d.dateKey ? '<span class="dt">' + esc(d.dateKey.slice(5).replace('-', '/')) + '</span>' : '') +
+        '</div>';
+    });
+
+    // 节次行 + 空格子 + 课程卡片
+    lay.rows.forEach(function (row) {
+      if (row.separator) {
+        html += '<div class="gsep" style="grid-row:' + row.rowIndex + '">' + esc(row.label) + '</div>';
+        return;
+      }
+      html += '<div class="gtime" style="grid-row:' + row.rowIndex + '">' +
+        '<span class="n">' + row.period + '</span>' +
+        '<span class="t">' + esc(row.start) + '</span></div>';
+      lay.days.forEach(function (d, di) {
+        html += '<div class="gcell' + (di === nDays - 1 ? ' lastcol' : '') +
+          '" style="grid-row:' + row.rowIndex + ';grid-column:' + (di + 2) + '"></div>';
+      });
+    });
+
+    // 课程卡片
+    lay.starts.forEach(function (s) {
+      var di = lay.days.findIndex(function (d) { return d.day === s.day; });
+      if (di < 0) return;
+      var c = s.course;
+      var col = di + 2;
+      var span = L.formatSpan(L.spanTime(c.periods, state.periods));
+      html += '<button class="course ' + ('c' + L.colorOf(c.name)) + (s.span === 1 ? ' one' : '') +
+        '" style="grid-column:' + col + ';grid-row:' + s.rowStart + ' / span ' + s.span + '"' +
+        ' data-course="' + esc(c.id) + '">' +
+        '<span class="cn">' + esc(c.name) + '</span>' +
+        (c.room ? '<span class="cr">' + esc(c.room) + '</span>' : '<span class="cr">' + esc(span) + '</span>') +
+        '</button>';
+    });
+
+    grid.innerHTML = html;
+    fitGridRows(lay);
+  }
+
+  /**
+   * 按可用高度算出行高，让整张课表尽量一屏放下。
+   *
+   * 为什么需要：行高写死时，在矮屏（iPhone SE 一类 568px）上 11 节次行会超出屏幕，
+   * 而外层如果 overflow:hidden 就会把第 9~11 节直接裁掉（踩过这个坑）。
+   * 现在外层可滚动，这里只是尽量把行高调到合适值，减少滚动。
+   *
+   * 下限 30px：再小课名就看不清了，宁可让用户滚一下。
+   */
+  function fitGridRows(lay) {
+    var wrap = el('gridWrap');
+    if (!wrap) return;
+    var headH = 0;
+    var head = el('grid').querySelector('.ghead');
+    if (head) headH = head.getBoundingClientRect().height;
+
+    var avail = wrap.clientHeight - headH;
+    var rowCount = 0;
+    lay.rows.forEach(function (r) {
+      if (r.separator) rowCount += 0.62;   // 分隔行矮一些
+      else rowCount += 1;
+    });
+    if (!rowCount || avail <= 0) return;
+
+    var h = Math.floor(avail / rowCount);
+    h = Math.max(30, Math.min(64, h));     // 夹在 30~64 之间
+    el('grid').style.setProperty('--row-h', h + 'px');
+  }
+
+  function renderNextClass() {
+    var host = el('nextHost');
+    var nx = L.nextClass(state, new Date(), 7);
+    if (!nx) { host.innerHTML = ''; return; }
+
+    var when;
+    var pos = L.nowPosition(state);
+    if (nx.dateKey === pos.dateKey) when = '今天 ' + nx.start;
+    else {
+      var d = L.fromDateKey(nx.dateKey);
+      var dayName = L.DAY_NAMES[d.getDay() === 0 ? 7 : d.getDay()];
+      when = dayName + ' ' + nx.start;
+    }
+    var mins = nx.minutesUntil;
+    var left = mins < 60 ? (mins + ' 分钟后') :
+      (Math.floor(mins / 60) + ' 小时' + (mins % 60 ? (mins % 60) + ' 分' : '') + '后');
+
+    host.innerHTML = '<div class="nextclass">' +
+      '<span class="e">⏰</span>' +
+      '<span class="tx">' + esc(nx.course.name) + '（' + esc(when) + '）</span>' +
+      '<span class="tm">' + esc(left) + '</span>' +
+      '</div>';
+  }
+
+  function renderBanner() {
+    var host = el('bannerHost');
+    var lines = [];
+    if (!storageOK) {
+      lines.push('<div class="banner danger"><span class="ico">⚠️</span><div>' +
+        '这个浏览器不支持本地存储，改动不会被保存。</div></div>');
+    }
+    if (lastSaveError) {
+      lines.push('<div class="banner danger"><span class="ico">⚠️</span><div>' +
+        esc(lastSaveError) + '</div></div>');
+    }
+    // 冲突提醒
+    var cf = L.findConflicts(state);
+    if (cf.length) {
+      var c0 = cf[0];
+      lines.push('<div class="banner"><span class="ico">📌</span><div>' +
+        '有 ' + cf.length + ' 处时间冲突，比如「' + esc(c0.a.name) + '」和「' + esc(c0.b.name) +
+        '」都占了周' + c0.a.day + ' 第 ' + c0.periods.join('/') + ' 节。</div></div>');
+    }
+    host.innerHTML = lines.join('');
+  }
+
+  /* ============================ ④ 课程编辑弹层 ============================ */
+
+  /** 打开弹层。opts: { course } 编辑已有 / { day, period } 或 {} 新建 */
+  function openSheet(opts) {
+    opts = opts || {};
+    var editing = !!opts.course;
+
+    if (editing) {
+      var c = opts.course;
+      draft = {
+        id: c.id, name: c.name, teacher: c.teacher, room: c.room,
+        day: c.day, periods: c.periods.slice(),
+        weeksText: c.weeksRaw || L.compactWeeks(c.weeks), note: c.note
+      };
+      el('sheetTitle').textContent = '编辑课程';
+      el('sheetDelete').style.visibility = 'visible';
+    } else {
+      draft = {
+        id: null, name: '', teacher: '', room: '',
+        day: opts.day || 1, periods: opts.period ? [opts.period] : [],
+        weeksText: '', note: ''
+      };
+      // 默认周次：整个学期
+      var sem = L.activeSemester(state);
+      if (sem) draft.weeksText = '1-' + sem.totalWeeks + '周';
+      el('sheetTitle').textContent = '添加课程';
+      el('sheetDelete').style.visibility = 'hidden';
+    }
+
+    buildDayButtons();
+    buildPeriodButtons();
+    buildWeekQuick();
+    syncSheetForm();
+    el('mask').classList.add('show');
+    el('sheet').classList.add('show');
+    el('fab').classList.add('hide');
+    // 新建时直接聚焦课程名，省一次点击
+    if (!editing) setTimeout(function () { el('nameInput').focus(); }, 260);
+  }
+
+  function closeSheet() {
+    el('mask').classList.remove('show');
+    el('sheet').classList.remove('show');
+    el('fab').classList.remove('hide');
+    draft = null;
+  }
+
+  function buildDayButtons() {
+    var names = ['一', '二', '三', '四', '五', '六', '日'];
+    el('dayRow').innerHTML = names.map(function (n, i) {
+      return '<button class="daybtn' + (draft.day === i + 1 ? ' on' : '') +
+        '" data-day="' + (i + 1) + '">' + n + '</button>';
+    }).join('');
+  }
+
+  function buildPeriodButtons() {
+    var ps = state.periods.slice().sort(function (a, b) { return a.n - b.n; })
+      .filter(function (p) { return p.n < L.ONLINE_PERIOD_FROM; });
+    el('perGrid').innerHTML = ps.map(function (p) {
+      return '<button class="perbtn' + (draft.periods.indexOf(p.n) > -1 ? ' on' : '') +
+        '" data-period="' + p.n + '">' + p.n + '</button>';
+    }).join('');
+    syncPeriodHint();
+  }
+
+  /** 节次提示：把选中的节次换算成时间，让用户能核对 */
+  function syncPeriodHint() {
+    if (!draft.periods.length) {
+      el('perHint').textContent = '至少要选一节';
+      return;
+    }
+    var span = L.spanTime(draft.periods, state.periods);
+    var text = span ? (L.formatSpan(span) + '（跨 ' + draft.periods.length + ' 节）') : '';
+    el('perHint').textContent = text;
+  }
+
+  function buildWeekQuick() {
+    var sem = L.activeSemester(state);
+    var total = sem ? sem.totalWeeks : 20;
+    var items = [
+      { t: '每周', v: '1-' + total + '周' },
+      { t: '单周', v: '1-' + total + '周(单)' },
+      { t: '双周', v: '2-' + total + '周(双)' },
+      { t: '前半学期', v: '1-' + Math.ceil(total / 2) + '周' },
+      { t: '后半学期', v: (Math.ceil(total / 2) + 1) + '-' + total + '周' }
+    ];
+    el('weekQuick').innerHTML = items.map(function (it) {
+      return '<button data-weeks="' + esc(it.v) + '">' + esc(it.t) + '</button>';
+    }).join('');
+  }
+
+  function syncSheetForm() {
+    el('nameInput').value = draft.name;
+    el('roomInput').value = draft.room;
+    el('teacherInput').value = draft.teacher;
+    el('weeksInput').value = draft.weeksText;
+    el('noteInput').value = draft.note;
+    buildDayButtons();
+    buildPeriodButtons();
+    syncWeeksHint();
+    syncSaveButton();
+  }
+
+  function syncWeeksHint() {
+    var text = el('weeksInput').value;
+    if (!text.trim()) { el('weeksHint').textContent = '要填周次，比如 1-16周'; return; }
+    var ex = L.expandWeeks(text, (L.activeSemester(state) || {}).totalWeeks || 20);
+    if (!ex.ok) {
+      el('weeksHint').innerHTML = '<span style="color:var(--danger)">没看懂这个写法</span>';
+      return;
+    }
+    var preview = ex.weeks.length > 8
+      ? (ex.weeks.slice(0, 8).join(',') + ' … 共 ' + ex.weeks.length + ' 周')
+      : ex.weeks.join(',');
+    el('weeksHint').innerHTML = '共 <b>' + ex.weeks.length + '</b> 周：' + esc(preview) +
+      (ex.oddEven ? '（<b>' + (ex.oddEven === 'odd' ? '单周' : '双周') + '</b>）' : '');
+  }
+
+  function syncSaveButton() {
+    var canSave = !!el('nameInput').value.trim() &&
+      draft.periods.length > 0 &&
+      L.expandWeeks(el('weeksInput').value).ok;
+    el('btnSave').disabled = !canSave;
+  }
+
+  function saveDraft() {
+    var name = el('nameInput').value.trim();
+    var weeksText = el('weeksInput').value.trim();
+    var ex = L.expandWeeks(weeksText, (L.activeSemester(state) || {}).totalWeeks || 20);
+    if (!name) { toast('要填课程名', true); return; }
+    if (!draft.periods.length) { toast('要选节次', true); return; }
+    if (!ex.ok) { toast('周次没看懂，比如 1-16周 或 1-15周(单)', true); return; }
+
+    var payload = {
+      name: name,
+      teacher: el('teacherInput').value.trim(),
+      room: el('roomInput').value.trim(),
+      note: el('noteInput').value.trim(),
+      day: draft.day,
+      periods: draft.periods,
+      weeks: ex.weeks,
+      weeksRaw: weeksText
+    };
+
+    var r;
+    if (draft.id) {
+      r = L.updateCourse(state, draft.id, payload);
+    } else {
+      r = L.addCourse(state, payload);
+    }
+    if (r.error) { toast(r.error, true); return; }
+
+    var saved = commit(r.state);
+    if (!saved) {
+      // ⚠️ 保存失败必须给出显眼反馈。
+      // 之前这里直接 return，只靠顶部横幅提示 —— 而横幅在滚动区之上，
+      // 用户很容易没注意到，看起来就像"点了保存没反应"。
+      toast(lastSaveError || '保存失败，这次改动没有写进手机', true);
+      return;
+    }
+    toast(draft.id ? '已保存' : '已加上');
+    closeSheet();
+  }
+
+  function deleteDraft() {
+    if (!draft || !draft.id) return;
+    if (!confirm('删掉这门课？')) return;
+    var r = L.removeCourse(state, draft.id);
+    if (r.error) { toast(r.error, true); return; }
+    var saved = commit(r.state);
+    if (!saved) return;
+    toast('已删除');
+    closeSheet();
+  }
+
+  /* ============================ ⑤ 课程详情 ============================ */
+  function openDetail(id) {
+    var c = L.findCourse(state, id);
+    if (!c) return;
+    detailCourse = c;
+
+    var sem = L.activeSemester(state);
+    var span = L.spanTime(c.periods, state.periods);
+    var rows = [
+      ['星期', L.DAY_FULL[c.day]],
+      ['节次', c.periods.join('、') + ' 节' + (span ? '（' + L.formatSpan(span) + '）' : '')],
+      ['周次', esc(c.weeksRaw || L.compactWeeks(c.weeks)) + '（共 ' + c.weeks.length + ' 周）']
+    ];
+    if (c.room) rows.push(['教室', esc(c.room)]);
+    if (c.teacher) rows.push(['教师', esc(c.teacher)]);
+    if (c.note) rows.push(['备注', escMultiline(c.note)]);
+
+    el('detailTitle').textContent = c.name;
+    el('detailBody').innerHTML = rows.map(function (r) {
+      return '<div class="detail-row"><span class="k">' + esc(r[0]) + '</span>' +
+        '<span class="v">' + (r[0] === '备注' ? r[1] : esc(r[1]).replace(/&amp;lt;/g, '&lt;')) + '</span></div>';
+    }).join('') +
+      (sem ? '<div class="detail-row"><span class="k">学期</span><span class="v">' + esc(sem.name) + '</span></div>' : '');
+
+    el('mask').classList.add('show');
+    el('sheetDetail').classList.add('show');
+    el('fab').classList.add('hide');
+  }
+
+  function closeDetail() {
+    el('mask').classList.remove('show');
+    el('sheetDetail').classList.remove('show');
+    el('fab').classList.remove('hide');
+    detailCourse = null;
+  }
+
+  /* ============================ ⑥ 导入课表 ============================ */
+  function openImport() {
+    el('filePdf').click();
+  }
+
+  async function handlePdfFile(file) {
+    toast('正在解析 PDF…');
+    var buf;
+    try {
+      buf = new Uint8Array(await file.arrayBuffer());
+    } catch (e) {
+      toast('读不到这个文件', true);
+      return;
+    }
+
+    var grid;
+    try {
+      grid = await Pdf.parsePdf(buf);
+    } catch (e) {
+      console.error(e);
+      toast('PDF 解析出错了：' + (e && e.message ? e.message : '未知原因'), true);
+      return;
+    }
+    if (grid.error) { toast(grid.error, true); return; }
+
+    var parsed = Parsers.parseGrid(grid, L.expandWeeks, L.ONLINE_PERIOD_FROM);
+    if (!parsed.courses.length) {
+      toast('没从这份 PDF 里找到课程，确认一下是不是课表文件', true);
+      return;
+    }
+
+    // 学期：没有就按 PDF 文件名/当前时间猜一个，让用户改
+    var sem = L.activeSemester(state);
+    var guessStart = sem ? sem.startDate : guessSemesterStart();
+
+    importDraft = {
+      courses: parsed.courses,
+      picked: parsed.courses.map(function () { return true; }),
+      stats: parsed.stats,
+      semesterId: sem ? sem.id : null,
+      newSemester: sem ? null : {
+        name: guessSemesterName(),
+        startDate: guessStart,
+        totalWeeks: 20
+      },
+      mode: 'replace'
+    };
+    renderImport();
+    el('mask').classList.add('show');
+    el('sheetImport').classList.add('show');
+    el('fab').classList.add('hide');
+  }
+
+  /** 猜学期名：按当前月份判断是第几学期 */
+  function guessSemesterName() {
+    var d = new Date();
+    var y = d.getFullYear();
+    var m = d.getMonth() + 1;
+    // 9 月~次年 1 月算第一学期
+    if (m >= 9 || m <= 1) {
+      var startYear = m <= 1 ? y - 1 : y;
+      return startYear + '-' + (startYear + 1) + '学年 第1学期';
+    }
+    var s = m <= 7 ? y - 1 : y;
+    return s + '-' + (s + 1) + '学年 第2学期';
+  }
+
+  /** 猜开学日：取最近一个 9 月 1 日所在周的周一（用户可改） */
+  function guessSemesterStart() {
+    var d = new Date();
+    var m = d.getMonth() + 1;
+    if (m <= 1 || m >= 9) {
+      // 本学期
+    } else if (m <= 7) {
+      d = new Date(d.getFullYear() - 1, 8, 1);   // 去年 9 月
+    }
+    var guess = new Date(d.getFullYear(), 8, 1);  // 今年 9 月 1 日
+    var mon = L.mondayOf(L.toDateKey(guess));
+    return mon || L.toDateKey(guess);
+  }
+
+  function renderImport() {
+    var d = importDraft;
+    if (!d) return;
+    var pickedCount = d.picked.filter(Boolean).length;
+    var skipped = d.stats.online;
+
+    var html = '';
+    html += '<div class="import-summary">' +
+      '识别到 <b>' + d.courses.length + '</b> 门课' +
+      (skipped ? '（另外跳过了 <b>' + skipped + '</b> 门网课）' : '') +
+      '，已选 <b>' + pickedCount + '</b> 门。' +
+      '<div style="font-size:12.5px;color:var(--ink-3);margin-top:5px">' +
+      '核对一下课程名和节次，不对的可以取消勾选，之后手动补。</div>' +
+      (d.stats.badWeek ? '<div class="warnline">有 ' + d.stats.badWeek + ' 门课的周次没看懂，已跳过</div>' : '') +
+      (d.stats.badName ? '<div class="warnline">有 ' + d.stats.badName + ' 门课没读到课程名，已跳过</div>' : '') +
+      '</div>';
+
+    // 学期（首次导入才要填）
+    if (d.newSemester) {
+      html += '<div class="card">' +
+        '<div class="ct">先确认学期信息</div>' +
+        '<div class="field" style="margin-bottom:8px">' +
+        '<label for="impName">学期名称</label>' +
+        '<input type="text" id="impName" value="' + esc(d.newSemester.name) + '" maxlength="40">' +
+        '</div>' +
+        '<div class="field" style="margin-bottom:8px">' +
+        '<label for="impStart">第 1 周的周一（教务系统不提供，需要你填）</label>' +
+        '<input type="date" id="impStart" value="' + esc(d.newSemester.startDate) + '">' +
+        '</div>' +
+        '<div class="field" style="margin-bottom:0">' +
+        '<label for="impWeeks">一共几周</label>' +
+        '<input type="number" id="impWeeks" min="1" max="30" value="' + d.newSemester.totalWeeks + '">' +
+        '</div>' +
+        '<div class="cd" style="margin-top:8px">日期填错的话，课表上的「本周」和日期会不对，可以随时在设置里改。</div>' +
+        '</div>';
+    }
+
+    // 导入方式
+    html += '<div class="mode-row">' +
+      '<button class="mode-btn' + (d.mode === 'replace' ? ' on' : '') + '" data-mode="replace">' +
+      '<div class="t">替换本学期</div><div class="d">清掉本学期原有课程，整批换成新的</div></button>' +
+      '<button class="mode-btn' + (d.mode === 'append' ? ' on' : '') + '" data-mode="append">' +
+      '<div class="t">追加</div><div class="d">保留原有课程，只加没有的</div></button>' +
+      '</div>';
+
+    // 课程列表
+    html += '<div class="import-list">';
+    d.courses.forEach(function (c, i) {
+      var span = L.spanTime(c.periods, state.periods);
+      html += '<div class="import-item' + (d.picked[i] ? ' on' : '') + '" data-idx="' + i + '">' +
+        '<span class="ck">✓</span>' +
+        '<span class="body">' +
+        '<span class="nm">' + esc(c.name) + '</span>' +
+        '<span class="mt"><span class="dg">' + esc(L.DAY_NAMES[c.day]) + '</span> ' +
+        esc(c.periods.join('、')) + ' 节' +
+        (span ? '（' + esc(L.formatSpan(span)) + '）' : '') +
+        ' ｜ ' + esc(c.weeksRaw || L.compactWeeks(c.weeks)) +
+        (c.room ? ' ｜ ' + esc(c.room) : '') +
+        (c.teacher ? ' ｜ ' + esc(c.teacher) : '') +
+        '</span></span></div>';
+    });
+    html += '</div>';
+
+    el('importBody').innerHTML = html;
+    el('importConfirm').textContent = '导入 ' + pickedCount + ' 门课';
+    el('importConfirm').disabled = !pickedCount;
+  }
+
+  function closeImport() {
+    el('mask').classList.remove('show');
+    el('sheetImport').classList.remove('show');
+    el('fab').classList.remove('hide');
+    importDraft = null;
+  }
+
+  function confirmImport() {
+    var d = importDraft;
+    if (!d) return;
+
+    var next = state;
+
+    /*
+     * ⚠️ 备份必须在**建学期之前**做。
+     * 之前写在建完学期之后，结果「撤销上次导入」时学期还留着 ——
+     * 撤销的意义是回到导入之前的样子，那时本来就没有这个学期。
+     */
+    backupBeforeImport(next);
+
+    // 首次导入：建学期
+    if (d.newSemester) {
+      var nameEl = el('impName'), startEl = el('impStart'), weeksEl = el('impWeeks');
+      var semName = nameEl ? nameEl.value.trim() : d.newSemester.name;
+      var startDate = startEl ? startEl.value : d.newSemester.startDate;
+      var totalWeeks = weeksEl ? Math.round(Number(weeksEl.value)) : d.newSemester.totalWeeks;
+
+      var sem = L.normalizeSemester({
+        name: semName || '未命名学期',
+        startDate: startDate,
+        totalWeeks: totalWeeks
+      });
+      if (!sem) { toast('学期起始日填得不对', true); return; }
+
+      next = L.normalizeState(next);
+      next.semesters = next.semesters.concat([sem]);
+      next.activeSemesterId = sem.id;
+      d.semesterId = sem.id;
+    }
+
+    var picked = d.courses.filter(function (c, i) { return d.picked[i]; });
+    var r = L.importCourses(next, d.semesterId, picked, d.mode);
+    if (r.error) { toast(r.error, true); return; }
+
+    var saved = commit(r.state);
+    if (!saved) return;
+
+    var msg = '导入了 ' + r.added + ' 门课';
+    if (r.skipped) msg += '，跳过 ' + r.skipped + ' 门';
+    toast(msg);
+    closeImport();
+  }
+
+  /** 导入前备份（撤销用） */
+  function backupBeforeImport(st) {
+    try {
+      localStorage.setItem(STORE_KEY + '-backup', JSON.stringify(st));
+      localStorage.setItem(STORE_KEY + '-backup-at', String(Date.now()));
+    } catch (e) { /* 备份失败不阻断导入 */ }
+  }
+
+  /* ============================ ⑦ 设置与数据 ============================ */
+  function openData() {
+    var sem = L.activeSemester(state);
+    var courses = L.coursesOf(state);
+    var totalWeeksWith = courses.reduce(function (a, c) { return a + c.weeks.length; }, 0);
+
+    var html = '';
+
+    html += '<div class="card"><div class="ct">现在的情况</div>' +
+      '<div class="stat-line">' +
+      '学期 <b>' + esc(sem ? sem.name : '（还没有）') + '</b><br>' +
+      (sem ? '开学 ' + esc(sem.startDate) + ' ｜ 共 ' + sem.totalWeeks + ' 周<br>' : '') +
+      '课程 <b>' + courses.length + '</b> 门 ｜ 学期 <b>' + state.semesters.length + '</b> 个<br>' +
+      '占用空间约 <b>' + esc(L.formatBytes ? L.formatBytes(JSON.stringify(state).length) : (JSON.stringify(state).length + ' 字符')) + '</b>' +
+      '</div></div>';
+
+    html += '<button class="listbtn" id="btnImportPdf">' +
+      '<span class="e">📥</span><span class="tx">导入课表 PDF' +
+      '<span class="sub">从教务系统导出的课表 PDF 自动识别</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    html += '<button class="listbtn" id="btnSemester">' +
+      '<span class="e">🎓</span><span class="tx">学期管理' +
+      '<span class="sub">切换学期、改开学日期、新建学期</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    html += '<button class="listbtn" id="btnRemind">' +
+      '<span class="e">🔔</span><span class="tx">课前提醒' +
+      '<span class="sub">提前 ' + state.settings.remindMinutes + ' 分钟提醒（只在打开 App 时弹）</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    html += '<button class="listbtn" id="btnExportIcs">' +
+      '<span class="e">📅</span><span class="tx">导出到手机日历（.ics）' +
+      '<span class="sub">导入系统日历后，关掉 App 也能收到提醒</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    html += '<button class="listbtn" id="btnExportJson">' +
+      '<span class="e">💾</span><span class="tx">导出备份（JSON）' +
+      '<span class="sub">换手机、防误删，靠这个恢复</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    html += '<button class="listbtn" id="btnImportJson">' +
+      '<span class="e">📤</span><span class="tx">导入备份' +
+      '<span class="sub">从之前导出的 JSON 恢复</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    if (hasBackup()) {
+      html += '<button class="listbtn" id="btnUndoImport">' +
+        '<span class="e">↩️</span><span class="tx">撤销上次导入' +
+        '<span class="sub">恢复到导入之前的状态</span></span>' +
+        '<span class="arrow">›</span></button>';
+    }
+
+    html += '<button class="listbtn danger" id="btnClearAll">' +
+      '<span class="e">🗑️</span><span class="tx">清空全部数据' +
+      '<span class="sub">课程和学期都会删掉，不可恢复</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    html += '<div class="card" style="margin-top:4px"><div class="cd">' +
+      '🔒 <b>只存在这台手机上</b>：本应用没有任何联网代码，已用内容安全策略禁止一切外部请求，' +
+      '不会上传、不同步、没有账号、没有广告。<br>' +
+      '清除浏览器数据会连课表一起删掉，请定期「导出备份」。' +
+      '</div></div>';
+
+    el('dataBody').innerHTML = html;
+    el('dataBody').dataset.view = 'main';
+    el('mask').classList.add('show');
+    el('sheetData').classList.add('show');
+    el('fab').classList.add('hide');
+  }
+
+  function closeData() {
+    el('mask').classList.remove('show');
+    el('sheetData').classList.remove('show');
+    el('fab').classList.remove('hide');
+  }
+
+  function hasBackup() {
+    try { return !!localStorage.getItem(STORE_KEY + '-backup'); } catch (e) { return false; }
+  }
+
+  /* ============================ ⑧ 导出日历（.ics） ============================ */
+  /**
+   * 生成 iCalendar 文本。
+   *
+   * 为什么需要它：浏览器不允许网页在后台定时唤醒自己，
+   * 所以「关掉 App 也能提醒」只能靠系统日历。这是唯一可靠的路子。
+   *
+   * 关键实现点（都是踩过的坑）：
+   *   · DTSTART 用**浮动时间**（不带 Z、不带 TZID），避免时区偏移把晚课挪到次日
+   *   · 单双周用 RRULE 的 INTERVAL=2 表达；间断周拆成多个 VEVENT
+   *   · 换行必须 CRLF；长行按 RFC 5545 折到 75 字节以内
+   *   · 提前提醒用 VALARM，TRIGGER 用 -PT{n}M
+   */
+  function buildIcs() {
+    var sem = L.activeSemester(state);
+    var courses = L.coursesOf(state);
+    if (!sem || !courses.length) return null;
+
+    var lines = [];
+    var crlf = function (s) { lines.push(s); };
+
+    crlf('BEGIN:VCALENDAR');
+    crlf('VERSION:2.0');
+    crlf('PRODID:-//课程表//离线课表//CN');
+    crlf('CALSCALE:GREGORIAN');
+    crlf('METHOD:PUBLISH');
+    crlf('X-WR-CALNAME:' + icsEsc(sem.name || '课程表'));
+    crlf('X-WR-TIMEZONE:Asia/Shanghai');
+
+    var stamp = icsStamp(new Date());
+    var remind = state.settings.remindMinutes || 0;
+
+    courses.forEach(function (c) {
+      // 把周次按「连续段 + 单双周」拆成若干 RRULE 组
+      var groups = splitForRrule(c.weeks);
+      groups.forEach(function (g, gi) {
+        var span = L.spanTime(c.periods, state.periods);
+        if (!span) return;
+        // 该段第一周的周一 + (day-1) 天
+        var base = L.weekDates(g.from, sem.startDate);
+        if (!base) return;
+        var dateKey = base[c.day - 1];
+        var d = L.fromDateKey(dateKey);
+        if (!d) return;
+
+        var dtStart = fmtIcsLocal(d, span.start);
+        var dtEnd = fmtIcsLocal(d, span.end);
+
+        crlf('BEGIN:VEVENT');
+        crlf('UID:' + icsUid(c, gi));
+        crlf('DTSTAMP:' + stamp);
+        crlf('DTSTART:' + dtStart);
+        crlf('DTEND:' + dtEnd);
+        crlf('SUMMARY:' + icsEsc(c.name));
+        var desc = [];
+        if (c.room) desc.push('教室：' + c.room);
+        if (c.teacher) desc.push('教师：' + c.teacher);
+        if (c.weeksRaw) desc.push('周次：' + c.weeksRaw);
+        if (c.note) desc.push(c.note);
+        if (desc.length) crlf('DESCRIPTION:' + icsEsc(desc.join('\\n')));
+        if (c.room) crlf('LOCATION:' + icsEsc(c.room));
+        // 重复规则：COUNT 表示这一连续段有几周，INTERVAL=2 表示隔周
+        var count = g.weeks.length;
+        var rrule = 'FREQ=WEEKLY;COUNT=' + count + ';BYDAY=' + ICS_DAY[c.day];
+        if (g.step === 2) rrule += ';INTERVAL=2';
+        crlf('RRULE:' + rrule);
+        if (remind > 0) {
+          crlf('BEGIN:VALARM');
+          crlf('TRIGGER:-PT' + remind + 'M');
+          crlf('ACTION:DISPLAY');
+          crlf('DESCRIPTION:' + icsEsc(c.name + ' 要上课了'));
+          crlf('END:VALARM');
+        }
+        crlf('END:VEVENT');
+      });
+    });
+
+    crlf('END:VCALENDAR');
+
+    // 折行 + CRLF
+    return lines.map(foldIcsLine).join('\r\n') + '\r\n';
+  }
+
+  var ICS_DAY = { 1: 'MO', 2: 'TU', 3: 'WE', 4: 'TH', 5: 'FR', 6: 'SA', 7: 'SU' };
+
+  /**
+   * 把周次数组拆成适合 RRULE 表达的若干段。
+   * 为什么要拆：间断周（4-7周,9-13周）一个 RRULE 表达不了；
+   * 单双周（1-15周(单)）要用 INTERVAL=2。
+   *
+   * 返回 [{ from, to, step, weeks }]，step=1 每周 / step=2 隔周
+   */
+  function splitForRrule(weeks) {
+    if (!weeks || !weeks.length) return [];
+    var w = weeks.slice().sort(function (a, b) { return a - b; });
+    var groups = [];
+    var cur = { from: w[0], to: w[0], step: null, weeks: [w[0]] };
+
+    for (var i = 1; i < w.length; i++) {
+      var gap = w[i] - cur.weeks[cur.weeks.length - 1];
+      var step = gap === 1 ? 1 : (gap === 2 ? 2 : 0);
+      if (step && (cur.step === null || cur.step === step)) {
+        cur.step = step;
+        cur.to = w[i];
+        cur.weeks.push(w[i]);
+      } else {
+        groups.push(cur);
+        cur = { from: w[i], to: w[i], step: null, weeks: [w[i]] };
+      }
+    }
+    groups.push(cur);
+    // 单周点的段 step 补成 1（COUNT=1 时 INTERVAL 无意义）
+    return groups.map(function (g) {
+      return { from: g.from, to: g.to, step: g.step || 1, weeks: g.weeks };
+    });
+  }
+
+  function fmtIcsLocal(d, hhmm) {
+    var hm = String(hhmm).split(':');
+    return d.getFullYear() + pad2(+d.getMonth() + 1) + pad2(d.getDate()) +
+      'T' + pad2(+hm[0]) + pad2(+hm[1]) + '00';
+  }
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  function icsStamp(d) {
+    return d.getUTCFullYear() + pad2(d.getUTCMonth() + 1) + pad2(d.getUTCDate()) +
+      'T' + pad2(d.getUTCHours()) + pad2(d.getUTCMinutes()) + pad2(d.getUTCSeconds()) + 'Z';
+  }
+
+  function icsUid(c, gi) {
+    var base = String(c.name).replace(/[^\w\u4e00-\u9fff]/g, '').slice(0, 20);
+    return 'course-' + base + '-' + c.day + '-' + c.periods.join('_') + '-' + gi + '@local';
+  }
+
+  function icsEsc(s) {
+    return String(s === undefined || s === null ? '' : s)
+      .replace(/\\/g, '\\\\')
+      .replace(/;/g, '\\;')
+      .replace(/,/g, '\\,')
+      .replace(/\r?\n/g, '\\n');
+  }
+
+  /** RFC 5545：一行不超过 75 字节，超出部分用 CRLF + 空格续行 */
+  function foldIcsLine(line) {
+    var bytes = 0, out = '';
+    var seq = [];
+    for (var i = 0; i < line.length; i++) {
+      var code = line.charCodeAt(i);
+      var len = code < 0x80 ? 1 : (code < 0x800 ? 2 : 3);
+      if (bytes + len > 73) { seq.push(out); out = ''; bytes = 0; }
+      out += line[i];
+      bytes += len;
+    }
+    seq.push(out);
+    return seq.join('\r\n ');
+  }
+
+  function exportIcs() {
+    var ics = buildIcs();
+    if (!ics) { toast('还没有课表可以导出', true); return; }
+    var sem = L.activeSemester(state);
+    var name = (sem ? sem.name : '课程表').replace(/[\\/:*?"<>|]/g, '_') + '.ics';
+    downloadText(ics, name, 'text/calendar;charset=utf-8');
+    toast('已导出日历文件，去「文件」里点开导入系统日历');
+  }
+
+  function downloadText(text, filename, mime) {
+    // 加 BOM，避免部分安卓应用把 UTF-8 中文读成乱码
+    var blob = new Blob(['\ufeff' + text], { type: mime || 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  /* ============================ ⑨ 提示 ============================ */
+  var toastTimer = null;
+  function toast(msg, isErr) {
+    var t = el('toast');
+    t.textContent = msg;
+    t.classList.toggle('err', !!isErr);
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+
+  /* ============================ ⑩ 事件绑定 ============================ */
+  function bind() {
+    // 周次切换
+    el('weekPrev').addEventListener('click', function () {
+      userPickedWeek = true; currentWeek = Math.max(1, currentWeek - 1); render();
+    });
+    el('weekNext').addEventListener('click', function () {
+      userPickedWeek = true; currentWeek = currentWeek + 1; render();
+    });
+    el('btnToday').addEventListener('click', function () {
+      userPickedWeek = false; render();
+    });
+
+    // 左右滑动切换周次
+    bindSwipe(el('gridWrap'));
+
+    // 点课程卡片看详情
+    el('grid').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-course]');
+      if (b) openDetail(b.dataset.course);
+    });
+
+    // 新建
+    el('fab').addEventListener('click', function () { openSheet({}); });
+
+    // 弹层：取消 / 遮罩
+    el('sheetCancel').addEventListener('click', closeSheet);
+    el('mask').addEventListener('click', function () {
+      closeSheet(); closeImport(); closeDetail(); closeData();
+    });
+    el('btnSave').addEventListener('click', saveDraft);
+    el('sheetDelete').addEventListener('click', deleteDraft);
+
+    // 表单联动
+    el('nameInput').addEventListener('input', function () { if (draft) { draft.name = el('nameInput').value; syncSaveButton(); } });
+    el('roomInput').addEventListener('input', function () { if (draft) draft.room = el('roomInput').value; });
+    el('teacherInput').addEventListener('input', function () { if (draft) draft.teacher = el('teacherInput').value; });
+    el('noteInput').addEventListener('input', function () { if (draft) draft.note = el('noteInput').value; });
+    el('weeksInput').addEventListener('input', function () {
+      if (draft) draft.weeksText = el('weeksInput').value;
+      syncWeeksHint(); syncSaveButton();
+    });
+
+    el('dayRow').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-day]');
+      if (!b || !draft) return;
+      draft.day = +b.dataset.day;
+      buildDayButtons();
+    });
+
+    el('perGrid').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-period]');
+      if (!b || !draft) return;
+      var n = +b.dataset.period;
+      var i = draft.periods.indexOf(n);
+      if (i > -1) draft.periods.splice(i, 1); else draft.periods.push(n);
+      draft.periods.sort(function (a, b2) { return a - b2; });
+      buildPeriodButtons();
+      syncPeriodHint();
+      syncSaveButton();
+    });
+    // 长按节次按钮 = 快速连选（1-2 节这种一大节）
+    el('perGrid').addEventListener('dblclick', function (e) {
+      var b = e.target.closest('[data-period]');
+      if (!b || !draft) return;
+      var n = +b.dataset.period;
+      if (n % 2 === 1 && draft.periods.indexOf(n + 1) === -1) {
+        draft.periods.push(n + 1);
+        draft.periods.sort(function (a, b2) { return a - b2; });
+        buildPeriodButtons(); syncPeriodHint(); syncSaveButton();
+      }
+    });
+
+    el('weekQuick').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-weeks]');
+      if (!b || !draft) return;
+      el('weeksInput').value = b.dataset.weeks;
+      draft.weeksText = b.dataset.weeks;
+      syncWeeksHint(); syncSaveButton();
+    });
+
+    // 详情
+    el('detailClose').addEventListener('click', closeDetail);
+    el('detailDelete').addEventListener('click', function () {
+      if (!detailCourse) return;
+      if (!confirm('删掉「' + detailCourse.name + '」？')) return;
+      var r = L.removeCourse(state, detailCourse.id);
+      if (r.error) { toast(r.error, true); return; }
+      var saved = commit(r.state);
+      if (!saved) return;
+      toast('已删除');
+      closeDetail();
+    });
+    el('detailEdit').addEventListener('click', function () {
+      var c = detailCourse;
+      closeDetail();
+      if (c) openSheet({ course: c });
+    });
+
+    // 导入
+    el('importCancel').addEventListener('click', closeImport);
+    el('importConfirm').addEventListener('click', confirmImport);
+    el('importBody').addEventListener('click', function (e) {
+      var m = e.target.closest('[data-mode]');
+      if (m && importDraft) {
+        importDraft.mode = m.dataset.mode;
+        renderImport();
+        return;
+      }
+      var it = e.target.closest('[data-idx]');
+      if (it && importDraft) {
+        var i = +it.dataset.idx;
+        importDraft.picked[i] = !importDraft.picked[i];
+        renderImport();
+      }
+    });
+    // 学期字段变化时同步到 draft（导入时统一读）
+    el('importBody').addEventListener('input', function () {
+      if (!importDraft || !importDraft.newSemester) return;
+      if (el('impName')) importDraft.newSemester.name = el('impName').value;
+      if (el('impStart')) importDraft.newSemester.startDate = el('impStart').value;
+      if (el('impWeeks')) importDraft.newSemester.totalWeeks = Number(el('impWeeks').value) || 20;
+    });
+
+    el('filePdf').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (f) handlePdfFile(f);
+    });
+    el('fileJson').addEventListener('change', function (e) {
+      var f = e.target.files && e.target.files[0];
+      e.target.value = '';
+      if (f) handleJsonFile(f);
+    });
+
+    // 设置
+    el('btnData').addEventListener('click', openData);
+    el('dataCancel').addEventListener('click', closeData);
+    /**
+     * 设置弹层里的点击统一走这里。
+     *
+     * ⚠️ 不要再给 dataBody 另挂 onclick —— 之前 openSemester/openRemind 各写了一个
+     * `dataBody.onclick = ...`，与这里的 addEventListener **同时存在**，
+     * 两个处理器都会触发、互相干扰（表现为点了「15 分钟」设置没变、也不报错）。
+     * 现在按「当前是哪个子视图」分派：semester / remind / 默认（主设置页）。
+     */
+    el('dataBody').addEventListener('click', function (e) {
+      var view = el('dataBody').dataset.view || 'main';
+
+      if (view === 'semester') {
+        var sb = e.target.closest('button');
+        if (!sb) return;
+        if (sb.dataset.sem) {
+          var nx = L.normalizeState(state);
+          nx.activeSemesterId = sb.dataset.sem;
+          if (!commit(nx)) return;
+          userPickedWeek = false;
+          openData();
+          return;
+        }
+        if (sb.id === 'semSave') { saveSemester(); return; }
+        if (sb.id === 'semNew') { newSemester(); return; }
+        return;
+      }
+
+      if (view === 'remind') {
+        var rb = e.target.closest('button');
+        if (!rb) return;
+        if (rb.dataset.rm !== undefined) {
+          var nr = L.normalizeState(state);
+          nr.settings.remindMinutes = Number(rb.dataset.rm);
+          if (!commit(nr)) return;
+          openRemind();
+          return;
+        }
+        if (rb.id === 'rmToIcs') { exportIcs(); return; }
+        return;
+      }
+
+      // 主设置页
+      var btn = e.target.closest('button');
+      if (!btn) return;
+      var id = btn.id;
+
+      if (id === 'btnImportPdf') { closeData(); setTimeout(openImport, 120); return; }
+      if (id === 'btnExportIcs') { exportIcs(); return; }
+      if (id === 'btnExportJson') { exportJson(); return; }
+      if (id === 'btnImportJson') { el('fileJson').click(); return; }
+      if (id === 'btnClearAll') { clearAll(); return; }
+      if (id === 'btnUndoImport') { undoImport(); return; }
+      if (id === 'btnSemester') { closeData(); setTimeout(openSemester, 120); return; }
+      if (id === 'btnRemind') { closeData(); setTimeout(openRemind, 120); return; }
+    });
+  }
+
+  /** 左右滑动切换周次（在课表区域上） */
+  function bindSwipe(host) {
+    window.__swipeLog = [];
+    var x0 = null, y0 = null, active = false;
+    host.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) { active = false; return; }
+      x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; active = true;
+      window.__swipeLog.push({ ev: 'start', x: x0, y: y0 });
+    }, { passive: true });
+    host.addEventListener('touchend', function (e) {
+      if (!active || x0 === null) return;
+      active = false;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - x0, dy = t.clientY - y0;
+      x0 = null;
+      window.__swipeLog.push({ ev: 'end', dx: dx, dy: dy, cw: currentWeek });
+      // 横向位移要明显大于纵向，避免和上下滚动冲突
+      if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+      userPickedWeek = true;
+      if (dx < 0) currentWeek = Math.max(1, currentWeek + 1);
+      else currentWeek = Math.max(1, currentWeek - 1);
+      window.__swipeLog.push({ ev: 'move', to: currentWeek });
+      render();
+    }, { passive: true });
+  }
+
+  function exportJson() {
+    var json = L.serialize(state);
+    var d = new Date();
+    var name = '课程表备份-' + d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate()) + '.json';
+    downloadText(json, name, 'application/json;charset=utf-8');
+    toast('已导出备份');
+  }
+
+  async function handleJsonFile(file) {
+    var text;
+    try { text = await file.text(); } catch (e) { toast('读不到这个文件', true); return; }
+    var next = L.deserialize(text);
+    if (!next.courses.length && !next.semesters.length) {
+      toast('这个文件里没有可用的课表数据', true);
+      return;
+    }
+    if (!confirm('导入备份会替换现在的全部数据，继续？')) return;
+    var saved = commit(next);
+    if (!saved) return;
+    userPickedWeek = false;
+    render();
+    toast('已恢复 ' + next.courses.length + ' 门课');
+    closeData();
+  }
+
+  function clearAll() {
+    if (!confirm('清空全部数据？课程、学期都会删掉，不可恢复。')) return;
+    if (!confirm('再确认一次：真的清空？建议先导出备份。')) return;
+    var saved = commit(L.emptyState());
+    if (!saved) return;
+    userPickedWeek = false;
+    currentWeek = 1;
+    render();
+    toast('已清空');
+    closeData();
+  }
+
+  function undoImport() {
+    var raw = null, at = null;
+    try {
+      raw = localStorage.getItem(STORE_KEY + '-backup');
+      at = localStorage.getItem(STORE_KEY + '-backup-at');
+    } catch (e) { /* ignore */ }
+    if (!raw) { toast('没有可撤销的备份', true); return; }
+    var when = at ? new Date(Number(at)) : null;
+    var label = when ? (when.getMonth() + 1) + '月' + when.getDate() + ' ' +
+      pad2(when.getHours()) + ':' + pad2(when.getMinutes()) : '上次导入前';
+    if (!confirm('恢复到「' + label + '」的状态？现在的课程会被替换。')) return;
+
+    var saved = commit(L.deserialize(raw));
+    if (!saved) return;
+    render();
+    toast('已撤销上次导入');
+    closeData();
+  }
+
+  /* ---------------------------- 学期管理 / 提醒设置 ---------------------------- */
+  function openSemester() {
+    var sem = L.activeSemester(state);
+    var html = '';
+
+    if (state.semesters.length) {
+      html += '<div class="card"><div class="ct">切换学期</div>';
+      state.semesters.forEach(function (s) {
+        var n = state.courses.filter(function (c) { return c.semesterId === s.id; }).length;
+        var on = s.id === (sem && sem.id);
+        html += '<button class="listbtn" data-sem="' + esc(s.id) + '"' +
+          (on ? ' style="background:var(--accent-soft)"' : '') + '>' +
+          '<span class="e">' + (on ? '✅' : '📘') + '</span>' +
+          '<span class="tx">' + esc(s.name) +
+          '<span class="sub">开学 ' + esc(s.startDate) + ' ｜ ' + s.totalWeeks + ' 周 ｜ ' + n + ' 门课</span>' +
+          '</span><span class="arrow">›</span></button>';
+      });
+      html += '</div>';
+    }
+
+    html += '<div class="card"><div class="ct">' + (sem ? '修改当前学期' : '新建学期') + '</div>' +
+      '<div class="field" style="margin-bottom:8px">' +
+      '<label for="semName">学期名称</label>' +
+      '<input type="text" id="semName" maxlength="40" value="' + esc(sem ? sem.name : '') + '" placeholder="比如：2026-2027学年 第1学期">' +
+      '</div>' +
+      '<div class="field" style="margin-bottom:8px">' +
+      '<label for="semStart">第 1 周的周一</label>' +
+      '<input type="date" id="semStart" value="' + esc(sem ? sem.startDate : '') + '">' +
+      '</div>' +
+      '<div class="field" style="margin-bottom:8px">' +
+      '<label for="semWeeks">一共几周</label>' +
+      '<input type="number" id="semWeeks" min="1" max="30" value="' + (sem ? sem.totalWeeks : 20) + '">' +
+      '</div>' +
+      '<div class="cd">开学日期填错的话，课表上的「本周」和日期会不对。改完自动重算。</div>' +
+      '</div>';
+
+    html += '<div class="sheet-actions">' +
+      '<button class="btn-ghost" id="semNew">新建学期</button>' +
+      '<button class="btn-save" id="semSave">保存</button>' +
+      '</div>';
+
+    el('dataBody').innerHTML = html;
+    el('dataBody').dataset.view = 'semester';
+    el('mask').classList.add('show');
+    el('sheetData').classList.add('show');
+    el('fab').classList.add('hide');
+    // 注意：点击分派统一在 bind() 里按 dataset.view 处理，这里不要再挂 onclick
+  }
+
+  function saveSemester() {
+    var name = (el('semName').value || '').trim();
+    var start = el('semStart').value;
+    var weeks = Math.round(Number(el('semWeeks').value)) || 20;
+    var sem = L.activeSemester(state);
+
+    if (!start) { toast('要选第 1 周的周一', true); return; }
+    var normalized = L.normalizeSemester({ id: sem ? sem.id : undefined, name: name, startDate: start, totalWeeks: weeks });
+    if (!normalized) { toast('日期不对', true); return; }
+
+    var next = L.normalizeState(state);
+    if (sem) {
+      next.semesters = next.semesters.map(function (s) { return s.id === sem.id ? normalized : s; });
+    } else {
+      next.semesters = next.semesters.concat([normalized]);
+      next.activeSemesterId = normalized.id;
+    }
+    var saved = commit(next);
+    if (!saved) return;
+    userPickedWeek = false;
+    toast('已保存');
+    openData();
+  }
+
+  function newSemester() {
+    var next = L.normalizeState(state);
+    // 拿不到日期就不建，让用户先填
+    var start = el('semStart') && el('semStart').value;
+    var guess = start || guessSemesterStart();
+    var sem = L.normalizeSemester({
+      name: (el('semName') && el('semName').value) || guessSemesterName(),
+      startDate: guess,
+      totalWeeks: 20
+    });
+    if (!sem) { toast('日期不对', true); return; }
+    next.semesters = next.semesters.concat([sem]);
+    next.activeSemesterId = sem.id;
+    var saved = commit(next);
+    if (!saved) return;
+    toast('已新建学期，可以导入这个学期的课表了');
+    openSemester();
+  }
+
+  function openRemind() {
+    var html = '<div class="card"><div class="ct">课前提醒</div>' +
+      '<div class="cd">提前多久提醒你。0 表示不提醒。</div>' +
+      '<div class="weekquick" style="margin-top:10px">' +
+      [0, 5, 10, 15, 20, 30].map(function (m) {
+        return '<button data-rm="' + m + '"' +
+          (state.settings.remindMinutes === m ? ' style="background:var(--accent-soft);color:var(--accent);font-weight:600"' : '') +
+          '>' + (m === 0 ? '不提醒' : m + ' 分钟') + '</button>';
+      }).join('') +
+      '</div></div>';
+
+    html += '<div class="banner" style="margin:0 0 10px"><span class="ico">⚠️</span><div>' +
+      '<b>必须说清楚</b>：浏览器不允许网页在后台定时唤醒自己，所以<b>关掉 App 后不会响</b>。<br>' +
+      '想要关掉也能提醒，请用下面的「导出到手机日历」——那是系统日历在提醒你。' +
+      '</div></div>';
+
+    html += '<button class="listbtn" id="rmToIcs">' +
+      '<span class="e">📅</span><span class="tx">导出到手机日历（.ics）' +
+      '<span class="sub">这才是关掉 App 也能提醒的办法</span></span>' +
+      '<span class="arrow">›</span></button>';
+
+    el('dataBody').innerHTML = html;
+    el('dataBody').dataset.view = 'remind';
+    el('mask').classList.add('show');
+    el('sheetData').classList.add('show');
+    el('fab').classList.add('hide');
+    // 注意：点击分派统一在 bind() 里按 dataset.view 处理，这里不要再挂 onclick
+  }
+
+  /* ============================ ⑪ 提醒检查 ============================ */
+  /**
+   * 打开 App 时检查「下节课快到了吗」。
+   * 只在前台有效——这是浏览器的硬限制，不是偷懒。
+   */
+  var lastNoticeKey = '';
+  function checkReminder() {
+    var mins = state.settings.remindMinutes;
+    if (!mins) return;
+    var nx = L.nextClass(state, new Date(), 1);
+    if (!nx) return;
+    if (nx.minutesUntil > mins || nx.minutesUntil < 0) return;
+
+    var key = nx.dateKey + '|' + nx.course.id + '|' + nx.period;
+    if (key === lastNoticeKey) return;      // 同一节课只提醒一次
+    lastNoticeKey = key;
+
+    var text = nx.course.name + ' ' + nx.start + ' 开始' +
+      (nx.course.room ? '（' + nx.course.room + '）' : '');
+    toast('⏰ ' + text + '，还有 ' + nx.minutesUntil + ' 分钟');
+    // 有系统通知权限就顺便发一条（App 在前台时有效）
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      try { new Notification('该上课了', { body: text, tag: key }); } catch (e) { /* ignore */ }
+    }
+  }
+
+  /* ============================ ⑫ 启动 ============================ */
+  function boot() {
+    // 存储可用性探测
+    try {
+      localStorage.setItem('__probe', '1');
+      localStorage.removeItem('__probe');
+      storageOK = true;
+    } catch (e) {
+      storageOK = false;
+    }
+
+    load();
+    if (!storageOK) state = L.emptyState();
+
+    // 首次打开：给个默认学期的位置提示，但不自动建（等导入时再建）
+    bind();
+    render();
+    renderBanner();
+
+    checkReminder();
+    // 每分钟重新检查一次「下一节课」与提醒（App 在前台时）
+    setInterval(function () {
+      renderNextClass();
+      checkReminder();
+    }, 60000);
+
+    // 回到前台时刷新（手机切回来时时间可能已经变了）
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        if (!userPickedWeek) render();
+        renderNextClass();
+        checkReminder();
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+
+  /* 供测试使用：暴露内部状态（只读） */
+  window.__courseDebug = {
+    getState: function () { return state; },
+    getDraft: function () { return draft; },
+    getImport: function () { return importDraft; },
+    getDetail: function () { return detailCourse; },
+    getWeek: function () { return currentWeek; },
+    /**
+     * 强制切到某一周（测试用）。
+     * ⚠️ 必须同时把 userPickedWeek 置真 —— 否则 render() 会按「跟随今天」的规则
+     * 把周次改回当前周（这正是它的正确行为，但会让测试设的值失效）。
+     * 置真也正好对应「用户手动点过上一周/下一周」的真实语义。
+     */
+    setWeek: function (w) { userPickedWeek = true; currentWeek = w; render(); },
+    /** 回到「跟随今天」模式（等价于点「本周」按钮） */
+    followToday: function () { userPickedWeek = false; render(); },
+    /** 滑动手势的调试记录（测试用） */
+    getSwipeLog: function () { return window.__swipeLog || []; },
+    buildIcs: buildIcs,
+    splitForRrule: splitForRrule,
+    render: render,
+    renderBanner: renderBanner,
+    storageOK: function () { return storageOK; },
+    getSaveLog: function () { return window.__saveLog || []; },
+    getLastSaveError: function () { return lastSaveError; },
+    stateSize: function () { return JSON.stringify(state).length; }
+  };
+})();
+
+</script>
+<!-- PWA 增强层：注册离线缓存、处理「安装到桌面」与系统提醒。
+     它不读写 App 的业务数据；file:// 打开时整段直接跳过。 -->
+<script>
+/* ===========================================================================
+ * 课程表 —— PWA 增强层（由 pwa/build-pwa.js 注入到 index.html 末尾）
+ *
+ * 职责只有两件：
+ *   ① 注册 Service Worker → 装到桌面后离线可用
+ *   ② 处理「安装到桌面」提示
+ *
+ * 严格隔离：不读取、不修改 App 的任何业务数据。
+ * 通过 file:// 打开时下面的判断会直接返回，App 行为与从前完全一致。
+ * =========================================================================== */
+(function () {
+  'use strict';
+  try {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+
+    var STYLE_BOX = [
+      'margin:0 12px 8px', 'padding:12px 14px', 'border-radius:14px',
+      'background:var(--accent-soft)', 'border:1px solid var(--accent)',
+      'color:var(--ink)', 'font-size:13.5px', 'line-height:1.5',
+      'display:flex', 'gap:10px', 'align-items:flex-start'
+    ].join(';');
+
+    /* ---------- ① 离线缓存 ---------- */
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function (e) {
+        console.warn('离线缓存注册失败（不影响正常使用）：', e);
+      });
+    });
+
+    /* ---------- ② 安装到桌面 ---------- */
+    var installEvent = null;
+
+    /*
+     * 安装横幅挂在 #bannerHost 里（课程表 App 的横幅容器），
+     * 它是 #app 的直接子元素、在周次条上方，不会被课表网格挤掉。
+     */
+    function showInstallBanner() {
+      var host = document.getElementById('bannerHost');
+      if (!host || document.getElementById('pwa-install-banner')) return;
+      var box = document.createElement('div');
+      box.id = 'pwa-install-banner';
+      box.setAttribute('style', STYLE_BOX);
+      box.innerHTML =
+        '<span style="font-size:16px">📲</span>' +
+        '<div style="flex:1">' +
+        '<b>装到桌面，用起来更像 App</b>' +
+        '<div style="font-size:12px;color:var(--ink-2);margin-top:2px">' +
+        '装好后全屏打开、没有地址栏，断网也能看课表。</div>' +
+        '<div style="margin-top:9px;display:flex;gap:8px">' +
+        '<button id="pwa-install-go" style="background:var(--accent);color:#fff;font-weight:600;font-size:13px;padding:8px 16px;border-radius:99px">立即安装</button>' +
+        '<button id="pwa-install-hide" style="font-size:12.5px;color:var(--ink-3);padding:8px 10px">以后再说</button>' +
+        '</div></div>';
+      host.appendChild(box);
+
+      box.querySelector('#pwa-install-go').addEventListener('click', function () {
+        if (!installEvent) return;
+        installEvent.prompt();
+        installEvent.userChoice.then(function () {
+          installEvent = null;
+          var b = document.getElementById('pwa-install-banner');
+          if (b) b.parentNode.removeChild(b);
+        });
+      });
+      box.querySelector('#pwa-install-hide').addEventListener('click', function () {
+        var b = document.getElementById('pwa-install-banner');
+        if (b && b.parentNode) b.parentNode.removeChild(b);
+      });
+    }
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      installEvent = e;
+      showInstallBanner();
+    });
+
+    window.addEventListener('appinstalled', function () {
+      var b = document.getElementById('pwa-install-banner');
+      if (b && b.parentNode) b.parentNode.removeChild(b);
+    });
+  } catch (e) {
+    /* PWA 增强失败绝不能影响 App 本身 */
+    try { console.warn('PWA 增强层跳过：', e); } catch (e2) {}
+  }
+})();
+</script>
+</body>
+</html>
