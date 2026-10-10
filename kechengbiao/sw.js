@@ -6,7 +6,7 @@
 'use strict';
 
 var APP = 'kechengbiao';
-var VERSION = '84929f0e427b';
+var VERSION = '8862b7fad152';
 var SHELL = [
   "./",
   "./index.html",

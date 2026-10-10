@@ -2208,6 +2208,125 @@ input,textarea,select{font:inherit;color:inherit}
     return String(m[1] || '').replace(/\s+/g, '').trim();
   }
 
+  /* ==========================================================================
+   * 一格多课：把单元格文字拆成多门课
+   *
+   * ⚠️ 为什么必须拆：实测用户的课表里，**同一个格子会叠两门课**
+   * （同一时间段、不同周次段，例如「复变函数 1-3周」和「复变函数 4-7周,9-13周(单)」，
+   *   或者「习近平概论 1周」和「大学物理Ⅰ（下）2-16周(双)」）。
+   * 原先的实现只取第一个节次标记、第一段周次，导致每格的第二门课**被整个丢弃** ——
+   * 用户反馈的「复变函数第4周后不见了」和「大学物理单双周不显示」都是这一个 bug。
+   *
+   * PDF 里每门课的形状（实测）：
+   *   课名★(1-2节)1-3周/场地:明理2-304/教师:赵国平/教学班:.../学分:3.0
+   * 同一格第二门课的形状 —— **课名被焊在前一门的字段值后面**：
+   *   ...学分:3.0(1-2节)4-7周,9-13周(单)/场地:明理9-410/教师:赵国平/...
+   *   ...学分:3.0大学物理Ⅰ（下）★(3-4节)2-16周(双)/场地:明理1-104/...
+   * 所以：「课名+标记+节次」这种能直接认出课名；
+   * 没有课名的（像 `学分:3.0(1-2节)…`）就继承本格的课名（同一门课的另一周次段）。
+   * ======================================================================== */
+
+  /**
+   * 从「课名?★(n节)」前的文字里提取真正的课名。
+   *
+   * ⚠️ 同一格的第 2~N 门课，课名会被**焊在前一门课的字段值后面**，例如：
+   *     '…总学时:48/学分:3.0'                       -> 这门课没写课名（继承本格课名）
+   *     '…总学时:40/学分:3.0大学物理Ⅰ（下）★'        -> 课名是「大学物理Ⅰ（下）」
+   * 所以要按「最后一个字段关键词」切开，取它后面的部分。
+   */
+  function extractName(rawName) {
+    var s = String(rawName || '');
+    // 按 / 分段，取最后一段
+    var slash = s.lastIndexOf('/');
+    if (slash > -1) s = s.slice(slash + 1);
+    /*
+     * 剥掉「字段名:值」前缀。
+     * 难点：'学分:3.0大学物理Ⅰ（下）★' 里，值只有 '3.0'，课名紧跟在后面。
+     * 写法要点：
+     *   ① 值用 [\d.\s]* 贪婪吃掉数字和小数点/空白，吃到课名第一个字符就停；
+     *   ② 不能用 $ 锚定 —— '（下）★' 在值之后，锚定会导致回溯成只匹配 '学分:'。
+     * 之前用 [^/]*$ 更糟：贪婪匹配会把课名整个当成值吃掉（实测踩过）。
+     */
+    var keys = FIELD_KEYS.join('|');
+    var re = new RegExp('(?:' + keys + ')[：:][\\d.\\s]*');
+    var m = re.exec(s);
+    if (m) s = s.slice(m.index + m[0].length);
+    // 去掉尾部的标记符号与空白
+    s = s.replace(/[★◆☆\s]+$/, '').trim();
+    // 纯数字/单位（形如 "3.0"）不是课名
+    if (/^[\d.\s]*$/.test(s)) return '';
+    return s;
+  }
+
+  /**
+   * 把一个格子的文字拆成多门课。
+   *
+   * ⚠️ 课程边界怎么定：每门课的「课名★(n节)」就是它自己的开头。
+   * 但**周次和字段值的归属**有个陷阱 —— 看周二那格的真实排版：
+   *
+   *   课名1★(1-2节)1-3周/场地:房1/教师:师1/…/学分:3.0(1-2节)4-7周,9-13周(单)/场地:房2/…
+   *   └──────────── 第 1 门 ────────────┘└──────────── 第 2 门 ────────────┘
+   *
+   * 第 1 门的内容结束在**第 2 门的节次标记之前**（即 `学分:3.0` 那里）；
+   * 第 2 门的内容结束在**第 3 门的节次标记之前**（没有第 3 门就到文字末尾）。
+   * 所以每门的「片段」= [本门节次标记之前 → 下一门节次标记之前]，
+   * 在这个片段里找周次/场地/教师才**不会跨到隔壁课**。
+   *
+   * @returns [{ name, periods, periodsRaw, weeksRaw, seg }]
+   *          seg 是本门课自己的文字片段
+   */
+  function splitCellCourses(text, fallbackName) {
+    var t = String(text || '');
+    // 找到所有「(n节)」标记的位置
+    var marks = [];
+    var re = /\(\d+(?:-\d+)?节\)/g;
+    var m;
+    while ((m = re.exec(t)) !== null) marks.push({ pos: m.index, raw: m[0] });
+    if (!marks.length) return [];
+
+    var out = [];
+    for (var i = 0; i < marks.length; i++) {
+      var mk = marks[i];
+      // 片段起点：本标记之前的最后一个 '/'（或文字开头）
+      // 这样「学分:3.0大学物理Ⅰ（下）★」里的课名也落在片段内
+      var prevSlash = t.lastIndexOf('/', mk.pos);
+      var segStart = prevSlash > -1 ? prevSlash + 1 : 0;
+      // 片段终点：下一个标记所在的字段值结尾（下一个 '/'，或文字末尾）
+      var segEnd;
+      if (i + 1 < marks.length) {
+        var nextSlash = t.lastIndexOf('/', marks[i + 1].pos);
+        segEnd = nextSlash > -1 ? nextSlash : marks[i + 1].pos;
+      } else {
+        segEnd = t.length;
+      }
+      var seg = t.slice(segStart, segEnd);
+
+      // 课名：片段开头到节次标记之间
+      var namePart = seg.slice(0, mk.pos - segStart);
+      var nm = extractName(namePart);
+      if (!nm) nm = String(fallbackName || '').trim();
+      if (!nm) return [];        // 认不出课名就不猜，交给上层记 badName
+
+      var per = parsePeriods(mk.raw);
+      if (!per) continue;
+
+      // 周次：节次标记之后、第一个 '/' 之前
+      var after = seg.slice(mk.pos - segStart + mk.raw.length);
+      var slash = after.indexOf('/');
+      if (slash > -1) after = after.slice(0, slash);
+      var weeksRaw = after.replace(/(场地|教师|教幢|教学班)[：:].*$/, '').trim();
+
+      out.push({
+        name: nm,
+        periods: per.periods,
+        periodsRaw: per.raw,
+        weeksRaw: weeksRaw,
+        seg: seg
+      });
+    }
+    return out;
+  }
+
   /**
    * 解析一个课程块。
    *
@@ -2217,38 +2336,61 @@ input,textarea,select{font:inherit;color:inherit}
    * @param onlineFrom   网课起始节次（默认 12），>= 该值的课程返回 null
    * @returns 课程对象 或 null（不是有效课程）
    */
-  function parseBlock(block, day, expandWeeks, onlineFrom) {
-    if (!block || typeof block.text !== 'string') return null;
+  /**
+   * 解析一个格子里**所有**的课（一格可能叠多门）。
+   *
+   * @param block  pdf.js 的课程块 { name, text }
+   * @param day    星期几（1~7），由所在的列决定
+   * @param expandWeeks  周次展开函数（来自 logic.js），注入以便单测
+   * @param onlineFrom   网课起始节次（默认 12），>= 该值的课丢弃
+   * @returns 课程对象数组（可能为空）
+   */
+  function parseBlockAll(block, day, expandWeeks, onlineFrom) {
+    var out = [];
+    if (!block || typeof block.text !== 'string') return out;
     var text = block.text;
     var limit = onlineFrom === undefined ? 12 : onlineFrom;
 
-    var per = parsePeriods(text);
-    if (!per) return null;
+    var parts = splitCellCourses(text, block.name);
+    if (!parts.length) return out;
 
-    // 网课段整条丢弃（用户已确认第 12~14 节是网课，不用排）
-    if (per.periods[0] >= limit) return null;
-    // 跨到网课段的（例如 11-13 节）：砍掉网课部分，只留有效节次
-    var periods = per.periods.filter(function (n) { return n < limit; });
-    if (!periods.length) return null;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      // 网课整门丢弃（用户已确认第 12~14 节是网课，不用排）
+      if (p.periods[0] >= limit) continue;
+      // 跨到网课段的（例如 11-13 节）：砍掉网课部分，只留有效节次
+      var periods = p.periods.filter(function (n) { return n < limit; });
+      if (!periods.length) continue;
 
-    var weeksRaw = parseWeeksRaw(text);
-    if (!weeksRaw) return null;
+      var weeksRaw = p.weeksRaw;
+      if (!weeksRaw) continue;
+      var ex = expandWeeks(weeksRaw);
+      if (!ex || !ex.ok) continue;
 
-    var ex = expandWeeks(weeksRaw);
-    if (!ex || !ex.ok) return null;
+      var name = String(p.name || '').trim();
+      if (!name) continue;
 
-    var name = (block.name || '').trim();
-    if (!name) return null;
+      // 场地/教师在**本门课自己的片段**里找（见 splitCellCourses 的说明）
+      out.push({
+        name: name,
+        teacher: grab(RE_TEACHER_A, p.seg) || grab(RE_TEACHER_B, p.seg),
+        room: grab(RE_ROOM, p.seg),
+        day: day,
+        periods: periods,
+        weeks: ex.weeks,
+        weeksRaw: weeksRaw
+      });
+    }
+    return out;
+  }
 
-    return {
-      name: name,
-      teacher: grab(RE_TEACHER_A, text) || grab(RE_TEACHER_B, text),
-      room: grab(RE_ROOM, text),
-      day: day,
-      periods: periods,
-      weeks: ex.weeks,
-      weeksRaw: weeksRaw
-    };
+  /**
+   * 兼容旧接口：只返回第一门课。
+   * 新代码请用 parseBlockAll —— 一格多课时这里会丢掉后面的课。
+   */
+  function parseBlock(block, day, expandWeeks, onlineFrom) {
+    var all = parseBlockAll(block, day, expandWeeks, onlineFrom);
+    return all.length ? all[0] : null;
   }
 
   /**
@@ -2258,7 +2400,13 @@ input,textarea,select{font:inherit;color:inherit}
    */
   function parseGrid(grid, expandWeeks, onlineFrom) {
     var out = [];
-    var stats = { total: 0, online: 0, badWeek: 0, badPeriod: 0, badName: 0, ok: 0 };
+    /*
+     * stats 口径：
+     *   cells   = PDF 里识别出的格子数（一个格子可能装多门课）
+     *   total   = 格子里的课程条目总数（>= cells）
+     *   multi   = 装了 2 门以上课的格子数（用来监控"一格多课"是否被正确处理）
+     */
+    var stats = { cells: 0, total: 0, multi: 0, online: 0, badWeek: 0, badPeriod: 0, badName: 0, ok: 0 };
     if (!grid || !grid.columns) return { courses: out, stats: stats };
 
     var limit = onlineFrom === undefined ? 12 : onlineFrom;
@@ -2266,33 +2414,45 @@ input,textarea,select{font:inherit;color:inherit}
     Object.keys(grid.columns).forEach(function (dayKey) {
       var day = +dayKey;
       grid.columns[dayKey].forEach(function (block) {
-        stats.total++;
+        stats.cells++;
 
-        var per = parsePeriods(block.text);
-        if (!per) { stats.badPeriod++; return; }
-        if (per.periods[0] >= limit) { stats.online++; return; }
+        var parts = splitCellCourses(block.text, block.name);
+        if (parts.length > 1) stats.multi++;
 
-        var weeksRaw = parseWeeksRaw(block.text);
-        if (!weeksRaw) { stats.badWeek++; return; }
-        var ex = expandWeeks(weeksRaw);
-        if (!ex.ok) { stats.badWeek++; return; }
+        if (!parts.length) {
+          // 连一个节次标记都没有：这不是课程格子
+          stats.badPeriod++;
+          return;
+        }
 
-        var name = (block.name || '').trim();
-        if (!name) { stats.badName++; return; }
+        for (var i = 0; i < parts.length; i++) {
+          var p = parts[i];
+          stats.total++;
 
-        var periods = per.periods.filter(function (n) { return n < limit; });
-        if (!periods.length) { stats.online++; return; }
+          // 网课整门丢弃
+          if (p.periods[0] >= limit) { stats.online++; continue; }
+          var periods = p.periods.filter(function (n) { return n < limit; });
+          if (!periods.length) { stats.online++; continue; }
 
-        out.push({
-          name: name,
-          teacher: grab(RE_TEACHER_A, block.text) || grab(RE_TEACHER_B, block.text),
-          room: grab(RE_ROOM, block.text),
-          day: day,
-          periods: periods,
-          weeks: ex.weeks,
-          weeksRaw: weeksRaw
-        });
-        stats.ok++;
+          if (!p.weeksRaw) { stats.badWeek++; continue; }
+          var ex = expandWeeks(p.weeksRaw);
+          if (!ex || !ex.ok) { stats.badWeek++; continue; }
+
+          var name = String(p.name || '').trim();
+          if (!name) { stats.badName++; continue; }
+
+          // 场地/教师在**本门课自己的片段**里找（见 splitCellCourses 的说明）
+          out.push({
+            name: name,
+            teacher: grab(RE_TEACHER_A, p.seg) || grab(RE_TEACHER_B, p.seg),
+            room: grab(RE_ROOM, p.seg),
+            day: day,
+            periods: periods,
+            weeks: ex.weeks,
+            weeksRaw: p.weeksRaw
+          });
+          stats.ok++;
+        }
       });
     });
 
@@ -2304,6 +2464,8 @@ input,textarea,select{font:inherit;color:inherit}
     parsePeriods: parsePeriods,
     parseWeeksRaw: parseWeeksRaw,
     parseBlock: parseBlock,
+    parseBlockAll: parseBlockAll,
+    splitCellCourses: splitCellCourses,
     parseGrid: parseGrid
   };
 });
