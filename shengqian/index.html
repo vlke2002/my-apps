@@ -352,6 +352,51 @@ input,select,textarea{font:inherit;color:inherit}
 }
 .quick-amt button:active{background:var(--accent-soft);border-color:var(--accent)}
 
+/* ==== 人情往来 / 冷静期 ==== */
+.lend-toggle{
+  display:flex;align-items:center;gap:9px;width:100%;margin-top:10px;
+  background:var(--line-2);border:1.5px solid transparent;border-radius:var(--r-md);
+  padding:10px 12px;text-align:left;transition:.12s;
+}
+.lend-toggle .e{font-size:17px}
+.lend-toggle .t{flex:1;min-width:0}
+.lend-toggle .t .a{font-size:13.5px;font-weight:600;display:block}
+.lend-toggle .t .b{font-size:11.5px;color:var(--ink-3);display:block;margin-top:1px}
+.lend-toggle .box{
+  flex:0 0 20px;width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line);
+  background:var(--card);display:grid;place-items:center;font-size:12px;color:#fff;
+}
+.lend-toggle.on{border-color:var(--warn);background:var(--warn-soft)}
+.lend-toggle.on .box{background:var(--warn);border-color:var(--warn)}
+
+.review-item{
+  display:flex;align-items:center;gap:10px;padding:11px 0;
+  border-bottom:1px solid var(--line-2);
+}
+.review-item:last-of-type{border-bottom:0}
+.review-item .em{flex:0 0 34px;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;background:var(--line-2)}
+.review-item .mid{flex:1;min-width:0}
+.review-item .mid .n{font-size:13.5px;font-weight:600}
+.review-item .mid .s{font-size:11.5px;color:var(--ink-3);margin-top:1px}
+.review-item .amt{font-weight:700;font-size:15px}
+.review-actions{display:flex;gap:8px;margin-top:10px}
+.review-actions button{
+  flex:1;padding:10px 8px;border-radius:var(--r-md);font-size:13.5px;font-weight:600;
+}
+.review-actions .keep{background:var(--danger-soft);color:var(--danger)}
+.review-actions .drop{background:var(--line-2);color:var(--ink-2)}
+@media (prefers-color-scheme: dark){
+  .review-actions .keep{color:#ff9a9d}
+}
+.badge-lend{
+  display:inline-block;font-size:10.5px;font-weight:600;color:var(--warn);
+  background:var(--warn-soft);padding:1px 6px;border-radius:99px;margin-left:5px;vertical-align:1px;
+}
+.renqing-line{display:flex;align-items:baseline;justify-content:space-between;padding:7px 0;font-size:13.5px}
+.renqing-line .k{color:var(--ink-2)}
+.renqing-line .v{font-weight:700}
+.renqing-line.lent{color:var(--danger)}
+.renqing-line.lent .k{color:var(--danger)}
 .field-row{display:flex;gap:8px;margin-top:12px}
 .field{flex:1;background:var(--line-2);border:1px solid var(--line);border-radius:var(--r-md);padding:9px 12px}
 .field label{display:block;font-size:11px;color:var(--ink-3);margin-bottom:2px}
@@ -474,6 +519,31 @@ input,select,textarea{font:inherit;color:inherit}
       </div>
 
       <div class="card">
+        <div class="card-head">
+          <span class="card-title big">冷静期</span>
+          <span style="font-size:11.5px;color:var(--ink-3)">防冲动消费 · 防乱借钱</span>
+        </div>
+        <button class="lend-toggle" id="coolOffToggle">
+          <span class="e">🧊</span>
+          <span class="t">
+            <span class="a">大额支出与借钱先等 24 小时</span>
+            <span class="b" id="coolOffThreshold">当前门槛：—</span>
+          </span>
+          <span class="box" id="coolOffBox"></span>
+        </button>
+        <div class="field-row" id="coolOffField">
+          <div class="field">
+            <label for="coolOffInput">超过多少钱要冷静（元）</label>
+            <input type="text" id="coolOffInput" inputmode="decimal" placeholder="500" autocomplete="off">
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--ink-3);margin-top:9px;line-height:1.6">
+          🤝 <b>人情往来一律过冷静期</b>，不看金额：借钱给人、请客送礼都算。
+          这是最容易漏财的一类支出，所以单独归集、单独提醒。
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-head"><span class="card-title big">数据</span></div>
         <button class="settings-row" id="btnExportJson">
           <span class="em">📤</span>
@@ -541,6 +611,15 @@ input,select,textarea{font:inherit;color:inherit}
 
     <div class="quick-amt" id="quickAmt"></div>
 
+    <button class="lend-toggle" id="lendToggle">
+      <span class="e">🤝</span>
+      <span class="t">
+        <span class="a">这笔是借出去的钱</span>
+        <span class="b" id="lendHint">会单独统计，并强制过 24 小时冷静期</span>
+      </span>
+      <span class="box" id="lendBox"></span>
+    </button>
+
     <div class="field-row">
       <div class="field" style="flex:0 0 46%">
         <label for="dateInput">日期</label>
@@ -605,10 +684,18 @@ input,select,textarea{font:inherit;color:inherit}
     { key: 'study',  name: '学习',   emoji: '📚', color: '#7e57c2' },
     { key: 'health', name: '健康',   emoji: '💊', color: '#66bb6a' },
     { key: 'home',   name: '居家',   emoji: '🏠', color: '#8d6e63' },
+    { key: 'renqing', name: '人情往来', emoji: '🤝', color: '#d4a017' },
     { key: 'other',  name: '其他',   emoji: '✨', color: '#78909c' }
   ];
 
   var DATA_VERSION = 1;
+
+  /* ----------------------------- 冷静期默认值 ----------------------------- */
+  // 超过这个金额（分）的记录会先进入「冷静期」，24 小时后再确认还要不要买。
+  var DEFAULT_COOL_OFF_CENTS = 50000;      // 500 元
+  // 人情往来（借钱给人 / 请客送礼）不论金额一律进冷静期：这是最容易漏财的出口。
+  var LENDING_CATEGORY = 'renqing';
+  var REVIEW_DELAY_MS = 24 * 60 * 60 * 1000;   // 24 小时
 
   /* ----------------------------- 基础工具 ----------------------------- */
 
@@ -742,7 +829,11 @@ input,select,textarea{font:inherit;color:inherit}
       transactions: [],
       budgets: {},          // { '2025-06': { food: 80000, fun: 20000 } }  单位：分
       totalBudgets: {},     // { '2025-06': 200000 }                     单位：分
-      settings: { carryOver: false }
+      settings: {
+        carryOver: false,
+        coolOff: true,                    // 冷静期开关
+        coolOffCents: DEFAULT_COOL_OFF_CENTS   // 冷静期门槛（分）；0 = 每笔都过冷静期
+      }
     };
   }
 
@@ -776,7 +867,13 @@ input,select,textarea{font:inherit;color:inherit}
         category: cat,
         note: typeof t.note === 'string' ? t.note.slice(0, 60) : '',
         createdAt: typeof t.createdAt === 'number' && isFinite(t.createdAt) ? t.createdAt : 0,
-        updatedAt: typeof t.updatedAt === 'number' && isFinite(t.updatedAt) ? t.updatedAt : 0
+        updatedAt: typeof t.updatedAt === 'number' && isFinite(t.updatedAt) ? t.updatedAt : 0,
+        // 借钱给人（人情往来里最容易漏财的一类）
+        isLending: !!t.isLending,
+        // 冷静期：到点后才提醒「这笔还要吗」
+        reviewAt: typeof t.reviewAt === 'number' && isFinite(t.reviewAt) && t.reviewAt > 0
+          ? Math.round(t.reviewAt) : 0,
+        reviewCleared: !!t.reviewCleared
       });
     }
 
@@ -784,6 +881,11 @@ input,select,textarea{font:inherit;color:inherit}
     st.totalBudgets = sanitizeTotalBudgetMap(raw.totalBudgets);
     if (raw.settings && typeof raw.settings === 'object') {
       st.settings.carryOver = !!raw.settings.carryOver;
+      if (raw.settings.coolOff !== undefined) st.settings.coolOff = !!raw.settings.coolOff;
+      var co = raw.settings.coolOffCents;
+      if (typeof co === 'number' && isFinite(co) && co >= 0) {
+        st.settings.coolOffCents = Math.round(co);
+      }
     }
     st.version = DATA_VERSION;
     return st;
@@ -1022,10 +1124,107 @@ input,select,textarea{font:inherit;color:inherit}
     });
   }
 
+  /* ----------------------------- 冷静期 ----------------------------- */
+
+  /** 该笔是否需要冷静期：达到金额门槛，或属于人情往来（借钱/人情一律过冷静期） */
+  function needsCoolOff(tx, settings) {
+    if (!tx) return false;
+    var s = (settings && typeof settings === 'object') ? settings : {};
+    if (s.coolOff === false) return false;
+    if (tx.category === LENDING_CATEGORY) return true;
+    var limit = typeof s.coolOffCents === 'number' && isFinite(s.coolOffCents) && s.coolOffCents >= 0
+      ? Math.round(s.coolOffCents) : DEFAULT_COOL_OFF_CENTS;
+    // 门槛为 0 时不代表关闭，而是「每笔都过冷静期」
+    return (Number(tx.cents) || 0) >= limit;
+  }
+
+  /**
+   * 新增/修改时的冷静期到期时间（毫秒时间戳）。
+   * 不需要冷静期返回 0。now 可显式传入，方便测试。
+   */
+  function reviewAtFor(tx, settings, now, delayMs) {
+    if (!needsCoolOff(tx, settings)) return 0;
+    var base = typeof now === 'number' && isFinite(now) ? now : Date.now();
+    var delay = typeof delayMs === 'number' && isFinite(delayMs) && delayMs >= 0
+      ? delayMs : REVIEW_DELAY_MS;
+    return Math.round(base + delay);
+  }
+
+  /**
+   * 待确认清单：冷静期已到点、且用户还没处理过的记录，按到期时间正序。
+   * 到期时间越早的越靠前（等得最久的最该先处理）。
+   */
+  function pendingReviews(state, now) {
+    var st = state && state.transactions ? state : emptyState();
+    var t = typeof now === 'number' && isFinite(now) ? now : Date.now();
+    return st.transactions.filter(function (tx) {
+      return tx.reviewAt > 0 && tx.reviewAt <= t && !tx.reviewCleared;
+    }).sort(function (a, b) { return a.reviewAt - b.reviewAt; });
+  }
+
+  /** 标记冷静期已处理（保留这笔） */
+  function clearReview(state, id) {
+    var next = normalizeState(state);
+    for (var i = 0; i < next.transactions.length; i++) {
+      if (next.transactions[i].id === id) { next.transactions[i].reviewCleared = true; break; }
+    }
+    return next;
+  }
+
+  /** 设置冷静期开关 / 门槛；门槛传 0 表示「每笔都过冷静期」，传负数表示恢复默认 */
+  function setCoolOff(state, enabled, cents) {
+    var next = normalizeState(state);
+    next.settings.coolOff = !!enabled;
+    if (cents !== undefined) {
+      var v = Math.round(Number(cents));
+      next.settings.coolOffCents = (isFinite(v) && v >= 0) ? v : DEFAULT_COOL_OFF_CENTS;
+    }
+    return next;
+  }
+
+  /* ----------------------------- 人情往来 ----------------------------- */
+
+  /**
+   * 人情往来汇总：本期总额、分类金额、借出金额与笔数、以及明细。
+   * 「借出去的钱」单独拎出来，因为这是回不来的风险敞口，不该混在消费里看。
+   */
+  function renqingStats(state, monthKey) {
+    var st = normalizeState(state);
+    var list = monthKey ? transactionsOfMonth(st, monthKey) : st.transactions.slice();
+    var total = 0, lent = 0, lentCount = 0, count = 0;
+    var items = [];
+    for (var i = 0; i < list.length; i++) {
+      var t = list[i];
+      if (t.category !== LENDING_CATEGORY) continue;
+      count++;
+      total += t.cents;
+      if (t.isLending) { lent += t.cents; lentCount++; }
+      items.push(t);
+    }
+    var lentAllTime = 0, lentAllTimeCount = 0;
+    for (var j = 0; j < st.transactions.length; j++) {
+      var a = st.transactions[j];
+      if (a.category === LENDING_CATEGORY && a.isLending) {
+        lentAllTime += a.cents;
+        lentAllTimeCount++;
+      }
+    }
+    return {
+      monthKey: monthKey || '',
+      count: count,
+      totalCents: total,
+      lentCents: lent,
+      lentCount: lentCount,
+      lentAllTimeCents: lentAllTime,
+      lentAllTimeCount: lentAllTimeCount,
+      items: sortByDateDesc(items)
+    };
+  }
+
   /* ----------------------------- 变更操作 ----------------------------- */
 
   /** 新增一笔；返回 { state, tx } 或 { error } —— 不修改入参 */
-  function addTransaction(state, input) {
+  function addTransaction(state, input, now) {
     var cents = parseAmountToCents(input && input.amount);
     if (cents === null) return { error: '金额格式不对' };
     if (cents <= 0) return { error: '金额要大于 0' };
@@ -1033,23 +1232,32 @@ input,select,textarea{font:inherit;color:inherit}
     var date = fromDateKey(input && input.date) ? input.date : null;
     if (!date) return { error: '日期不对' };
 
-    var now = Date.now();
+    var ts = typeof now === 'number' && isFinite(now) ? now : Date.now();
+    var next = normalizeState(state);
+    // 人情往来一律按「借出/人情」记录：这是最需要冷静的一类支出
+    var cat = (input && input.category) || 'other';
+    var lending = !!(input && input.isLending) || cat === LENDING_CATEGORY;
     var tx = {
       id: uid(),
       date: date,
       cents: cents,
-      category: (input && input.category) || 'other',
+      category: cat,
       note: typeof (input && input.note) === 'string' ? input.note.slice(0, 60) : '',
-      createdAt: now,
-      updatedAt: now
+      createdAt: ts,
+      updatedAt: ts,
+      isLending: lending,
+      reviewAt: 0,
+      reviewCleared: false
     };
-    var next = normalizeState(state);
+    // 达到门槛（或属人情往来）→ 挂上 24 小时冷静期
+    tx.reviewAt = reviewAtFor(tx, next.settings, ts);
     next.transactions.push(tx);
     return { state: next, tx: tx };
   }
 
   /** 修改一笔；返回 { state, tx } 或 { error } */
-  function updateTransaction(state, id, patch) {
+  function updateTransaction(state, id, patch, now) {
+    var ts = typeof now === 'number' && isFinite(now) ? now : Date.now();
     var next = normalizeState(state);
     var idx = -1;
     for (var i = 0; i < next.transactions.length; i++) {
@@ -1061,26 +1269,34 @@ input,select,textarea{font:inherit;color:inherit}
       amount: old.cents,
       date: old.date,
       category: old.category,
-      note: old.note
+      note: old.note,
+      isLending: old.isLending
     };
     if (patch) {
       if (patch.amount !== undefined) merged.amount = patch.amount;
       if (patch.date !== undefined) merged.date = patch.date;
       if (patch.category !== undefined) merged.category = patch.category;
       if (patch.note !== undefined) merged.note = patch.note;
+      if (patch.isLending !== undefined) merged.isLending = !!patch.isLending;
     }
     var cents = parseAmountToCents(merged.amount);
     if (cents === null || cents <= 0) return { error: '金额要大于 0' };
     if (!fromDateKey(merged.date)) return { error: '日期不对' };
+    var cat = merged.category || 'other';
     var tx = {
       id: old.id,
       date: merged.date,
       cents: cents,
-      category: merged.category || 'other',
+      category: cat,
       note: typeof merged.note === 'string' ? merged.note.slice(0, 60) : '',
-      createdAt: old.createdAt || Date.now(),
-      updatedAt: Date.now()
+      createdAt: old.createdAt || ts,
+      updatedAt: ts,
+      isLending: !!merged.isLending || cat === LENDING_CATEGORY,
+      reviewAt: 0,
+      reviewCleared: false
     };
+    // 改动过就重新计时：改了金额相当于一笔新决定，理应再冷静一次
+    tx.reviewAt = reviewAtFor(tx, next.settings, ts);
     next.transactions[idx] = tx;
     return { state: next, tx: tx };
   }
@@ -1161,11 +1377,12 @@ input,select,textarea{font:inherit;color:inherit}
     categories.forEach(function (c) { nameOf[c.key] = c.name; });
     var st = normalizeState(state);
     var rows = sortByDateDesc(st.transactions);
-    var lines = ['日期,分类,金额(元),备注'];
+    var lines = ['日期,分类,金额(元),是否借出,备注'];
     rows.forEach(function (t) {
       var name = nameOf[t.category] || t.category;
       var note = (t.note || '').replace(/"/g, '""');
-      lines.push(t.date + ',' + name + ',' + formatCents(t.cents) + ',"' + note + '"');
+      lines.push(t.date + ',' + name + ',' + formatCents(t.cents) + ',' +
+        (t.isLending ? '是' : '') + ',"' + note + '"');
     });
     return '\ufeff' + lines.join('\r\n');
   }
@@ -1211,6 +1428,9 @@ input,select,textarea{font:inherit;color:inherit}
   return {
     DEFAULT_CATEGORIES: DEFAULT_CATEGORIES,
     DATA_VERSION: DATA_VERSION,
+    DEFAULT_COOL_OFF_CENTS: DEFAULT_COOL_OFF_CENTS,
+    LENDING_CATEGORY: LENDING_CATEGORY,
+    REVIEW_DELAY_MS: REVIEW_DELAY_MS,
     // 工具
     pad2: pad2, toDateKey: toDateKey, fromDateKey: fromDateKey,
     toMonthKey: toMonthKey, isValidMonthKey: isValidMonthKey, monthKeyOf: monthKeyOf,
@@ -1226,6 +1446,11 @@ input,select,textarea{font:inherit;color:inherit}
     sortByDateDesc: sortByDateDesc, sumCents: sumCents, monthSummary: monthSummary,
     spentOn: spentOn, dailySeries: dailySeries, pieData: pieData,
     donutSegments: donutSegments,
+    // 冷静期
+    needsCoolOff: needsCoolOff, reviewAtFor: reviewAtFor, pendingReviews: pendingReviews,
+    clearReview: clearReview, setCoolOff: setCoolOff,
+    // 人情往来
+    renqingStats: renqingStats,
     // 变更
     addTransaction: addTransaction, updateTransaction: updateTransaction,
     removeTransaction: removeTransaction, setBudget: setBudget,
@@ -1378,6 +1603,35 @@ input,select,textarea{font:inherit;color:inherit}
       alerts.push(`<div class="alert danger"><span class="ico">🔒</span><span>当前浏览器不允许本地存储
         （可能是无痕模式），关掉页面数据就会丢。请用普通模式打开。</span></div>`);
     }
+
+    /* 冷静期到点：这些是已经花钱、但还没点过确认的记录 */
+    const pending = L.pendingReviews(state, Date.now());
+    if (pending.length) {
+      alerts.push(`<div class="alert warn" style="display:block">
+        <div style="display:flex;gap:9px;align-items:flex-start">
+          <span class="ico">🧊</span>
+          <span>下面 <b>${pending.length}</b> 笔已经过了 24 小时冷静期。<b>还想留着就点「留着」</b>，
+          觉得不该花就点「划掉」——划掉就删了，钱当没花出去。</span>
+        </div>
+        <div style="margin-top:6px">${pending.map((t) => {
+          const c = CATS.find((x) => x.key === t.category) || { emoji: '❔', name: t.category };
+          const why = t.isLending ? '借出去的钱' : (t.note ? esc(t.note) : c.name);
+          return `<div class="review-item">
+            <span class="em">${c.emoji}</span>
+            <span class="mid">
+              <span class="n">${esc(why)}${t.isLending ? '<span class="badge-lend">借出</span>' : ''}</span>
+              <span class="s">${esc(c.name)} · ${L.friendlyDate(t.date, tk)}</span>
+            </span>
+            <span class="amt">-${L.formatCents(t.cents)}</span>
+          </div>
+          <div class="review-actions">
+            <button class="keep" data-review-keep="${t.id}">留着（确实该花）</button>
+            <button class="drop" data-review-drop="${t.id}">划掉（不买了）</button>
+          </div>`;
+        }).join('')}</div>
+      </div>`);
+    }
+
     el('homeAlerts').innerHTML = alerts.join('');
 
     /* 常记的几笔：按最近 60 天出现频次取前 7 个「备注/分类」组合 */
@@ -1439,7 +1693,7 @@ input,select,textarea{font:inherit;color:inherit}
           html += `<div class="tx" data-edit="${t.id}">
             <span class="em">${c.emoji}</span>
             <span class="mid">
-              <span class="name">${esc(c.name)}</span>
+              <span class="name">${esc(c.name)}${t.isLending ? '<span class="badge-lend">借出</span>' : ''}</span>
               ${t.note ? `<span class="note">${esc(t.note)}</span>` : ''}
             </span>
             <span class="amt">-${L.formatCents(t.cents)}</span>
@@ -1547,6 +1801,37 @@ input,select,textarea{font:inherit;color:inherit}
             font-size="10" fill="var(--ink-3)">${p.label}</text>`).join('')}
       </svg>`;
 
+    /* 人情往来：单独归集，重点盯「借出去的钱」这个漏财口 */
+    const rq = L.renqingStats(state, statMonth);
+    let renqingCard = '';
+    if (rq.count > 0) {
+      const share = sum.spentCents > 0 ? Math.round(rq.totalCents / sum.spentCents * 100) : 0;
+      const items = rq.items.slice(0, 6).map((t) => {
+        const c = CATS.find((x) => x.key === t.category) || { emoji: '🤝', name: t.category };
+        return `<div class="review-item">
+          <span class="em">${c.emoji}</span>
+          <span class="mid">
+            <span class="n">${esc(t.note || c.name)}${t.isLending ? '<span class="badge-lend">借出</span>' : ''}</span>
+            <span class="s">${t.date.slice(5).replace('-', '/')}</span>
+          </span>
+          <span class="amt">¥${L.formatCents(t.cents)}</span>
+        </div>`;
+      }).join('');
+      renqingCard = `
+        <div class="card">
+          <div class="card-head"><span class="card-title big">🤝 人情往来</span>
+            <span style="font-size:11.5px;color:var(--ink-3)">占本月花费 ${share}%</span></div>
+          <div class="renqing-line"><span class="k">本月人情往来合计</span><span class="v">¥${L.formatCents(rq.totalCents)}（${rq.count} 笔）</span></div>
+          <div class="renqing-line lent"><span class="k">其中借出去的钱</span><span class="v">¥${L.formatCents(rq.lentCents)}（${rq.lentCount} 笔）</span></div>
+          <div class="renqing-line"><span class="k">借出去累计（全部时间）</span><span class="v">¥${L.formatCents(rq.lentAllTimeCents)}（${rq.lentAllTimeCount} 笔）</span></div>
+          <div style="font-size:12px;color:var(--ink-3);line-height:1.6;margin:9px 0 4px">
+            「借出去的钱」是<b>风险敞口</b>，不是消费：它不在你的预算里，但会真的把钱拿走。
+            这类钱要单独记、单独盯，别混在吃喝里看不见。
+          </div>
+          <div style="border-top:1px solid var(--line-2);margin-top:6px">${items}</div>
+        </div>`;
+    }
+
     body.innerHTML = `
       <div class="card">
         <div class="card-head">
@@ -1574,6 +1859,8 @@ input,select,textarea{font:inherit;color:inherit}
           <span style="font-size:11.5px;color:var(--ink-3)">按金额排序</span></div>
         <div class="rank">${rank}</div>
       </div>
+
+      ${renqingCard}
 
       <div class="card">
         <div class="card-head"><span class="card-title big">最近 7 天</span>
@@ -1646,6 +1933,22 @@ input,select,textarea{font:inherit;color:inherit}
     el('clearHint').textContent = all.count > 0
       ? `当前共 ${all.count} 笔、合计 ¥${L.formatCents(all.totalCents)}，不可撤销`
       : '不可撤销，建议先导出备份';
+
+    /* 冷静期设置 */
+    const on = state.settings.coolOff !== false;
+    el('coolOffToggle').classList.toggle('on', on);
+    el('coolOffBox').textContent = on ? '✓' : '';
+    el('coolOffField').style.display = on ? '' : 'none';
+    const cents = state.settings.coolOffCents;
+    el('coolOffThreshold').textContent = !on
+      ? '已关闭：所有支出都不再等 24 小时'
+      : (cents > 0
+        ? `当前门槛：超过 ¥${L.formatCents(cents)} 或属于人情往来才等 24 小时`
+        : '当前门槛：0 元 —— 每一笔都要等 24 小时');
+    const ci = el('coolOffInput');
+    if (document.activeElement !== ci) {
+      ci.value = L.formatCentsShort(cents);
+    }
   }
 
   /* ============================ 提示 ============================ */
@@ -1669,7 +1972,8 @@ input,select,textarea{font:inherit;color:inherit}
       category: opts.category || (state.transactions.length
         ? mostUsedCategory() : 'food'),
       date: opts.date || tk,
-      note: opts.note || ''
+      note: opts.note || '',
+      isLending: !!opts.isLending
     };
     el('sheetTitle').textContent = opts.id ? '改这一笔' : '记一笔';
     el('keyOk').textContent = opts.id ? '保存' : '记下';
@@ -1677,6 +1981,7 @@ input,select,textarea{font:inherit;color:inherit}
     el('dateInput').value = draft.date;
     el('noteInput').value = draft.note;
     renderCats();
+    renderLendToggle();
     renderAmount();
     el('mask').classList.add('show');
     el('sheet').classList.add('show');
@@ -1703,6 +2008,18 @@ input,select,textarea{font:inherit;color:inherit}
       `<button class="cat ${draft.category === c.key ? 'on' : ''}" data-cat="${c.key}">
         <span class="e">${c.emoji}</span>${esc(c.name)}
       </button>`).join('');
+  }
+
+  /** 「借出去的钱」开关：选中人情往来时自动勾上，也可以手动取消 */
+  function renderLendToggle() {
+    const on = !!(draft && (draft.isLending || draft.category === L.LENDING_CATEGORY));
+    const btn = el('lendToggle');
+    btn.classList.toggle('on', on);
+    el('lendBox').textContent = on ? '✓' : '';
+    // 只改这一行提示，不要用 textContent 去改按钮本身——那会把按钮里的文案整段清空
+    el('lendHint').textContent = on
+      ? '会单独统计，并强制过 24 小时冷静期'
+      : '点一下：记成借出去的钱（单独统计，一定要冷静）';
   }
 
   function renderAmount() {
@@ -1761,19 +2078,25 @@ input,select,textarea{font:inherit;color:inherit}
       amount: draft.amount,
       date: el('dateInput').value || draft.date,
       category: draft.category,
-      note: el('noteInput').value
+      note: el('noteInput').value,
+      isLending: draft.isLending
     };
     if (draft.id) {
       const r = L.updateTransaction(state, draft.id, payload);
       if (r.error) { toast(r.error, true); return; }
       commit(r.state);
-      toast('已保存修改');
+      if (r.tx.reviewAt) toast('已保存，重新计算 24 小时冷静期');
+      else toast('已保存修改');
     } else {
       const r = L.addTransaction(state, payload);
       if (r.error) { toast(r.error, true); return; }
       commit(r.state);
       const c = CATS.find((x) => x.key === r.tx.category);
-      toast(`已记下 ${c ? c.emoji : ''}¥${L.formatCents(r.tx.cents)}`);
+      if (r.tx.reviewAt) {
+        toast(`已记下 ${c ? c.emoji : ''}¥${L.formatCents(r.tx.cents)}，24 小时后提醒你确认`);
+      } else {
+        toast(`已记下 ${c ? c.emoji : ''}¥${L.formatCents(r.tx.cents)}`);
+      }
     }
     closeSheet();
   }
@@ -1798,6 +2121,24 @@ input,select,textarea{font:inherit;color:inherit}
         document.querySelector('.tab[data-tab="budget"]').click();
       }
     });
+    /* 冷静期处理：留着 → 打标记；划掉 → 删掉这笔 */
+    el('homeAlerts').addEventListener('click', (e) => {
+      const keep = e.target.closest('[data-review-keep]');
+      const drop = e.target.closest('[data-review-drop]');
+      if (keep) {
+        commit(L.clearReview(state, keep.dataset.reviewKeep));
+        toast('好，这笔留着');
+        return;
+      }
+      if (drop) {
+        const id = drop.dataset.reviewDrop;
+        const t = state.transactions.find((x) => x.id === id);
+        if (!t) return;
+        if (!confirm(`把「${t.note || '这笔'}」¥${L.formatCents(t.cents)} 划掉吗？\n\n等于你没花这笔钱。`)) return;
+        commit(L.removeTransaction(state, id));
+        toast('已划掉，省下 ¥' + L.formatCents(t.cents));
+      }
+    });
     el('homeList').addEventListener('click', (e) => {
       if (e.target.id === 'emptyAdd' || e.target.closest('#emptyAdd')) { openSheet(); return; }
       const row = e.target.closest('[data-edit]');
@@ -1809,7 +2150,8 @@ input,select,textarea{font:inherit;color:inherit}
             amount: L.formatCentsShort(t.cents),
             category: t.category,
             date: t.date,
-            note: t.note
+            note: t.note,
+            isLending: t.isLending
           });
         }
       }
@@ -1848,7 +2190,18 @@ input,select,textarea{font:inherit;color:inherit}
       const b = e.target.closest('[data-cat]');
       if (!b || !draft) return;
       draft.category = b.dataset.cat;
+      // 选「人情往来」默认按借出记；换到别的分类就把借出标记撤掉，
+      // 否则开关会一直亮着，出现「吃喝 + 借出」这种自相矛盾的记录。
+      draft.isLending = draft.category === L.LENDING_CATEGORY;
       renderCats();
+      renderLendToggle();
+    });
+    el('lendToggle').addEventListener('click', () => {
+      if (!draft) return;
+      draft.isLending = !draft.isLending;
+      if (draft.isLending) draft.category = L.LENDING_CATEGORY;
+      renderCats();
+      renderLendToggle();
     });
     el('keypad').addEventListener('click', (e) => {
       const b = e.target.closest('[data-k]');
@@ -1946,6 +2299,24 @@ input,select,textarea{font:inherit;color:inherit}
       commit(L.copyBudgetsFrom(state, prev, mk));
       toast(`已复制${L.monthLabel(prev)}的预算`);
     });
+
+    /* 冷静期开关与门槛 */
+    el('coolOffToggle').addEventListener('click', () => {
+      const on = state.settings.coolOff !== false;
+      commit(L.setCoolOff(state, !on, state.settings.coolOffCents));
+      toast(!on ? '已打开冷静期' : '已关闭冷静期');
+    });
+    const coolInput = el('coolOffInput');
+    const commitCool = () => {
+      const raw = coolInput.value.trim();
+      if (raw === '') { commit(L.setCoolOff(state, true, 0)); toast('门槛设为 0：每笔都过冷静期'); return; }
+      const cents = L.parseAmountToCents(raw);
+      if (cents === null) { toast('金额不对', true); renderBudget(); return; }
+      commit(L.setCoolOff(state, true, cents));
+      toast(cents === 0 ? '门槛设为 0：每笔都过冷静期' : `超过 ¥${L.formatCents(cents)} 就要冷静 24 小时`);
+    };
+    coolInput.addEventListener('blur', commitCool);
+    coolInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') coolInput.blur(); });
   }
 
   function bindData() {
