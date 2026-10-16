@@ -1,0 +1,5231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="个人规划">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data: 'self'; manifest-src 'self'; worker-src 'self'; connect-src https://api.deepseek.com; form-action 'none'; base-uri 'none'">
+<!-- PWA 声明：由 pwa/build-pwa.js 注入。通过 file:// 打开时这些会被忽略。 -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>个人规划</title>
+<style>
+/* ===========================================================================
+   个人规划 —— 样式
+   手机优先。宽度 > 900px 时切到双栏，但**是同一套 HTML + 媒体查询**，不是两套代码。
+   =========================================================================== */
+:root{
+  --bg:#f6f7f9; --card:#fff; --ink:#1c1e21; --ink2:#606770; --ink3:#8a8f98;
+  --line:#e4e6eb; --brand:#0f766e; --brand-soft:#e6f4f2;
+  --warn:#b45309; --warn-soft:#fef3c7; --bad:#b91c1c; --bad-soft:#fee2e2;
+  --ok:#15803d; --ok-soft:#dcfce7;
+  --r:12px; --gap:10px;
+  --growth:#2563eb; --life:#7c3aed;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  padding-bottom:76px;                     /* 给底部导航留位 */
+  -webkit-text-size-adjust:100%;
+}
+.wrap{max-width:720px;margin:0 auto;padding:0 12px}
+
+/* ---------- 顶栏 ---------- */
+header{
+  position:sticky;top:0;z-index:20;background:rgba(246,247,249,.94);
+  backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid var(--line);
+}
+.hd{display:flex;align-items:center;gap:8px;padding:10px 0}
+.hd h1{font-size:17px;margin:0;flex:1;font-weight:650}
+.hd .sub{font-size:12px;color:var(--ink2);font-weight:400;margin-left:6px}
+.iconbtn{
+  border:1px solid var(--line);background:var(--card);color:var(--ink);
+  width:36px;height:36px;border-radius:10px;font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+}
+.iconbtn:active{background:#eef0f3}
+.datebar{display:flex;align-items:center;gap:6px;padding:0 0 10px}
+.datebar .d{flex:1;font-size:13px;color:var(--ink2);text-align:center}
+.mini{
+  border:1px solid var(--line);background:var(--card);border-radius:8px;
+  padding:6px 11px;font-size:12px;color:var(--ink2);cursor:pointer;min-height:28px;
+}
+.mini:active{background:#eef0f3}
+
+/* ---------- 卡片 ---------- */
+.card{
+  background:var(--card);border-radius:var(--r);padding:12px;
+  margin:0 0 var(--gap);border:1px solid var(--line);
+}
+.card h2{font-size:13px;margin:0 0 8px;color:var(--ink2);font-weight:600;letter-spacing:.02em}
+.card h2 .cnt{color:var(--ink3);font-weight:400}
+
+/* ---------- 录入 ---------- */
+#quick{
+  width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 11px;
+  font:inherit;resize:vertical;min-height:52px;background:#fbfcfd;color:var(--ink);
+}
+#quick:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+.hint{font-size:12px;color:var(--ink3);margin:6px 0 0}
+.btns{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.btn{
+  border:1px solid var(--line);background:var(--card);color:var(--ink);
+  border-radius:10px;padding:9px 13px;font:inherit;font-size:14px;cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.btn:active{background:#eef0f3}
+.btn.p{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:600}
+.btn.p:active{background:#0b5f59}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.grow{flex:1;justify-content:center}
+
+/* ---------- 时间线 ---------- */
+.tl{position:relative;padding-left:0}
+.entry{
+  display:flex;gap:9px;padding:9px 0;border-top:1px dashed var(--line);
+}
+.entry:first-child{border-top:0}
+.entry .t{
+  flex:0 0 44px;font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums;
+  padding-top:2px;
+}
+.entry .body{flex:1;min-width:0}
+.entry .dims{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
+.chip{
+  font-size:11px;padding:1px 7px;border-radius:999px;background:#f0f2f5;color:var(--ink2);
+  white-space:nowrap;
+}
+.chip.g{background:#e8efff;color:var(--growth)}
+.chip.l{background:#f1eaff;color:var(--life)}
+.entry .txt{font-size:14px;word-break:break-word;color:var(--ink)}
+.acts{margin-top:6px;display:flex;gap:6px}
+/* ⚠️ 可点区域别低于 28px：手机上手指点不准。
+   第一版是 padding 3px 8px + 11px 字号 = 24px 高，测量时被抓出来了。 */
+.tiny{
+  font-size:12px;border:1px solid var(--line);background:#fff;border-radius:8px;
+  padding:5px 11px;color:var(--ink2);cursor:pointer;min-height:28px;
+}
+.tiny:active{background:#eef0f3}
+.empty{color:var(--ink3);font-size:13px;padding:10px 2px;text-align:center}
+
+/* ---------- 汇总 ---------- */
+.sum{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px}
+.sum .kv{display:flex;gap:4px;align-items:baseline}
+.sum .k{color:var(--ink3);font-size:12px}
+.sum .v{font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:#eef0f3;border-radius:99px;overflow:hidden;margin-top:9px}
+.bar i{display:block;height:100%;background:var(--brand);border-radius:99px}
+.miss{font-size:12px;color:var(--ink3);margin-top:6px}
+
+/* ---------- 表单 ---------- */
+.acc{border-top:1px solid var(--line)}
+.acc:first-of-type{border-top:0}
+.acc>summary{
+  list-style:none;cursor:pointer;padding:11px 2px;display:flex;align-items:center;gap:8px;
+  font-size:14px;font-weight:550;
+}
+.acc>summary::-webkit-details-marker{display:none}
+.acc>summary .nm{flex:1}
+.acc>summary .st{font-size:12px;color:var(--ink3);font-weight:400}
+.acc>summary .arw{color:var(--ink3);font-size:12px;transition:transform .15s}
+.acc[open]>summary .arw{transform:rotate(90deg)}
+.acc .bd{padding:2px 2px 14px}
+.row{display:flex;gap:8px;align-items:center;margin:7px 0}
+.row>label{flex:0 0 74px;font-size:13px;color:var(--ink2)}
+.row .fi{flex:1;min-width:0}
+input[type=text],input[type=number],input[type=time],textarea,select{
+  width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;
+  font:inherit;font-size:14px;background:#fbfcfd;color:var(--ink);
+}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+textarea{resize:vertical;min-height:60px}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.tag{
+  border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 11px;
+  font-size:13px;cursor:pointer;color:var(--ink2);
+}
+.tag[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
+.stars{display:flex;gap:5px}
+.star{
+  width:32px;height:32px;border:1px solid var(--line);background:#fff;border-radius:8px;
+  font-size:13px;cursor:pointer;color:var(--ink2);font-variant-numeric:tabular-nums;
+}
+.star[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:700}
+.sub{border:1px solid var(--line);border-radius:10px;padding:9px;margin:8px 0;background:#fbfcfd}
+.sub h4{margin:0 0 6px;font-size:12px;color:var(--ink2);font-weight:600;display:flex;align-items:center}
+.sub h4 .rm{margin-left:auto}
+.mini2{
+  font-size:11px;border:1px solid var(--line);background:#fff;border-radius:7px;
+  padding:2px 7px;color:var(--ink2);cursor:pointer;
+}
+
+/* ---------- 提示条 ---------- */
+.banner{
+  border-radius:var(--r);padding:10px 12px;margin:0 0 var(--gap);font-size:13px;
+  display:flex;gap:8px;align-items:flex-start;border:1px solid transparent;
+}
+.banner.soft{background:var(--brand-soft);color:#0b5f59;border-color:#bfe3df}
+.banner.warn{background:var(--warn-soft);color:var(--warn);border-color:#fde68a}
+.banner.bad{background:var(--bad-soft);color:var(--bad);border-color:#fecaca}
+.banner.ok{background:var(--ok-soft);color:var(--ok);border-color:#bbf7d0}
+.banner .x{margin-left:auto;cursor:pointer;opacity:.6;flex:0 0 auto;padding:2px 4px;font-size:14px}
+.banner button{
+  font:inherit;font-size:12px;border:1px solid currentColor;background:transparent;
+  color:inherit;border-radius:8px;padding:5px 10px;cursor:pointer;min-height:28px;flex:0 0 auto;
+}
+
+/* ---------- 底部导航 ---------- */
+nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(255,255,255,.96);
+  border-top:1px solid var(--line);backdrop-filter:blur(8px);
+  padding:6px 0 calc(6px + env(safe-area-inset-bottom));
+}
+nav .in{max-width:720px;margin:0 auto;display:flex}
+nav button{
+  flex:1;border:0;background:transparent;font:inherit;font-size:11px;color:var(--ink3);
+  padding:5px 0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+nav button .ic{font-size:19px;line-height:1}
+nav button[aria-current="true"]{color:var(--brand);font-weight:600}
+
+/* ---------- 复盘三列 ---------- */
+.review{margin-top:10px;border-top:1px solid var(--line);padding-top:10px}
+.rc{padding:8px 0}
+.rc+.rc{border-top:1px dashed var(--line)}
+.rt{font-size:11px;color:var(--ink3);margin-bottom:3px;letter-spacing:.03em}
+.rb{font-size:14px;line-height:1.55;word-break:break-word}
+.rc.next .rb{color:var(--brand);font-weight:550}
+
+/* ---------- 仪表盘（M5）---------- */
+.dash-actions{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.dash-actions .mini[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.heat-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.heat{display:flex;gap:3px;min-width:max-content}
+.heat .wk{display:flex;flex-direction:column;gap:3px}
+.heat .cell{width:12px;height:12px;border-radius:3px;background:#eceff3}
+.heat .cell.l1{background:#a7e0d8}
+.heat .cell.l2{background:#5cc4b6}
+.heat .cell.l3{background:#1a9e8f}
+.heat .cell.l4{background:var(--brand)}
+.heat .cell.out{background:transparent}
+.heat .mo{font-size:9px;color:var(--ink3);height:11px;line-height:11px;white-space:nowrap}
+#chart{width:100%;height:auto;display:block;margin-top:4px;border-radius:8px}
+.chart-stats{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--ink2);margin-top:6px}
+.chart-stats b{color:var(--ink);font-variant-numeric:tabular-nums}
+.pair-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px dashed var(--line)}
+.pair-row:first-child{border-top:0}
+.pair-row .nm{flex:1;font-size:13px}
+.pair-row .rt{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.pair-row .rr{font-size:11px;color:var(--ink3)}
+
+/* ---------- 报告卡片（M6）---------- */
+.rep-head{font-size:14px;margin-bottom:6px}
+.rep-head .rr{font-size:11px;color:var(--ink3);font-weight:400}
+#reportBox code{background:#f0f2f5;padding:1px 5px;border-radius:5px;font-size:12px}
+
+/* ---------- 弹层里的小标题 ---------- */
+.sh{font-size:12px;color:var(--ink3);margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--line);letter-spacing:.03em}
+.sh:first-of-type{margin-top:4px}
+
+/* ---------- 弹层 ---------- */
+.sheet{
+  position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.35);display:none;
+  align-items:flex-end;justify-content:center;
+}
+.sheet.on{display:flex}
+.sheet .panel{
+  background:var(--card);width:100%;max-width:720px;border-radius:16px 16px 0 0;
+  padding:14px 14px calc(14px + env(safe-area-inset-bottom));
+  max-height:88vh;overflow:auto;
+}
+.sheet h3{margin:0 0 10px;font-size:15px}
+.sheet .prev{
+  background:#fbfcfd;border:1px solid var(--line);border-radius:10px;padding:11px;
+  font-size:13px;margin:8px 0;white-space:pre-wrap;word-break:break-word;
+}
+.sheet .prev .kk{color:var(--ink3);font-size:11px}
+.toast{
+  position:fixed;left:50%;bottom:88px;transform:translateX(-50%);z-index:50;
+  background:rgba(28,30,33,.92);color:#fff;padding:9px 15px;border-radius:999px;
+  font-size:13px;max-width:88vw;text-align:center;opacity:0;transition:opacity .18s;
+  pointer-events:none;
+}
+.toast.on{opacity:1}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- 宽屏：同一套 HTML，只是变双栏 ---------- */
+@media (min-width:900px){
+  .wrap{max-width:1080px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:var(--gap);align-items:start}
+  .cols>*{margin-bottom:0}
+  #quick{min-height:72px}
+  body{padding-bottom:24px}
+  nav{position:sticky;bottom:0;border-radius:0}
+}
+
+/* 深色模式（系统跟随） */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16181c; --card:#1e2126; --ink:#e8eaed; --ink2:#a8adb7; --ink3:#7d838d;
+    --line:#2c3037; --brand:#2dd4bf; --brand-soft:#123b38;
+    --warn-soft:#3b2f11; --bad-soft:#3b1616; --ok-soft:#12301c;
+    --growth:#7aa2f7; --life:#bb9af7;
+  }
+  input,textarea,select,#quick,.sub,.sheet .prev{background:#23262c}
+  .chip{background:#2a2e35}
+  .chip.g{background:#1b2540;color:#9db8f5}
+  .chip.l{background:#2a2140;color:#c4aef8}
+  header{background:rgba(22,24,28,.94)}
+  nav{background:rgba(30,33,38,.96)}
+  .iconbtn,.btn,.mini,.tiny,.mini2,.tag,.star{background:var(--card);color:var(--ink)}
+  .iconbtn:active,.btn:active,.mini:active,.tiny:active{background:#2a2e35}
+  .btn.p{background:#0d9488;border-color:#0d9488;color:#fff}
+  .tag[aria-pressed="true"],.star[aria-pressed="true"]{background:#0d9488;border-color:#0d9488;color:#fff}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="hd">
+      <h1>个人规划<span class="sub" id="dayLabel"></span></h1>
+      <button class="iconbtn" id="btnSettings" title="设置" aria-label="设置">⚙️</button>
+    </div>
+    <div class="datebar">
+      <button class="mini" id="btnPrev">‹ 前一天</button>
+      <button class="mini" id="btnToday">今天</button>
+      <span class="d" id="dateText"></span>
+      <button class="mini" id="btnNext">后一天 ›</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="main">
+  <div id="banners"></div>
+
+  <!-- ============ 视图：今天 ============ -->
+  <div id="view-today" class="cols">
+    <div>
+      <!-- 录入 -->
+      <section class="card">
+        <h2>✍️ 记一条</h2>
+        <textarea id="quick" placeholder="随口写一句，比如：今天睡到9点，下午有点困，晚上散步，没花钱"></textarea>
+        <p class="hint" id="quickHint">随手记一句，AI 会帮你分好类。不联网也能用「直接保存」。</p>
+        <div class="btns">
+          <button class="btn p" id="btnAI">✨ AI 帮我整理</button>
+          <button class="btn" id="btnSaveRaw">直接保存</button>
+          <button class="btn" id="btnClear">清空</button>
+        </div>
+      </section>
+
+      <!-- 时间线 -->
+      <section class="card">
+        <h2>今天的时间线 <span class="cnt" id="tlCount"></span></h2>
+        <div class="tl" id="timeline"></div>
+      </section>
+    </div>
+
+    <div>
+      <!-- 汇总 -->
+      <section class="card">
+        <h2>今日汇总 <span class="cnt" id="sumNote"></span></h2>
+        <div class="sum" id="summary"></div>
+        <div class="bar"><i id="sumBar" style="width:0%"></i></div>
+        <div class="miss" id="sumMiss"></div>
+        <div class="btns" style="margin-top:10px">
+          <button class="btn p grow" id="btnReview">🔄 生成今日复盘</button>
+        </div>
+        <div id="reviewBox"></div>
+      </section>
+
+      <!-- 手填表单 -->
+      <section class="card">
+        <h2>手填（不用 AI 也行）</h2>
+        <div id="form"></div>
+        <div class="btns">
+          <button class="btn p grow" id="btnAddEntry">保存这条记录</button>
+          <button class="btn" id="btnResetForm">重置</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ 视图：仪表盘（M5）============ -->
+  <div id="view-dash" style="display:none">
+    <section class="card">
+      <h2>概览 <span class="cnt" id="dashNote"></span></h2>
+      <div class="sum" id="dashStats"></div>
+      <div class="dash-actions">
+        <button class="mini" data-range="7">近 7 天</button>
+        <button class="mini" data-range="30">近 30 天</button>
+        <button class="mini" data-range="90">近 90 天</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>记录日历</h2>
+      <div class="heat-wrap"><div id="heat"></div></div>
+      <p class="hint" id="heatHint">颜色越深 = 那天记的维度越多；空白 = 那天没记</p>
+    </section>
+
+    <section class="card">
+      <h2>趋势 <span class="cnt" id="chartNote"></span></h2>
+      <div class="dash-actions" id="chartPick"></div>
+      <canvas id="chart" width="600" height="220"></canvas>
+      <div class="chart-stats" id="chartStats"></div>
+      <p class="hint" id="chartHint"></p>
+    </section>
+
+    <section class="card">
+      <h2>报告</h2>
+      <div class="btns">
+        <button class="btn p grow" id="btnWeekReport">📄 生成本周报告</button>
+        <button class="btn" id="btnMonthReport">📆 本月报告</button>
+      </div>
+      <div class="btns">
+        <button class="btn grow" id="btnExportWeek">⬇️ 导出本周素材</button>
+      </div>
+      <div id="reportBox"></div>
+      <p class="hint">
+        导出的文件按天分段，丢进 U 盘 <code>我的生活\素材\</code> 就能用来写日报。
+        月报用**分层压缩**：只喂周摘要，不喂 30 天原文（更快、更省，也更不容易跑偏）。
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>两个指标一起看</h2>
+      <div class="dash-actions" id="pairPick"></div>
+      <div id="pairOut"></div>
+      <p class="hint">
+        只做**描述**：告诉你两个指标有多少天是同向变化。**不下因果结论** ——
+        那需要 AI 分析，而且样本太少时必须说"数据不够"。
+      </p>
+    </section>
+  </div>
+</main>
+
+<nav>
+  <div class="in">
+    <button data-view="today" aria-current="true"><span class="ic">📝</span>今天</button>
+    <button data-view="dash"><span class="ic">📊</span>仪表盘</button>
+    <button data-view="history"><span class="ic">📅</span>历史</button>
+    <button data-view="settings"><span class="ic">⚙️</span>设置</button>
+  </div>
+</nav>
+
+<div class="sheet" id="sheet"><div class="panel" id="sheetPanel"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===========================================================================
+   注入点：构建时把 logic.js 与 ai.js 内联到这里。
+   直接打开这个文件（没构建过）时，下面两个注入点为空，脚本会提示未构建。
+   =========================================================================== */
+/* ===========================================================================
+ * 个人规划 —— 纯逻辑层
+ *
+ * 运行环境：既可被内联进单文件页面，也可在 Node 里 require（UMD）。
+ *
+ * ⚠️ 本文件会被原样内联进 HTML 的脚本块里，所以**绝对不能出现字面的
+ *    script 开标签或闭标签**（哪怕写在注释里也不行）——浏览器的 HTML 解析器
+ *    只看字节，不认识 JS 注释，会提前把脚本块截断，整个页面直接白屏。
+ *    build.js 里有针对这一点的强制检查。
+ *
+ * 这个文件只做「数据」相关的事：日期、时长、维度、聚合、统计、序列化。
+ * 不碰界面、不碰网络、不碰文件。
+ *
+ * ── 一条贯穿全文件的项目规矩 ──
+ *   **纯函数绝不抛异常。** 非法输入一律返回 null / 空数组 / 空对象。
+ *   原因：这些函数会被界面到处调用，抛一次异常就是白屏。
+ *   踩过的坑：写 `(arr || [])` 以为能兜住，其实 `||` 只挡 null/undefined，
+ *   挡住不「truthy 但非数组」的值（传字符串进来就抛
+ *   `(arr || []).forEach is not a function`）。所以一律用 Array.isArray 判。
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.PlanLogic = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  var STORE_KEY = 'personal-plan-v1';
+  var BACKUP_KEY = 'personal-plan-v1-backup';
+  var BACKUP_AT_KEY = 'personal-plan-v1-backup-at';
+
+  /* ==========================================================================
+   * 一、维度定义
+   *
+   * ⚠️ 这张表是**唯一的真相来源**。聚合、绘图、AI 输入全都查它。
+   * 新增字段时必须在这里登记性质，否则默认按 state（状态型）处理。
+   *
+   * kind 三种取值（对应方案 §6.1 的三条聚合规则）：
+   *   sum   —— 累计型：跨条目**相加**（支出、收入、学习时长）
+   *   state —— 状态型：取当天**最后一条有值的**（睡眠、精力、情绪、余额）
+   *   list  —— 清单型：跨条目**合并成列表**（症状、标签、学习条目、决策）
+   *
+   * 搞反的症状很具体：
+   *   支出若当 state  → 花 32.5 又花 8，显示只花 8 元
+   *   睡眠若当 sum    → 早上记 7h、晚上更正 8h，算出 15 小时
+   * ======================================================================== */
+  var DIMS = [
+    { key: 'body', name: '身体', icon: '🌙', group: 'growth' },
+    { key: 'sport', name: '运动', icon: '🏃', group: 'growth' },
+    { key: 'mind', name: '精神', icon: '🧠', group: 'growth' },
+    { key: 'study', name: '学习', icon: '📚', group: 'growth' },
+    { key: 'work', name: '工作', icon: '💼', group: 'growth' },
+    { key: 'social', name: '社会关系', icon: '👥', group: 'growth' },
+    { key: 'finance', name: '财务', icon: '💰', group: 'life' },
+    { key: 'plan', name: '规划与想法', icon: '✨', group: 'life' }
+  ];
+
+  var GROUPS = [
+    { key: 'growth', name: '个人成长' },
+    { key: 'life', name: '生活与复盘' }
+  ];
+
+  /**
+   * 字段性质表。`__self` 表示「整个维度是清单型」（维度值本身就是数组）。
+   */
+  var FIELD_KIND = {
+    /*
+     * ⚠️ 身体里**没有** exercise 字段。
+     * 用户 2026-10 要求把运动独立成一个大类，所以原本的 `body.exercise`
+     * 已彻底移除（App 未上线、无真实数据，不存在迁移问题）。
+     * 保留它会让提示词里出现两个概念相近的字段（body.exercise 和 sport），
+     * AI 会犯迷糊"该填哪个" —— 这种歧义必须消掉。
+     */
+    body: {
+      sleepStart: 'state', wake: 'state', energy: 'state',
+      symptoms: 'list', note: 'list'
+    },
+    /* 运动：一天可能跑一次又打一次球，所以整个维度是清单型（数组） */
+    sport: { __self: 'list' },
+    mind: { mood: 'state', tags: 'list', trigger: 'state', note: 'list' },
+    study: { __self: 'list' },
+    work: { progress: 'list', apps: 'list', next: 'state' },
+    social: { __self: 'list' },
+    finance: { income: 'sum', expense: 'sum', balance: 'state', expenseTags: 'list' },
+    plan: { ideas: 'list', decisions: 'list', note: 'list' }
+  };
+
+  /** 取某维度某字段的性质。查不到时默认 state（最保守） */
+  function kindOf(dim, field) {
+    var d = FIELD_KIND[dim];
+    if (!d) return 'state';
+    if (field === undefined || field === null) return d.__self || 'state';
+    return d[field] || d.__self || 'state';
+  }
+
+  /** 维度定义（按 key 取） */
+  function dimOf(key) {
+    for (var i = 0; i < DIMS.length; i++) if (DIMS[i].key === key) return DIMS[i];
+    return null;
+  }
+
+  /** 某维度是否有值（缺失 = 这次没记） */
+  function hasValue(v) {
+    if (v === undefined || v === null) return false;
+    if (typeof v === 'string') return v.trim().length > 0;
+    if (Array.isArray(v)) return v.length > 0;
+    if (typeof v === 'object') {
+      var ks = Object.keys(v);
+      for (var i = 0; i < ks.length; i++) if (hasValue(v[ks[i]])) return true;
+      return false;
+    }
+    return true;                                   // 数字（含 0）算有值
+  }
+
+  /* ==========================================================================
+   * 二、日期与时长
+   *
+   * 已用原型验证 59 项（跨天/闰年/跨年/夏令时/ISO 周）。
+   * ======================================================================== */
+
+  /** 解析 "HH:MM" → 当天分钟数。非法返回 null。接受 1 位小时（9:00） */
+  function parseTime(s) {
+    if (typeof s !== 'string') return null;
+    var m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+    if (!m) return null;
+    var h = +m[1], mi = +m[2];
+    if (h < 0 || h > 23 || mi < 0 || mi > 59) return null;
+    return h * 60 + mi;
+  }
+
+  /**
+   * 睡眠时长（分钟）：入睡 → 起床。
+   * ⚠️ **跨天是常态**：23:40 睡、09:00 起 = 560 分。
+   * 同日小睡（13:00→14:30）也要支持。算法：按同日算，为负则 +24h。
+   */
+  function sleepMinutes(startTime, endTime) {
+    var a = parseTime(startTime), b = parseTime(endTime);
+    if (a === null || b === null) return null;
+    var d = b - a;
+    if (d < 0) d += 24 * 60;
+    return d;
+  }
+
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+
+  /**
+   * 本地日期键 "YYYY-MM-DD"。
+   * ⚠️ **必须用本地时间的年月日拼**，绝不能用 toISOString()——
+   * 那是 UTC，在东八区会让 00:00~07:59 的记录**整体错一天**。
+   * 这个 bug 白天测不出来，只在深夜/清晨记录时才暴露。
+   */
+  function toDateKey(d) {
+    var dt = d instanceof Date ? d : new Date(d);
+    if (isNaN(dt.getTime())) return null;
+    return dt.getFullYear() + '-' + pad2(dt.getMonth() + 1) + '-' + pad2(dt.getDate());
+  }
+
+  /** 从日期键取 Date（本地 00:00）。非法返回 null */
+  function fromDateKey(key) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key === undefined || key === null ? '' : key));
+    if (!m) return null;
+    var d = new Date(+m[1], +m[2] - 1, +m[3]);
+    if (isNaN(d.getTime())) return null;
+    // 校验没有溢出（例如 2026-02-30 会被 JS 滚到 3 月）
+    if (d.getFullYear() !== +m[1] || d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[3]) return null;
+    return d;
+  }
+
+  /** 两个日期键相差几天（b - a）。跨月/跨年/闰月都要对。 */
+  function daysBetween(aKey, bKey) {
+    var a = fromDateKey(aKey), b = fromDateKey(bKey);
+    if (!a || !b) return null;
+    // 用 UTC 毫秒差，规避夏令时导致的 23/25 小时天
+    var ua = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+    var ub = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+    return Math.round((ub - ua) / 86400000);
+  }
+
+  /** 日期键 + n 天 */
+  function addDays(key, n) {
+    var d = fromDateKey(key);
+    if (!d) return null;
+    if (typeof n !== 'number' || !isFinite(n)) return null;
+    d.setDate(d.getDate() + n);
+    return toDateKey(d);
+  }
+
+  /** 星期几：1=周一 … 7=周日（注意 getDay 的周日是 0） */
+  function isoDayOfWeek(key) {
+    var d = fromDateKey(key);
+    if (!d) return null;
+    var w = d.getDay();
+    return w === 0 ? 7 : w;
+  }
+
+  /** 某日期所属的 ISO 周键 "YYYY-Www"。已用 1826 天逐日比对标准算法验证过 */
+  function isoWeekKey(key) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key === undefined || key === null ? '' : key));
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], dd = +m[3];
+    var t = new Date(Date.UTC(y, mo - 1, dd));
+    if (isNaN(t.getTime())) return null;
+    var dow = t.getUTCDay() === 0 ? 7 : t.getUTCDay();
+    t.setUTCDate(t.getUTCDate() + 4 - dow);           // 移到本周四
+    var ty = t.getUTCFullYear();
+    var jan1 = new Date(Date.UTC(ty, 0, 1));
+    var week = Math.floor((t - jan1) / 86400000 / 7) + 1;
+    return ty + '-W' + pad2(week);
+  }
+
+  /** 格式化时长：560 → "9小时20分"；负数保留负号（防止算错时静默显示正数） */
+  function formatMinutes(min) {
+    if (min === null || min === undefined || typeof min !== 'number' || !isFinite(min)) return '';
+    var neg = min < 0;
+    var v = Math.abs(Math.round(min));
+    var h = Math.floor(v / 60), m = v % 60;
+    var s;
+    if (h) s = h + '小时' + (m ? m + '分' : '');
+    else s = m + '分';
+    return (neg ? '-' : '') + s;
+  }
+
+  /** 现在时刻 "HH:MM" */
+  function nowHHMM(d) {
+    var dt = d instanceof Date ? d : new Date();
+    if (isNaN(dt.getTime())) return '';
+    return pad2(dt.getHours()) + ':' + pad2(dt.getMinutes());
+  }
+
+  /* ==========================================================================
+   * 三、状态与归一化
+   * ======================================================================== */
+
+  function defaultSettings() {
+    return {
+      apiKey: '',
+      apiKeySessionOnly: false,
+      baseUrl: '',
+      model: 'deepseek-flash',
+      remindTime: '21:00',
+      monthlyBudget: 5,
+      lastExportAt: null
+    };
+  }
+
+  function emptyState() {
+    return {
+      version: 1,
+      settings: defaultSettings(),
+      days: {},
+      reports: {}
+    };
+  }
+
+  function isObj(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+  /** 归一化一个字段值：数字转数字、字符串 trim、数组清空项 */
+  function normFieldValue(v) {
+    if (v === undefined || v === null) return undefined;
+    if (typeof v === 'number') return isFinite(v) ? v : undefined;
+    if (typeof v === 'string') { var t = v.trim(); return t ? t : undefined; }
+    if (Array.isArray(v)) {
+      var a = [];
+      for (var i = 0; i < v.length; i++) {
+        var x = normFieldValue(v[i]);
+        if (x !== undefined && !(isObj(x) && !Object.keys(x).length)) a.push(x);
+      }
+      return a.length ? a : undefined;
+    }
+    if (isObj(v)) {
+      var o = {};
+      var ks = Object.keys(v);
+      for (var j = 0; j < ks.length; j++) {
+        var y = normFieldValue(v[ks[j]]);
+        if (y !== undefined) o[ks[j]] = y;
+      }
+      return Object.keys(o).length ? o : undefined;
+    }
+    return undefined;
+  }
+
+  /**
+   * 归一化一条记录（entry）。
+   * 关键两条：
+   *   ① **只保留有值的维度**——缺的字段就是「这次没记」，不要填空对象
+   *   ② **没有任何维度有值就返回 null**（整条丢弃）
+   *      踩过的坑：原先只判 `isObj`，于是 `normalizeEntry({})` 返回了 `{}`，
+   *      空记录会一路溜进 state 里，让"记了几天"之类的统计偏大。
+   */
+  function normalizeEntry(e) {
+    if (!isObj(e)) return null;
+    var out = {};
+    if (typeof e.id === 'string' && e.id) out.id = e.id;
+    if (typeof e.at === 'string' && /^\d{1,2}:\d{2}$/.test(e.at)) out.at = e.at;
+    if (typeof e.createdAt === 'number' && isFinite(e.createdAt)) out.createdAt = e.createdAt;
+    if (typeof e.raw === 'string' && e.raw.trim()) out.raw = e.raw.trim();
+
+    var hasDim = false;
+    for (var i = 0; i < DIMS.length; i++) {
+      var k = DIMS[i].key;
+      var v = normFieldValue(e[k]);
+      if (v === undefined) continue;
+      /*
+       * ⚠️ 按字段白名单过滤。
+       * 光靠 normFieldValue 会**保留任何字段**，于是两个问题：
+       *   ① 已删除的字段（body.exercise）还能被写回来
+       *   ② AI 编造字段名（body.moodd）会一路存进数据里，之后很难查
+       * 白名单来自 FIELD_KIND（唯一的真相来源）：
+       *   · 整个维度是清单型的（study/social/sport）→ 不细分字段，整块保留
+       *   · 其余维度 → 只保留登记过的字段
+       */
+      if (FIELD_KIND[k] && FIELD_KIND[k].__self) {
+        out[k] = v;
+        hasDim = true;
+        continue;
+      }
+      if (isObj(v) && FIELD_KIND[k]) {
+        var kept = {};
+        var ks = Object.keys(v);
+        for (var j = 0; j < ks.length; j++) {
+          if (Object.prototype.hasOwnProperty.call(FIELD_KIND[k], ks[j])) kept[ks[j]] = v[ks[j]];
+        }
+        if (!Object.keys(kept).length) continue;      // 全是未登记字段 → 整块丢弃
+        out[k] = kept;
+        hasDim = true;
+        continue;
+      }
+      out[k] = v;
+      hasDim = true;
+    }
+    if (!hasDim) return null;                      // 没有任何维度内容 → 整条丢弃
+
+    if (typeof e.updatedAt === 'number' && isFinite(e.updatedAt)) out.updatedAt = e.updatedAt;
+    return out;
+  }
+
+  /** 归一化一天 */
+  function normalizeDay(d, dateKey) {
+    if (!isObj(d)) return null;
+    var key = (typeof d.date === 'string' && fromDateKey(d.date)) ? d.date
+            : (fromDateKey(dateKey) ? dateKey : null);
+    if (!key) return null;
+
+    var entries = [];
+    if (Array.isArray(d.entries)) {
+      for (var i = 0; i < d.entries.length; i++) {
+        var e = normalizeEntry(d.entries[i]);
+        if (e) entries.push(e);
+      }
+    }
+    entries.sort(entryCompare);
+
+    var out = { date: key, entries: entries };
+
+    // AI 产出（挂在「天」上，因为日复盘汇总当天全部条目）
+    if (isObj(d.ai)) {
+      var ai = {};
+      if (isObj(d.ai.review)) {
+        var rev = {};
+        ['fact', 'contribution', 'next'].forEach(function (f) {
+          if (typeof d.ai.review[f] === 'string' && d.ai.review[f].trim()) rev[f] = d.ai.review[f].trim();
+        });
+        if (Object.keys(rev).length) ai.review = rev;
+      }
+      if (typeof d.ai.at === 'number' && isFinite(d.ai.at)) ai.at = d.ai.at;
+      if (typeof d.ai.model === 'string' && d.ai.model) ai.model = d.ai.model;
+      if (isObj(d.ai.tokens)) {
+        var tk = {};
+        if (typeof d.ai.tokens.in === 'number' && isFinite(d.ai.tokens.in)) tk.in = d.ai.tokens.in;
+        if (typeof d.ai.tokens.out === 'number' && isFinite(d.ai.tokens.out)) tk.out = d.ai.tokens.out;
+        if (Object.keys(tk).length) ai.tokens = tk;
+      }
+      if (typeof d.ai.entryCount === 'number' && isFinite(d.ai.entryCount)) ai.entryCount = d.ai.entryCount;
+      if (typeof d.ai.lastEntryAt === 'number' && isFinite(d.ai.lastEntryAt)) ai.lastEntryAt = d.ai.lastEntryAt;
+      if (Object.keys(ai).length) out.ai = ai;
+    }
+
+    /*
+     * ⚠️ 空的一天要整个丢掉。
+     * 踩过的坑：原先不管有没有内容都返回 `{ date, entries: [] }`，
+     * 于是坏数据（或删光条目后残留）会在 state 里堆出一堆空天。
+     * 虽然 datesWithRecords 会过滤掉它们，但 state 会越积越大、备份也跟着变大。
+     * 只有「有 AI 产出」的空天才保留（那种情况少见，但删条目后复盘还在，不该丢）。
+     */
+    if (!entries.length && !out.ai) return null;
+
+    return out;
+  }
+
+  /** 条目排序：createdAt 优先，其次 at 字符串 */
+  function entryCompare(a, b) {
+    var ca = (a && typeof a.createdAt === 'number') ? a.createdAt : 0;
+    var cb = (b && typeof b.createdAt === 'number') ? b.createdAt : 0;
+    if (ca !== cb) return ca - cb;
+    var sa = String((a && a.at) || '');
+    var sb = String((b && b.at) || '');
+    return sa < sb ? -1 : (sa > sb ? 1 : 0);
+  }
+
+  /** 归一化整个状态（对任何输入都不抛异常，坏数据一律丢弃） */
+  function normalizeState(s) {
+    var out = emptyState();
+    if (!isObj(s)) return out;
+
+    if (isObj(s.settings)) {
+      var st = s.settings;
+      var d = defaultSettings();
+      if (typeof st.apiKey === 'string') out.settings.apiKey = st.apiKey;
+      out.settings.apiKeySessionOnly = !!st.apiKeySessionOnly;
+      if (typeof st.baseUrl === 'string') out.settings.baseUrl = st.baseUrl;
+      if (typeof st.model === 'string' && st.model) out.settings.model = st.model;
+      if (typeof st.remindTime === 'string' && parseTime(st.remindTime) !== null) out.settings.remindTime = st.remindTime;
+      if (typeof st.monthlyBudget === 'number' && isFinite(st.monthlyBudget) && st.monthlyBudget >= 0) {
+        out.settings.monthlyBudget = st.monthlyBudget;
+      } else {
+        out.settings.monthlyBudget = d.monthlyBudget;
+      }
+      if (typeof st.lastExportAt === 'number' && isFinite(st.lastExportAt)) out.settings.lastExportAt = st.lastExportAt;
+    }
+
+    if (isObj(s.days)) {
+      Object.keys(s.days).forEach(function (k) {
+        var day = normalizeDay(s.days[k], k);
+        if (day) out.days[day.date] = day;
+      });
+    }
+
+    if (isObj(s.reports)) {
+      Object.keys(s.reports).forEach(function (k) {
+        var r = s.reports[k];
+        if (!isObj(r)) return;
+        var o = {};
+        if (typeof r.text === 'string' && r.text.trim()) o.text = r.text.trim();
+        if (typeof r.at === 'number' && isFinite(r.at)) o.at = r.at;
+        if (typeof r.summary === 'string' && r.summary.trim()) o.summary = r.summary.trim();
+        if (isObj(r.tokens)) o.tokens = r.tokens;
+        if (typeof r.kind === 'string') o.kind = r.kind;
+        if (Object.keys(o).length) out.reports[k] = o;
+      });
+    }
+    return out;
+  }
+
+  /* ==========================================================================
+   * 四、读写：天 / 条目
+   * ======================================================================== */
+
+  function getDay(state, dateKey) {
+    if (!isObj(state) || !isObj(state.days)) return null;
+    if (!fromDateKey(dateKey)) return null;
+    return state.days[dateKey] || null;
+  }
+
+  function ensureDay(state, dateKey) {
+    if (!fromDateKey(dateKey)) return null;
+    if (!isObj(state.days)) state.days = {};
+    if (!state.days[dateKey]) state.days[dateKey] = { date: dateKey, entries: [] };
+    if (!Array.isArray(state.days[dateKey].entries)) state.days[dateKey].entries = [];
+    return state.days[dateKey];
+  }
+
+  /** 生成一个够用的 id（不依赖 crypto，避免老浏览器缺失） */
+  var idSeq = 0;
+  function makeId(prefix, now) {
+    var t = typeof now === 'number' ? now : Date.now();
+    idSeq = (idSeq + 1) % 1000;
+    return (prefix || 'e') + '_' + t.toString(36) + '_' + idSeq.toString(36);
+  }
+
+  /**
+   * 加一条记录。返回 { state, entry } 或 { error }
+   * ⚠️ 不可变：返回新 state，原 state 不动（便于撤销/对比）。
+   */
+  function addEntry(state, dateKey, entry, now) {
+    var norm = normalizeEntry(entry);
+    if (!norm) return { error: '这条记录没有内容' };
+    var hasDim = false;
+    for (var i = 0; i < DIMS.length; i++) if (hasValue(norm[DIMS[i].key])) { hasDim = true; break; }
+    if (!hasDim) return { error: '至少填一个维度' };
+
+    var t = typeof now === 'number' ? now : Date.now();
+    var s = normalizeState(state);
+    var day = ensureDay(s, dateKey);
+    if (!day) return { error: '日期不对' };
+
+    var e = {};
+    Object.keys(norm).forEach(function (k) { e[k] = norm[k]; });
+    if (!e.id) e.id = makeId('e', t);
+    if (!e.at) e.at = nowHHMM(new Date(t));
+    if (typeof e.createdAt !== 'number') e.createdAt = t;
+    e.updatedAt = t;
+
+    day.entries.push(e);
+    day.entries.sort(entryCompare);
+    return { state: s, entry: e };
+  }
+
+  /** 改一条记录（同一天内按 id 找） */
+  function updateEntry(state, dateKey, entryId, patch, now) {
+    var s = normalizeState(state);
+    var day = getDay(s, dateKey);
+    if (!day) return { error: '这一天还没有记录' };
+    var idx = -1;
+    for (var i = 0; i < day.entries.length; i++) if (day.entries[i].id === entryId) { idx = i; break; }
+    if (idx < 0) return { error: '找不到这条记录' };
+
+    var merged = {};
+    var old = day.entries[idx];
+    Object.keys(old).forEach(function (k) { merged[k] = old[k]; });
+    if (isObj(patch)) Object.keys(patch).forEach(function (k) { merged[k] = patch[k]; });
+    var norm = normalizeEntry(merged);
+    if (!norm) return { error: '这条记录没有内容' };
+
+    norm.id = old.id;
+    if (typeof norm.createdAt !== 'number') norm.createdAt = old.createdAt || Date.now();
+    norm.updatedAt = typeof now === 'number' ? now : Date.now();
+    day.entries[idx] = norm;
+    day.entries.sort(entryCompare);
+    return { state: s, entry: norm };
+  }
+
+  function removeEntry(state, dateKey, entryId) {
+    var s = normalizeState(state);
+    var day = getDay(s, dateKey);
+    if (!day) return { error: '这一天还没有记录' };
+    var before = day.entries.length;
+    day.entries = day.entries.filter(function (e) { return e.id !== entryId; });
+    if (day.entries.length === before) return { error: '找不到这条记录' };
+    if (!day.entries.length) delete s.days[dateKey];          // 空的一天不留垃圾
+    return { state: s };
+  }
+
+  /** 找一条记录（跨天） */
+  function findEntry(state, entryId) {
+    if (!isObj(state) || !isObj(state.days)) return null;
+    var keys = Object.keys(state.days);
+    for (var i = 0; i < keys.length; i++) {
+      var es = state.days[keys[i]].entries || [];
+      for (var j = 0; j < es.length; j++) if (es[j].id === entryId) return { date: keys[i], entry: es[j] };
+    }
+    return null;
+  }
+
+  /* ==========================================================================
+   * 五、聚合（一天多条的三条规则）
+   *
+   * 已用原型验证 24 项。
+   * ======================================================================== */
+
+  /**
+   * 把一天的多个条目聚合成一个「虚拟条目」。
+   * 用于：今日汇总显示、绘图取数、AI 输入。
+   */
+  function aggregateDay(day) {
+    var out = {};
+    if (!isObj(day) || !Array.isArray(day.entries)) return out;
+    var entries = day.entries;
+
+    DIMS.forEach(function (dim) {
+      var selfKind = kindOf(dim.key, null);
+      var spec = FIELD_KIND[dim.key] || {};
+
+      if (selfKind === 'list') {
+        // 整个维度是清单型：把各条目的数组拼起来
+        var all = [];
+        entries.forEach(function (e) {
+          var v = e[dim.key];
+          if (Array.isArray(v)) { for (var i = 0; i < v.length; i++) all.push(v[i]); }
+          else if (hasValue(v)) all.push(v);
+        });
+        if (all.length) out[dim.key] = all;
+        return;
+      }
+
+      var acc = {};
+      Object.keys(spec).forEach(function (field) {
+        var kind = spec[field];
+        var vals = [];
+        entries.forEach(function (e) {
+          var dv = e[dim.key];
+          if (isObj(dv) && !Array.isArray(dv) && hasValue(dv[field])) vals.push(dv[field]);
+        });
+        if (!vals.length) return;
+
+        if (kind === 'sum') {
+          var sum = 0, any = false;
+          vals.forEach(function (x) { if (typeof x === 'number' && isFinite(x)) { sum += x; any = true; } });
+          if (any) acc[field] = sum;
+        } else if (kind === 'state') {
+          acc[field] = vals[vals.length - 1];         // 最后一条有值的
+        } else {
+          var merged = [];
+          vals.forEach(function (v) {
+            if (Array.isArray(v)) { for (var i = 0; i < v.length; i++) merged.push(v[i]); }
+            else merged.push(v);
+          });
+          acc[field] = merged;
+        }
+      });
+      if (Object.keys(acc).length) out[dim.key] = acc;
+    });
+    return out;
+  }
+
+  /** 当天是否记了某维度（任一条目里有值即可） */
+  function dayHasDim(day, dimKey) {
+    if (!isObj(day) || !Array.isArray(day.entries)) return false;
+    for (var i = 0; i < day.entries.length; i++) {
+      if (hasValue(day.entries[i][dimKey])) return true;
+    }
+    return false;
+  }
+
+  /** 一天的完成度：{ filled, total, ratio, missing[] } */
+  function dayCompletion(day) {
+    var missing = [], filled = 0;
+    DIMS.forEach(function (d) {
+      if (dayHasDim(day, d.key)) filled++;
+      else missing.push(d.key);
+    });
+    return {
+      filled: filled,
+      total: DIMS.length,
+      ratio: DIMS.length ? filled / DIMS.length : 0,
+      missing: missing
+    };
+  }
+
+  /** 当天的睡眠时长（分钟），从聚合结果算。没有记录返回 null */
+  function daySleepMinutes(day) {
+    var agg = aggregateDay(day);
+    var b = agg.body;
+    if (!b) return null;
+    return sleepMinutes(b.sleepStart, b.wake);
+  }
+
+  /* ==========================================================================
+   * 六、统计（趋势图 + AI 相关性分析的输入）
+   * ======================================================================== */
+
+  /**
+   * 取某维度某字段的「按天序列」。
+   * 返回 [{ date, v }]，按日期升序。跳过缺失的天。
+   */
+  function seriesOf(state, dim, field) {
+    var out = [];
+    if (!isObj(state) || !isObj(state.days)) return out;
+    var dates = Object.keys(state.days).sort();
+    dates.forEach(function (dk) {
+      var day = state.days[dk];
+      var agg = aggregateDay(day);
+      var dv = agg[dim];
+      if (!isObj(dv)) return;
+      var x = dv[field];
+      if (typeof x === 'number' && isFinite(x)) out.push({ date: dk, v: x });
+    });
+    return out;
+  }
+
+  /** 睡眠时长的按天序列（分钟） */
+  function sleepSeries(state) {
+    var out = [];
+    if (!isObj(state) || !isObj(state.days)) return out;
+    Object.keys(state.days).sort().forEach(function (dk) {
+      var m = daySleepMinutes(state.days[dk]);
+      if (typeof m === 'number') out.push({ date: dk, v: m });
+    });
+    return out;
+  }
+
+  /** 描述性统计。只做描述，**相关性交给 AI**（它更擅长，也不需要我们造轮子） */
+  function describe(nums) {
+    var empty = { n: 0, mean: null, min: null, max: null, median: null };
+    if (!Array.isArray(nums)) return empty;
+    var a = [];
+    for (var i = 0; i < nums.length; i++) {
+      if (typeof nums[i] === 'number' && isFinite(nums[i])) a.push(nums[i]);
+    }
+    if (!a.length) return empty;
+    var sorted = a.slice().sort(function (x, y) { return x - y; });
+    var sum = 0;
+    for (var j = 0; j < a.length; j++) sum += a[j];
+    var mid = Math.floor(sorted.length / 2);
+    var median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    return {
+      n: a.length,
+      mean: Math.round((sum / a.length) * 100) / 100,
+      min: sorted[0],
+      max: sorted[sorted.length - 1],
+      median: Math.round(median * 100) / 100
+    };
+  }
+
+  /** 滚动均值（趋势图平滑用）。窗口内含 null 时只对窗口内有效值求均值 */
+  function rollingMean(nums, window) {
+    if (!Array.isArray(nums)) return [];
+    var w = Math.max(1, typeof window === 'number' ? window : 7);
+    return nums.map(function (_, i) {
+      var from = Math.max(0, i - w + 1);
+      var slice = nums.slice(from, i + 1);
+      var acc = [], k;
+      for (k = 0; k < slice.length; k++) {
+        if (typeof slice[k] === 'number' && isFinite(slice[k])) acc.push(slice[k]);
+      }
+      if (!acc.length) return null;
+      var s = 0;
+      for (k = 0; k < acc.length; k++) s += acc[k];
+      return Math.round((s / acc.length) * 100) / 100;
+    });
+  }
+
+  /** 某天的汇总数字（给首页汇总区用） */
+  function dayTotals(state, dateKey) {
+    var day = getDay(state, dateKey);
+    if (!day) {
+      return { entries: 0, filled: 0, total: DIMS.length, sleepMinutes: null,
+               expense: null, income: null, studyCount: 0, ideaCount: 0, decisionCount: 0 };
+    }
+    var agg = aggregateDay(day);
+    var fin = isObj(agg.finance) ? agg.finance : {};
+    var plan = isObj(agg.plan) ? agg.plan : {};
+    var study = Array.isArray(agg.study) ? agg.study : [];
+    var comp = dayCompletion(day);
+    return {
+      entries: day.entries.length,
+      filled: comp.filled,
+      total: comp.total,
+      sleepMinutes: daySleepMinutes(day),
+      expense: typeof fin.expense === 'number' ? fin.expense : null,
+      income: typeof fin.income === 'number' ? fin.income : null,
+      studyCount: study.length,
+      ideaCount: Array.isArray(plan.ideas) ? plan.ideas.length : (hasValue(plan.ideas) ? 1 : 0),
+      decisionCount: Array.isArray(plan.decisions) ? plan.decisions.length : 0
+    };
+  }
+
+  /** 一段日期范围（含两端）的汇总。周报用 */
+  function rangeSummary(state, fromKey, toKey) {
+    var n = daysBetween(fromKey, toKey);
+    if (n === null || n < 0) return { days: 0 };
+    var dates = [], cur = fromKey;
+    for (var i = 0; i <= n; i++) { dates.push(cur); cur = addDays(cur, 1); }
+
+    var withRecords = 0, filled = 0, slots = 0;
+    var missingCount = {};
+    dates.forEach(function (dk) {
+      var day = getDay(state, dk);
+      if (day && day.entries.length) withRecords++;
+      var comp = dayCompletion(day);
+      filled += comp.filled;
+      slots += comp.total;
+      comp.missing.forEach(function (m) { missingCount[m] = (missingCount[m] || 0) + 1; });
+    });
+
+    var mostMissed = Object.keys(missingCount)
+      .sort(function (a, b) { return missingCount[b] - missingCount[a]; })
+      .slice(0, 3)
+      .map(function (k) { return { dim: k, missed: missingCount[k] }; });
+
+    var sleeps = [];
+    var expenses = 0, hasExpense = false;
+    dates.forEach(function (dk) {
+      var day = getDay(state, dk);
+      if (!day) return;
+      var m = daySleepMinutes(day);
+      if (typeof m === 'number') sleeps.push(m);
+      var agg = aggregateDay(day);
+      if (isObj(agg.finance) && typeof agg.finance.expense === 'number') {
+        expenses += agg.finance.expense; hasExpense = true;
+      }
+    });
+
+    return {
+      from: fromKey, to: toKey,
+      days: dates.length,
+      daysWithRecords: withRecords,
+      ratio: slots ? Math.round((filled / slots) * 1000) / 1000 : 0,
+      mostMissed: mostMissed,
+      sleep: describe(sleeps),
+      expenseTotal: hasExpense ? Math.round(expenses * 100) / 100 : null
+    };
+  }
+
+  /* ==========================================================================
+   * 七、AI 输入组装（分层压缩 + 编号清单）
+   *
+   * 方案 §7 / §2.2 教训 B：
+   *   · 日复盘发「当天全部条目」，但**必须带记录时刻**，否则 AI 会把
+   *     晚上补记的睡眠当成「睡了两次」
+   *   · 周报发「编号清单」，要求 AI 只回编号 → 省 token + 防幻觉
+   * ======================================================================== */
+
+  /** 把某维度的一条值压成一行短文本（AI 输入用） */
+  function compactDim(dimKey, val) {
+    if (!hasValue(val)) return '';
+    var parts = [];
+    if (dimKey === 'body') {
+      var m = sleepMinutes(val.sleepStart, val.wake);
+      if (m !== null) parts.push('睡眠' + formatMinutes(m));
+      if (typeof val.energy === 'number') parts.push('精力' + val.energy);
+      if (hasValue(val.symptoms)) parts.push('症状:' + [].concat(val.symptoms).join('/'));
+      if (hasValue(val.note)) parts.push('备注:' + [].concat(val.note).join('；'));
+    } else if (dimKey === 'mind') {
+      if (typeof val.mood === 'number') parts.push('情绪' + val.mood);
+      if (hasValue(val.tags)) parts.push([].concat(val.tags).join('/'));
+      if (hasValue(val.trigger)) parts.push('触发:' + val.trigger);
+      if (hasValue(val.note)) parts.push('备注:' + [].concat(val.note).join('；'));
+    } else if (dimKey === 'sport') {
+      [].concat(val).forEach(function (x) {
+        if (!isObj(x)) return;
+        /*
+         * ⚠️ 只有在**项目**存在时才输出。
+         * 踩过的坑：第一版没判 type，于是 AI 若只给了距离（用户说"今天跑了5公里"
+         * 而模型没识别出"跑步"），就会输出一个光秃秃的「5公里」——
+         * 不知道是什么运动，这条记录基本没用。宁可提示缺失，也不要输出半条。
+         */
+        if (!hasValue(x.type)) return;
+        var one = [x.type];
+        if (typeof x.km === 'number') one.push(x.km + '公里');
+        if (typeof x.feeling === 'number') one.push('感受' + x.feeling);
+        if (hasValue(x.note)) one.push(x.note);
+        parts.push(one.join(' '));
+      });
+    } else if (dimKey === 'study') {
+      [].concat(val).forEach(function (s) {
+        if (!isObj(s)) return;
+        var one = [];
+        if (hasValue(s.subject)) one.push(s.subject);
+        if (hasValue(s.what)) one.push(s.what);
+        if (typeof s.minutes === 'number') one.push(s.minutes + '分');
+        if (typeof s.mastery === 'number') one.push('掌握' + s.mastery);
+        if (hasValue(s.gap)) one.push('漏点:' + s.gap);
+        if (one.length) parts.push(one.join(' '));
+      });
+    } else if (dimKey === 'work') {
+      if (hasValue(val.progress)) parts.push([].concat(val.progress).join('；'));
+      if (Array.isArray(val.apps)) {
+        val.apps.forEach(function (a) {
+          if (!isObj(a)) return;
+          parts.push([a.company, a.role, a.status].filter(hasValue).join('/'));
+        });
+      }
+      if (hasValue(val.next)) parts.push('下一步:' + val.next);
+    } else if (dimKey === 'social') {
+      [].concat(val).forEach(function (s) {
+        if (!isObj(s)) return;
+        parts.push([s.who, s.what, typeof s.feeling === 'number' ? '感受' + s.feeling : ''].filter(hasValue).join(' '));
+      });
+    } else if (dimKey === 'finance') {
+      if (typeof val.income === 'number') parts.push('收入' + val.income);
+      if (typeof val.expense === 'number') parts.push('支出' + val.expense);
+      if (typeof val.balance === 'number') parts.push('余额' + val.balance);
+      if (hasValue(val.expenseTags)) parts.push([].concat(val.expenseTags).join('/'));
+    } else if (dimKey === 'plan') {
+      if (hasValue(val.ideas)) parts.push('想法:' + [].concat(val.ideas).join('；'));
+      if (Array.isArray(val.decisions)) {
+        val.decisions.forEach(function (d) {
+          if (!isObj(d)) return;
+          parts.push('决定:' + (d.what || '') + (d.why ? '（原因:' + d.why + '）' : ''));
+        });
+      }
+      if (hasValue(val.note)) parts.push('备注:' + [].concat(val.note).join('；'));
+    }
+    return parts.filter(function (x) { return x && String(x).trim(); }).join(' ');
+  }
+
+  /**
+   * 组装「当天全部条目」的 AI 输入文本。
+   * ⚠️ 每条**必须带记录时刻** —— 否则 AI 会把晚上补记的睡眠当成睡了两次。
+   */
+  function dayDigest(state, dateKey, opts) {
+    var day = getDay(state, dateKey);
+    if (!day || !day.entries.length) return '';
+    var withTime = !(isObj(opts) && opts.withTime === false);
+    var lines = [];
+    lines.push('日期：' + dateKey + '（星期' + '一二三四五六日'[isoDayOfWeek(dateKey) - 1] + '）');
+    lines.push('当天共 ' + day.entries.length + ' 条记录：');
+    day.entries.forEach(function (e, i) {
+      var bits = [];
+      DIMS.forEach(function (d) {
+        var s = compactDim(d.key, e[d.key]);
+        if (s) bits.push(d.name + '：' + s);
+      });
+      lines.push((i + 1) + '. ' + (withTime && e.at ? '[' + e.at + '] ' : '') + bits.join(' ｜ '));
+    });
+    // 汇总（明确标注是聚合结果，避免 AI 误当成又一条记录）
+    var agg = aggregateDay(day);
+    var aggBits = [];
+    DIMS.forEach(function (d) {
+      var s = compactDim(d.key, agg[d.key]);
+      if (s) aggBits.push(d.name + '：' + s);
+    });
+    if (aggBits.length) {
+      lines.push('');
+      lines.push('（以下是按规则聚合后的当日合计，不是额外记录：');
+      lines.push('  ' + aggBits.join(' ｜ '));
+      lines.push('  规则：支出/收入/时长类相加；睡眠/精力/情绪/余额类取当天最后一次；清单类合并。）');
+    }
+    return lines.join('\n');
+  }
+
+  /**
+   * 组装「编号清单」用于周报/月报。
+   * 方案 §2.2 教训 B：发编号 + 要求 AI 只回编号 → 省 token + **防幻觉**
+   * （AI 只能引用真实存在的编号，编不出不存在的日子）。
+   */
+  function rangeDigest(state, fromKey, toKey) {
+    var n = daysBetween(fromKey, toKey);
+    if (n === null || n < 0) return { text: '', count: 0, dates: [] };
+    var lines = [], dates = [], cur = fromKey;
+    for (var i = 0; i <= n; i++) {
+      var summ = rangeOneDayLine(state, cur);
+      if (summ) { lines.push(lines.length + 1 + '. ' + summ); dates.push(cur); }
+      cur = addDays(cur, 1);
+    }
+    return { text: lines.join('\n'), count: dates.length, dates: dates };
+  }
+
+  function rangeOneDayLine(state, dateKey) {
+    var day = getDay(state, dateKey);
+    if (!day || !day.entries.length) return '';
+    var agg = aggregateDay(day);
+    var bits = [];
+    DIMS.forEach(function (d) {
+      var s = compactDim(d.key, agg[d.key]);
+      if (s) bits.push(s);
+    });
+    return dateKey + ' ' + bits.join(' ｜ ');
+  }
+
+  /* ==========================================================================
+   * 七之二、仪表盘数据（M5）
+   *
+   * 分工：**"算什么"在这里（纯函数、可测试）**，"怎么画"在界面层（Canvas）。
+   * 这样图表数据不会算错 —— 算错和画错是两类问题，混在一起最难查。
+   * ======================================================================== */
+
+  /**
+   * 连续 N 天的完整日期序列（含没有记录的天）。
+   * ⚠️ 必须**补齐空天**，否则图表会把"没记的日子"压缩掉，
+   *    看起来像天天都在记，趋势也被扭曲。
+   */
+  function lastNDays(n, endKey) {
+    var end = fromDateKey(endKey) ? endKey : todayKey();
+    var cnt = (typeof n === 'number' && n > 0) ? Math.floor(n) : 30;
+    var out = [];
+    for (var i = cnt - 1; i >= 0; i--) out.push(addDays(end, -i));
+    return out.filter(function (x) { return x; });
+  }
+
+  /** 仪表盘汇总（近 N 天） */
+  function dashSummary(state, days, endKey) {
+    var dates = lastNDays(days || 30, endKey);
+    var withRecords = 0, filled = 0, slots = 0;
+    var missingCount = {};
+
+    dates.forEach(function (dk) {
+      var day = getDay(state, dk);
+      if (day && day.entries && day.entries.length) withRecords++;
+      var comp = dayCompletion(day);
+      filled += comp.filled;
+      slots += comp.total;
+      comp.missing.forEach(function (m) { missingCount[m] = (missingCount[m] || 0) + 1; });
+    });
+
+    var mostMissed = Object.keys(missingCount)
+      .sort(function (a, b) { return missingCount[b] - missingCount[a]; })
+      .slice(0, 3)
+      .map(function (k) { return { dim: k, missed: missingCount[k], name: (dimOf(k) || {}).name || k }; });
+
+    return {
+      from: dates[0], to: dates[dates.length - 1], days: dates.length,
+      daysWithRecords: withRecords,
+      recordRate: dates.length ? Math.round((withRecords / dates.length) * 100) / 100 : 0,
+      ratio: slots ? Math.round((filled / slots) * 1000) / 1000 : 0,
+      mostMissed: mostMissed
+    };
+  }
+
+  /**
+   * 日历热力图：按周排列的格子。
+   * level: 0=没记　1~4=记了 1/2/3/4+ 个维度（用来上色）
+   */
+  function calendarHeat(state, days, endKey) {
+    var dates = lastNDays(days || 91, endKey);
+    if (!dates.length) return { weeks: [], months: [] };
+    var byDate = {};
+    dates.forEach(function (dk) {
+      var day = getDay(state, dk);
+      var comp = dayCompletion(day);
+      var count = (day && day.entries) ? day.entries.length : 0;
+      byDate[dk] = {
+        date: dk, count: count, filled: comp.filled, inRange: true,
+        level: count === 0 ? 0 : Math.min(4, Math.max(1, comp.filled))
+      };
+    });
+
+    var first = dates[0];
+    var wd = isoDayOfWeek(first);                       // 1=周一
+    var cursor = addDays(first, -(wd - 1));              // 从该周周一开始
+    var weeks = [], months = [];
+    var guard = 0;
+    while (guard++ < 60) {
+      var week = [], started = false;
+      for (var i = 0; i < 7; i++) {
+        var cell = byDate[cursor];
+        if (cell) { week.push(cell); started = true; }
+        else week.push({ date: cursor, count: 0, filled: 0, level: 0, inRange: false });
+        cursor = addDays(cursor, 1);
+      }
+      if (!started) break;
+      weeks.push(week);
+      var m = week[0].date.slice(0, 7);
+      if (!months.length || months[months.length - 1].m !== m) {
+        months.push({ m: m, weekIndex: weeks.length - 1 });
+      }
+      if (daysBetween(cursor, dates[dates.length - 1]) < 0) break;
+    }
+    return { weeks: weeks, months: months, from: dates[0], to: dates[dates.length - 1] };
+  }
+
+  /**
+   * 图表序列：**补齐 N 天**，没记录的天是 null（画成空档，不是 0）。
+   *
+   * ⚠️ 绝不能把缺失当 0 —— 那会让"没记"看起来像"睡了 0 小时"。
+   */
+  function chartSeries(state, days, endKey) {
+    var dates = lastNDays(days || 30, endKey);
+    var defs = [
+      { key: 'sleep', name: '睡眠', unit: '小时', scale: 1 / 60, get: function (day) {
+          var m = daySleepMinutes(day); return typeof m === 'number' ? m : null;
+        } },
+      { key: 'energy', name: '精力', unit: '分', get: function (day) {
+          var a = aggregateDay(day); return (a.body && typeof a.body.energy === 'number') ? a.body.energy : null;
+        } },
+      { key: 'mood', name: '情绪', unit: '分', get: function (day) {
+          var a = aggregateDay(day); return (a.mind && typeof a.mind.mood === 'number') ? a.mind.mood : null;
+        } },
+      { key: 'expense', name: '支出', unit: '元', get: function (day) {
+          var a = aggregateDay(day); return (a.finance && typeof a.finance.expense === 'number') ? a.finance.expense : null;
+        } },
+      { key: 'sport', name: '运动', unit: '次', get: function (day) {
+          var a = aggregateDay(day); return Array.isArray(a.sport) ? a.sport.length : 0;
+        } }
+    ];
+
+    return defs.map(function (def) {
+      var values = dates.map(function (dk) {
+        var day = getDay(state, dk);
+        if (!day || !day.entries || !day.entries.length) return null;   // 没记录 → 空档
+        var v = def.get(day);
+        if (typeof v !== 'number' || !isFinite(v)) return null;
+        return def.scale ? Math.round(v * def.scale * 10) / 10 : v;
+      });
+      var valid = values.filter(function (v) { return typeof v === 'number'; });
+      var last = null;
+      for (var i = values.length - 1; i >= 0; i--) if (typeof values[i] === 'number') { last = values[i]; break; }
+      return {
+        key: def.key, name: def.name, unit: def.unit,
+        dates: dates, values: values, stat: describe(valid), last: last
+      };
+    });
+  }
+
+  /** 两个序列点对点配对（只取两边都有值的那天） */
+  function pairSeries(seriesA, seriesB) {
+    var out = [];
+    if (!seriesA || !seriesB || !Array.isArray(seriesA.dates)) return out;
+    var idx = {};
+    seriesB.dates.forEach(function (d, i) { idx[d] = i; });
+    seriesA.dates.forEach(function (d, i) {
+      var j = idx[d];
+      if (j === undefined) return;
+      var a = seriesA.values[i], b = seriesB.values[j];
+      if (typeof a === 'number' && typeof b === 'number') out.push({ date: d, a: a, b: b });
+    });
+    return out;
+  }
+
+  /**
+   * 两个序列"同向变化"的比例。
+   * ⚠️ 只做描述，**不下因果结论** —— 那是 AI 的活，而且必须带样本量。
+   */
+  function coMove(seriesA, seriesB) {
+    var pairs = pairSeries(seriesA, seriesB);
+    if (pairs.length < 3) return { n: pairs.length, same: 0, rate: null };
+    var same = 0;
+    for (var i = 1; i < pairs.length; i++) {
+      var da = pairs[i].a - pairs[i - 1].a;
+      var db = pairs[i].b - pairs[i - 1].b;
+      if ((da > 0 && db > 0) || (da < 0 && db < 0)) same++;
+    }
+    var total = pairs.length - 1;
+    return { n: pairs.length, same: same, rate: total ? Math.round((same / total) * 100) / 100 : null };
+  }
+
+  /** 连续记录天数（从 endKey 往回数，断了就停） */
+  function streak(state, endKey) {
+    var cur = fromDateKey(endKey) ? endKey : todayKey();
+    var n = 0, guard = 0;
+    while (guard++ < 3650) {
+      var day = getDay(state, cur);
+      if (!day || !day.entries || !day.entries.length) break;
+      n++;
+      cur = addDays(cur, -1);
+      if (!cur) break;
+    }
+    return n;
+  }
+
+  /* ==========================================================================
+   * 八、序列化与备份
+   * ======================================================================== */
+
+  function serialize(state) {
+    return JSON.stringify(normalizeState(state));
+  }
+
+  /** 反序列化：坏数据不抛异常，返回 null 让上层提示 */
+  function deserialize(json) {
+    if (typeof json !== 'string' || !json.trim()) return null;
+    var parsed;
+    try { parsed = JSON.parse(json); } catch (e) { return null; }
+    if (!isObj(parsed)) return null;
+    if (!isObj(parsed.days) && !isObj(parsed.settings)) return null;
+    var st = normalizeState(parsed);
+    if (!Object.keys(st.days).length && !st.settings.apiKey && !Object.keys(st.reports).length) {
+      // 看起来是空壳：可能是别人的 JSON，也可能是真的空
+      if (!isObj(parsed.days)) return null;
+    }
+    return st;
+  }
+
+  /**
+   * 导出备份用的对象。
+   * ⚠️ **必须剔除 apiKey** —— 用户会把备份发到微信/网盘，key 跟着泄露就完了。
+   */
+  function exportForBackup(state, now) {
+    var s = normalizeState(state);
+    var out = {
+      version: 1,
+      exportedAt: typeof now === 'number' ? now : Date.now(),
+      settings: {
+        model: s.settings.model,
+        remindTime: s.settings.remindTime,
+        monthlyBudget: s.settings.monthlyBudget
+      },
+      days: s.days,
+      reports: s.reports
+    };
+    return out;
+  }
+
+  /** 导出给 AI 网页版分析用的纯文本（零成本深度分析通道） */
+  function exportPlainText(state, fromKey, toKey) {
+    var d = rangeDigest(state, fromKey, toKey);
+    if (!d.count) return '';
+    var head = [
+      '以下是我 ' + fromKey + ' 到 ' + toKey + ' 的个人记录（共 ' + d.count + ' 天有记录）。',
+      '请帮我分析：哪些维度在改善、哪些在退步？有没有值得注意的规律（请注明样本量）？',
+      '数据不足的地方请直接说"数据不够"，不要勉强下结论。',
+      ''
+    ];
+    return head.join('\n') + d.text;
+  }
+
+  /**
+   * 按周导出（M6）。
+   *
+   * 用途：**这是接桌面「我的生活」文件夹那套的格式** ——
+   * 生成 `素材/2026-W42 个人规划导出.md`，写日报时读它，能标出"来源：素材/…"。
+   *
+   * 为什么按周一个文件：一周一个文件数量少、好找，
+   * 而且写日报时"读最近那个"就够了（每天一个文件会很碎）。
+   */
+  function weekRange(weekKey) {
+    var m = /^(\d{4})-W(\d{2})$/.exec(String(weekKey === undefined || weekKey === null ? '' : weekKey));
+    if (!m) return null;
+    var year = +m[1], week = +m[2];
+    if (week < 1 || week > 53) return null;
+    // ISO 第 1 周的周一是"含 1 月 4 日的那一周的周一"
+    var jan4 = new Date(year, 0, 4);
+    if (isNaN(jan4.getTime())) return null;
+    var wd = jan4.getDay() === 0 ? 7 : jan4.getDay();
+    var monday = new Date(year, 0, 4 - (wd - 1));
+    monday.setDate(monday.getDate() + (week - 1) * 7);
+    var monKey = toDateKey(monday);
+    if (!monKey) return null;
+    return { from: monKey, to: addDays(monKey, 6), week: weekKey };
+  }
+
+  /** 某周的汇总（含每天的明细），用于导出与周报 */
+  function weekSummary(state, weekKey) {
+    var r = weekRange(weekKey);
+    if (!r) return null;
+    var dates = [], cur = r.from;
+    for (var i = 0; i < 7; i++) { dates.push(cur); cur = addDays(cur, 1); }
+
+    var days = dates.map(function (dk) {
+      var day = getDay(state, dk);
+      var agg = aggregateDay(day);
+      var comp = dayCompletion(day);
+      var bits = [];
+      DIMS.forEach(function (d) {
+        var s = compactDim(d.key, agg[d.key]);
+        if (s) bits.push(s);
+      });
+      return {
+        date: dk, weekday: isoDayOfWeek(dk),
+        count: (day && day.entries) ? day.entries.length : 0,
+        filled: comp.filled, missing: comp.missing,
+        line: bits.join(' ｜ '),
+        agg: agg
+      };
+    });
+
+    var s2 = rangeSummary(state, r.from, r.to);
+    return {
+      week: weekKey, from: r.from, to: r.to, days: days,
+      daysWithRecords: days.filter(function (d) { return d.count > 0; }).length,
+      summary: s2
+    };
+  }
+
+  /**
+   * 把一周导出成 Markdown（按天分段）—— 直接丢进「素材」文件夹的东西。
+   */
+  function exportWeekMarkdown(state, weekKey) {
+    var w = weekSummary(state, weekKey);
+    if (!w) return null;
+    if (!w.daysWithRecords) {
+      // 没有记录也生成（留个空档，让"这周我确实没记"有痕迹）
+      return '# ' + weekKey + ' 个人规划导出\n\n' +
+             '期间：' + w.from + ' ~ ' + w.to + '\n\n本期没有记录。\n';
+    }
+
+    var L2 = [];
+    L2.push('# ' + weekKey + ' 个人规划导出');
+    L2.push('');
+    L2.push('> 期间：' + w.from + ' ~ ' + w.to + '（' + w.daysWithRecords + '/7 天有记录）');
+    L2.push('> 来源：个人规划 App 导出。按天分段，可直接对照写日报。');
+    L2.push('');
+
+    /* 每天一段 */
+    w.days.forEach(function (d) {
+      var wk = '一二三四五六日'[d.weekday - 1];
+      if (!d.count) {
+        L2.push('## ' + d.date + ' 星期' + wk);
+        L2.push('');
+        L2.push('（这天没有记录）');
+        L2.push('');
+        return;
+      }
+      L2.push('## ' + d.date + ' 星期' + wk + '（' + d.count + ' 条）');
+      L2.push('');
+      L2.push(d.line || '（有记录但没填字段）');
+      L2.push('');
+    });
+
+    /* 本周合计 */
+    var s = w.summary;
+    L2.push('---');
+    L2.push('');
+    L2.push('## 本周合计');
+    L2.push('');
+    if (s.sleep && s.sleep.n) {
+      L2.push('- 睡眠：平均 ' + formatMinutes(s.sleep.mean) + '（' + s.sleep.n + ' 天有数据，' +
+              formatMinutes(s.sleep.min) + ' ~ ' + formatMinutes(s.sleep.max) + '）');
+    }
+    if (typeof s.expenseTotal === 'number') L2.push('- 支出合计：' + s.expenseTotal + ' 元');
+
+    // 运动次数与距离（用户常运动，单独统计）
+    var sportCount = 0, sportKm = 0, sportTypes = {};
+    w.days.forEach(function (d) {
+      if (!Array.isArray(d.agg.sport)) return;
+      d.agg.sport.forEach(function (x) {
+        if (!x || !x.type) return;
+        sportCount++;
+        if (typeof x.km === 'number') sportKm += x.km;
+        sportTypes[x.type] = (sportTypes[x.type] || 0) + 1;
+      });
+    });
+    if (sportCount) {
+      var typeStr = Object.keys(sportTypes).map(function (k) { return k + '×' + sportTypes[k]; }).join('、');
+      L2.push('- 运动：' + sportCount + ' 次' + (sportKm ? '，共 ' + (Math.round(sportKm * 10) / 10) + ' 公里' : '') +
+              '（' + typeStr + '）');
+    } else {
+      L2.push('- 运动：本周没有记录运动');
+    }
+
+    // 学习条目
+    var studyItems = [];
+    w.days.forEach(function (d) {
+      if (Array.isArray(d.agg.study)) {
+        d.agg.study.forEach(function (x) { if (x && (x.what || x.subject)) studyItems.push(x); });
+      }
+    });
+    if (studyItems.length) L2.push('- 学习：' + studyItems.length + ' 条');
+
+    // 想法与决策
+    var ideas = [], decs = [];
+    w.days.forEach(function (d) {
+      var p = d.agg.plan;
+      if (!p) return;
+      if (Array.isArray(p.ideas)) p.ideas.forEach(function (x) { if (x) ideas.push(x); });
+      else if (p.ideas) ideas.push(p.ideas);
+      if (Array.isArray(p.decisions)) decs = decs.concat(p.decisions);
+    });
+    if (ideas.length) {
+      L2.push('');
+      L2.push('### 本周的想法');
+      L2.push('');
+      ideas.forEach(function (x) { L2.push('- ' + x); });
+    }
+    if (decs.length) {
+      L2.push('');
+      L2.push('### 本周的决策');
+      L2.push('');
+      decs.forEach(function (d2) {
+        L2.push('- ' + (d2.what || '') + (d2.why ? '（原因：' + d2.why + '）' : ''));
+      });
+    }
+
+    // 漏记提示
+    if (s.mostMissed && s.mostMissed.length) {
+      L2.push('');
+      L2.push('### 最常漏记的维度');
+      L2.push('');
+      s.mostMissed.forEach(function (m) {
+        var dd = dimOf(m.dim);
+        L2.push('- ' + (dd ? dd.name : m.dim) + '：缺 ' + m.missed + ' 天');
+      });
+    }
+
+    L2.push('');
+    return L2.join('\n');
+  }
+
+  /**
+   * 分层压缩的第二层：把一周压成**一段摘要**（喂给月报用）。
+   * 这样月报就不必喂 30 天原文 —— 只喂 4~5 段周摘要。
+   */
+  function weekDigest(state, weekKey) {
+    var w = weekSummary(state, weekKey);
+    if (!w || !w.daysWithRecords) return null;
+    var s = w.summary;
+    var bits = [];
+    if (s.sleep && s.sleep.n) bits.push('睡眠均 ' + formatMinutes(s.sleep.mean) + '(' + s.sleep.n + '天)');
+    if (typeof s.expenseTotal === 'number') bits.push('支出 ' + s.expenseTotal);
+
+    var sportCount = 0;
+    var studyCount = 0, ideaCount = 0;
+    w.days.forEach(function (d) {
+      if (Array.isArray(d.agg.sport)) sportCount += d.agg.sport.length;
+      if (Array.isArray(d.agg.study)) studyCount += d.agg.study.length;
+      var p = d.agg.plan;
+      if (p && Array.isArray(p.ideas)) ideaCount += p.ideas.length;
+    });
+    bits.push('运动 ' + sportCount + ' 次');
+    if (studyCount) bits.push('学习 ' + studyCount + ' 条');
+    if (ideaCount) bits.push('想法 ' + ideaCount + ' 条');
+    bits.push('记录 ' + w.daysWithRecords + '/7 天');
+    return weekKey + '：' + bits.join('，');
+  }
+
+  /** 一个月的周摘要列表（分层压缩用） */
+  function monthWeekDigests(state, year, month) {
+    var out = [];
+    var first = toDateKey(new Date(year, month - 1, 1));
+    var last = toDateKey(new Date(year, month, 0));            // 该月最后一天
+    if (!first || !last) return out;
+    var seen = {};
+    var cur = first, guard = 0;
+    while (guard++ < 40) {
+      var wk = isoWeekKey(cur);
+      if (wk && !seen[wk]) {
+        seen[wk] = 1;
+        var d = weekDigest(state, wk);
+        if (d) out.push(d);
+      }
+      if (cur === last) break;
+      cur = addDays(cur, 1);
+      if (!cur) break;
+    }
+    return out;
+  }
+
+  /** 导出 Markdown（人类可读，可贴进任何编辑器） */
+  function exportMarkdown(state, dateKey) {
+    var day = getDay(state, dateKey);
+    if (!day || !day.entries.length) return '';
+    var lines = ['# ' + dateKey + ' 记录', ''];
+    var agg = aggregateDay(day);
+    DIMS.forEach(function (d) {
+      var s = compactDim(d.key, agg[d.key]);
+      if (s) lines.push('- **' + d.name + '**：' + s);
+    });
+    lines.push('');
+    lines.push('## 原始条目（' + day.entries.length + ' 条）');
+    day.entries.forEach(function (e) {
+      var bits = [];
+      DIMS.forEach(function (d) {
+        var s = compactDim(d.key, e[d.key]);
+        if (s) bits.push(d.name + '：' + s);
+      });
+      lines.push('- `' + (e.at || '') + '` ' + bits.join(' ｜ '));
+    });
+    if (isObj(day.ai) && isObj(day.ai.review)) {
+      lines.push('');
+      lines.push('## AI 复盘');
+      var r = day.ai.review;
+      if (r.fact) lines.push('- **今日事实**：' + r.fact);
+      if (r.contribution) lines.push('- **贡献与问题**：' + r.contribution);
+      if (r.next) lines.push('- **下一步**：' + r.next);
+    }
+    return lines.join('\n');
+  }
+
+  /* ==========================================================================
+   * 九、提醒 / 杂项
+   * ======================================================================== */
+
+  /** 是否该提醒备份（方案 §14.2：7 天提醒，14 天警告） */
+  function backupReminder(state, now) {
+    var t = typeof now === 'number' ? now : Date.now();
+    var last = isObj(state) && isObj(state.settings) ? state.settings.lastExportAt : null;
+    var days = Object.keys(isObj(state) && isObj(state.days) ? state.days : {}).length;
+    if (!days) return { level: 'none', days: 0 };
+    if (typeof last !== 'number' || !isFinite(last)) {
+      return { level: days >= 3 ? 'warn' : 'none', days: null, neverExported: true };
+    }
+    var diff = Math.floor((t - last) / 86400000);
+    if (diff >= 14) return { level: 'warn', days: diff };
+    if (diff >= 7) return { level: 'soft', days: diff };
+    return { level: 'none', days: diff };
+  }
+
+  /** 日复盘是否已过期（当天条目变过） */
+  function reviewStale(state, dateKey) {
+    var day = getDay(state, dateKey);
+    if (!day || !isObj(day.ai) || !isObj(day.ai.review)) return false;
+    if (typeof day.ai.entryCount !== 'number') return false;
+    if (day.entries.length !== day.ai.entryCount) return true;
+    var last = 0;
+    day.entries.forEach(function (e) { if (typeof e.updatedAt === 'number' && e.updatedAt > last) last = e.updatedAt; });
+    return typeof day.ai.lastEntryAt === 'number' && last > day.ai.lastEntryAt;
+  }
+
+  /** 某天的"当前周" —— 用于首页默认显示今天 */
+  function todayKey(now) {
+    return toDateKey(typeof now === 'number' ? new Date(now) : (now instanceof Date ? now : new Date()));
+  }
+
+  /** 有记录的日期列表（降序，最新的在前） */
+  function datesWithRecords(state) {
+    if (!isObj(state) || !isObj(state.days)) return [];
+    return Object.keys(state.days)
+      .filter(function (k) { return state.days[k] && state.days[k].entries && state.days[k].entries.length; })
+      .sort()
+      .reverse();
+  }
+
+  return {
+    STORE_KEY: STORE_KEY,
+    BACKUP_KEY: BACKUP_KEY,
+    BACKUP_AT_KEY: BACKUP_AT_KEY,
+    DIMS: DIMS,
+    GROUPS: GROUPS,
+    FIELD_KIND: FIELD_KIND,
+    kindOf: kindOf,
+    dimOf: dimOf,
+    hasValue: hasValue,
+
+    // 日期与时长
+    parseTime: parseTime,
+    sleepMinutes: sleepMinutes,
+    toDateKey: toDateKey,
+    fromDateKey: fromDateKey,
+    daysBetween: daysBetween,
+    addDays: addDays,
+    isoDayOfWeek: isoDayOfWeek,
+    isoWeekKey: isoWeekKey,
+    formatMinutes: formatMinutes,
+    nowHHMM: nowHHMM,
+    todayKey: todayKey,
+
+    // 状态
+    emptyState: emptyState,
+    defaultSettings: defaultSettings,
+    normalizeState: normalizeState,
+    normalizeEntry: normalizeEntry,
+
+    // 读写
+    getDay: getDay,
+    ensureDay: ensureDay,
+    addEntry: addEntry,
+    updateEntry: updateEntry,
+    removeEntry: removeEntry,
+    findEntry: findEntry,
+    datesWithRecords: datesWithRecords,
+
+    // 聚合
+    aggregateDay: aggregateDay,
+    dayHasDim: dayHasDim,
+    dayCompletion: dayCompletion,
+    daySleepMinutes: daySleepMinutes,
+    dayTotals: dayTotals,
+    rangeSummary: rangeSummary,
+
+    // 统计
+    seriesOf: seriesOf,
+    sleepSeries: sleepSeries,
+    describe: describe,
+    rollingMean: rollingMean,
+
+    // 仪表盘（M5）
+    lastNDays: lastNDays,
+    dashSummary: dashSummary,
+    calendarHeat: calendarHeat,
+    chartSeries: chartSeries,
+    pairSeries: pairSeries,
+    coMove: coMove,
+    streak: streak,
+
+    // AI 输入
+    compactDim: compactDim,
+    dayDigest: dayDigest,
+    rangeDigest: rangeDigest,
+
+    // 周报 / 导出（M6）
+    weekRange: weekRange,
+    weekSummary: weekSummary,
+    exportWeekMarkdown: exportWeekMarkdown,
+    weekDigest: weekDigest,
+    monthWeekDigests: monthWeekDigests,
+
+    // 序列化
+    serialize: serialize,
+    deserialize: deserialize,
+    exportForBackup: exportForBackup,
+    exportPlainText: exportPlainText,
+    exportMarkdown: exportMarkdown,
+
+    // 提醒
+    backupReminder: backupReminder,
+    reviewStale: reviewStale
+  };
+});
+
+/* ===========================================================================
+ * 个人规划 —— AI 层（唯一联网的模块）
+ *
+ * 运行环境：既可被内联进单文件页面，也可在 Node 里 require（UMD）。
+ *
+ * ⚠️ 本文件会被原样内联进 HTML 的脚本块里，所以**绝对不能出现字面的
+ *    script 开标签或闭标签**（哪怕写在注释里也不行）。build.js 有强制检查。
+ *
+ * 这个文件只做三件事：组装提示词、调 API、解析结果。
+ * 不碰界面、不碰 localStorage、不改 state。
+ *
+ * ── 所有结论都有官方文档或实测依据（2026-10）──
+ *   · baseUrl / 路径 / 模型名        ：官方文档 + 实测
+ *   · thinking 参数的位置与取值      ：官方「思考模式」文档
+ *   · 思考模式下 temperature 无效    ：官方明文（设了不报错但也不生效）
+ *   · JSON 模式四条硬要求 + 空响应   ：官方「JSON Output」文档
+ *   · 错误响应也带 CORS 头           ：我方实测
+ * =========================================================================== */
+(function (root, factory) {
+  var api = factory(
+    (typeof require === 'function') ? tryRequire('./logic.js') : null
+  );
+  function tryRequire(p) {
+    try { return require(p); } catch (e) { return null; }
+  }
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  root.PlanAI = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (InjectedLogic) {
+  'use strict';
+
+  /* logic.js 在浏览器里是全局的 PlanLogic；在 Node 里是 require 进来的 */
+  function Logic() {
+    if (InjectedLogic) return InjectedLogic;
+    if (typeof globalThis !== 'undefined' && globalThis.PlanLogic) return globalThis.PlanLogic;
+    throw new Error('ai.js 需要 logic.js');
+  }
+
+  /* ==========================================================================
+   * 一、服务商与常量
+   *
+   * 「会变的东西」集中在这里 —— 以后加服务商 / 换模型只改这一处。
+   * ======================================================================== */
+  var PROVIDERS = {
+    deepseek: {
+      key: 'deepseek',
+      name: 'DeepSeek',
+      baseUrl: 'https://api.deepseek.com',
+      path: '/chat/completions',
+      // ⚠️ 旧名 deepseek-chat / deepseek-reasoner 已于 2026-07-24 停用
+      models: ['deepseek-flash', 'deepseek-v4-pro'],
+      defaultModel: 'deepseek-flash',
+      keyUrl: 'https://platform.deepseek.com/api_keys',
+      // ⚠️ 官方明确：JSON 模式「有概率返回空的 content」→ 必须重试
+      supportsJsonMode: true,
+      // ⚠️ 思考模式默认打开，且 effort 默认 high；关掉能便宜约 4 倍
+      defaultThinking: false
+    }
+  };
+
+  var DEFAULT_PROVIDER = 'deepseek';
+  var TIMEOUT_MS = 45000;
+  var MAX_EMPTY_RETRY = 3;         // 空 content 最多重试 3 次（绝不无限重试）
+
+  /* ==========================================================================
+   * 二、错误分类
+   *
+   * ⚠️ 关键结论（我方实测）：**错误响应也带 CORS 头**，
+   *    所以前端能读到 status 和响应体 —— 可以把「key 填错」和「网络断了」区分开。
+   *    如果这个前提不成立，就只能给一个含糊的"失败了"，体验会差很多。
+   * ======================================================================== */
+  function classifyError(status, bodyText, thrown) {
+    if (thrown) {
+      var msg = String(thrown && thrown.message || thrown || '');
+      if (/abort/i.test(msg)) return { kind: 'timeout', icon: '⏱', text: '等太久了，可能网络慢' };
+      // fetch 抛异常基本都是网络层（DNS/断网/CORS 被拦）
+      return { kind: 'network', icon: '📡', text: '连不上网，AI 功能要先联网' };
+    }
+    var detail = extractApiMessage(bodyText);
+    switch (status) {
+      case 400: return { kind: 'bad_request', icon: '⚠️', text: '请求被拒绝' + (detail ? '：' + detail : ''), detail: detail };
+      case 401: return { kind: 'bad_key', icon: '🔑', text: 'API key 不对，检查一下有没有复制完整', detail: detail };
+      case 402: return { kind: 'no_balance', icon: '💰', text: '账户余额不足，去 DeepSeek 官网充值', detail: detail };
+      case 403: return { kind: 'forbidden', icon: '🚫', text: '没有权限' + (detail ? '：' + detail : ''), detail: detail };
+      case 404: return { kind: 'not_found', icon: '❓', text: '这个接口地址不对（可能是自定义地址填错了）', detail: detail };
+      case 429: return { kind: 'rate_limit', icon: '🚦', text: '调用太频繁，等几秒再试', detail: detail, retryable: true };
+      case 500: case 502: case 503: case 504:
+        return { kind: 'server', icon: '🔧', text: 'AI 服务暂时出问题（' + status + '），稍后再试', detail: detail, retryable: true };
+      default:
+        return { kind: 'http_' + status, icon: '⚠️', text: '请求失败（' + status + '）' + (detail ? '：' + detail : ''), detail: detail };
+    }
+  }
+
+  /** 从错误响应里抠出可读信息（绝不回显 key） */
+  function extractApiMessage(bodyText) {
+    if (!bodyText || typeof bodyText !== 'string') return '';
+    var t = bodyText.trim();
+    if (!t) return '';
+    try {
+      var j = JSON.parse(t);
+      if (j && typeof j === 'object') {
+        if (j.error) {
+          if (typeof j.error === 'string') return clip(j.error);
+          if (typeof j.error.message === 'string') return clip(j.error.message);
+        }
+        if (typeof j.message === 'string') return clip(j.message);
+      }
+    } catch (e) { /* 不是 JSON，按纯文本处理 */ }
+    // 不是 JSON 时只取第一行、限长，避免把整页 HTML 塞进界面
+    return clip(t.split('\n')[0]);
+  }
+
+  function clip(s, n) {
+    var lim = n || 160;
+    s = String(s).replace(/\s+/g, ' ').trim();
+    return s.length > lim ? s.slice(0, lim) + '…' : s;
+  }
+
+  /* ==========================================================================
+   * 三、JSON 兜底解析
+   *
+   * 已用原型验证 17 个用例 + 14 种异常输入。
+   * ⚠️ 最后一段的「平衡括号扫描」是必需的吗？不是 ——
+   *    但它是**唯一能救回被截断 JSON** 的手段，而官方承认 JSON 模式可能返回空/被截断。
+   *    注意它只做"尽力而为"，失败就返回 ok:false，绝不让上层以为成功。
+   * ======================================================================== */
+
+  function isPlainObj(v) {
+    // ⚠️ 必须排除数组：typeof [] === 'object' 曾让数组冒充合法结果，
+    // 上层取字段全崩（原型阶段抓到的真实漏洞）
+    return !!v && typeof v === 'object' && !Array.isArray(v);
+  }
+
+  /** 剥掉 markdown 代码块围栏（AI 很爱加） */
+  function stripFence(s) {
+    var t = String(s).trim();
+    // ```json ... ``` 或 ``` ... ```
+    var m = /^```[ \t]*[A-Za-z0-9_-]*[ \t]*\r?\n([\s\S]*?)\r?\n?```$/.exec(t);
+    if (m) return m[1].trim();
+    // 只有开头围栏（结尾被截断）
+    var m2 = /^```[ \t]*[A-Za-z0-9_-]*[ \t]*\r?\n([\s\S]*)$/.exec(t);
+    if (m2) return m2[1].trim();
+    return t;
+  }
+
+  /** 取第一个 { 到最后一个 } 之间 */
+  function sliceBraces(s) {
+    var a = s.indexOf('{'), b = s.lastIndexOf('}');
+    if (a < 0 || b <= a) return null;
+    return s.slice(a, b + 1);
+  }
+
+  /**
+   * 平衡括号扫描：从第一个 { 开始，配平后就停。
+   * 用途：前后都有废话，且结尾后面还跟着别的 { } 时，sliceBraces 会取多，
+   *       这个能精确取到第一个完整对象。
+   * 也被用于尝试修复被截断的 JSON（自动补齐未闭合的括号）。
+   */
+  function balancedObject(s) {
+    var start = s.indexOf('{');
+    if (start < 0) return null;
+    var depth = 0, inStr = false, esc = false, end = -1;
+    for (var i = start; i < s.length; i++) {
+      var c = s[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{') depth++;
+      else if (c === '}') {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end > start) return { text: s.slice(start, end + 1), closed: true };
+    // 没配平 → 返回剩余部分 + 需要补的括号数（尽力修复被截断的情况）
+    return { text: s.slice(start), closed: false, missing: depth };
+  }
+
+  /** 尽力补齐被截断的 JSON 的括号和引号 */
+  function repairTruncated(frag) {
+    var text = String(frag);
+    // 截断在字符串中间：补一个引号
+    var inStr = false, esc = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') inStr = !inStr;
+    }
+    if (inStr) text += '"';
+    // 去掉尾部悬空的 , : 之类
+    text = text.replace(/[,:\s]+$/, '');
+    // 配平括号
+    var depth = 0;
+    var s2 = false, e2 = false;
+    for (var j = 0; j < text.length; j++) {
+      var ch = text[j];
+      if (e2) { e2 = false; continue; }
+      if (ch === '\\') { e2 = true; continue; }
+      if (ch === '"') { s2 = !s2; continue; }
+      if (s2) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+    }
+    // 负 depth 说明多了，先截断到配平
+    while (depth < 0) { text = text.replace(/\}[^}]*$/, ''); depth++; }
+    for (var k = 0; k < depth; k++) text += '}';
+    return text;
+  }
+
+  /**
+   * 从 AI 的文本里抠出 JSON 对象。
+   * 返回 { ok, data, strategy, error, raw }
+   *
+   * 逐级降级：
+   *   ① 直接 parse（干净）
+   *   ② 剥 markdown 围栏
+   *   ③ 取首尾大括号
+   *   ④ 平衡括号扫描
+   *   ⑤ 尝试修复被截断的
+   *   ⑥ 全失败 → ok:false（**绝不假装成功**）
+   */
+  function parseAIJson(text) {
+    var raw = text;
+    var out = { ok: false, data: null, strategy: null, error: null, raw: raw };
+    if (typeof text !== 'string' || !text.trim()) {
+      out.error = 'AI 返回了空内容';
+      return out;
+    }
+    var t = text.trim();
+
+    // ① 直接 parse
+    try {
+      var a = JSON.parse(t);
+      if (isPlainObj(a)) return { ok: true, data: a, strategy: 'direct', error: null, raw: raw };
+    } catch (e) { /* 继续降级 */ }
+
+    // ② 剥围栏
+    var stripped = stripFence(t);
+    if (stripped !== t) {
+      try {
+        var b = JSON.parse(stripped);
+        if (isPlainObj(b)) return { ok: true, data: b, strategy: 'fence', error: null, raw: raw };
+      } catch (e2) { /* 继续 */ }
+    }
+
+    // ③ 取首尾大括号
+    var sliced = sliceBraces(stripped);
+    if (sliced) {
+      try {
+        var c = JSON.parse(sliced);
+        if (isPlainObj(c)) return { ok: true, data: c, strategy: 'braces', error: null, raw: raw };
+      } catch (e3) { /* 继续 */ }
+    }
+
+    // ④ 平衡括号扫描（应对前后废话 + 后面还跟着别的 JSON）
+    var bal = balancedObject(stripped);
+    if (bal) {
+      if (bal.closed) {
+        try {
+          var d = JSON.parse(bal.text);
+          if (isPlainObj(d)) return { ok: true, data: d, strategy: 'balanced', error: null, raw: raw };
+        } catch (e4) { /* 继续 */ }
+      }
+      // ⑤ 尝试修复被截断的
+      var fixed = repairTruncated(bal.text);
+      try {
+        var f = JSON.parse(fixed);
+        // ⚠️ 修复后**必须非空**才算成功。
+        // 踩过的坑：输入 "{" 会被 repairTruncated 补成 "{}"，parse 通过，
+        // 于是返回 ok:true + 空对象 —— 上层会以为"AI 给了内容"，
+        // 然后 cleanParsed 发现里面没维度，报出莫名其妙的"没拆出任何维度"。
+        // 实际原因明明是"AI 根本没返回内容"，提示语应该是另一套。
+        if (isPlainObj(f) && Object.keys(f).length) {
+          return { ok: true, data: f, strategy: 'repaired', error: null, raw: raw };
+        }
+      } catch (e5) { /* 落到失败 */ }
+    }
+
+    // ⑥ 失败：把原始文本带回去，让界面能显示给用户看
+    out.error = 'AI 返回的内容不是合法 JSON';
+    return out;
+  }
+
+  /* ==========================================================================
+   * 四、提示词
+   *
+   * ⚠️ JSON 模式的四条硬要求里，有两条靠这里满足：
+   *    ① prompt 里必须出现 "json" 字样
+   *    ② 必须给出 JSON 样例
+   * ======================================================================== */
+
+  var DIM_SPEC = [
+    'body:{sleepStart,wake,energy(1-5),symptoms[],note}',
+    'sport:[{type,km,feeling(1-5),note}]',
+    'mind:{mood(1-5),tags[],trigger,note}',
+    'study:[{subject,what,minutes,mastery(1-5),gap}]',
+    'work:{progress,apps:[{company,role,status,next}],next}',
+    'social:[{who,what,feeling(1-5)}]',
+    'finance:{income,expense,balance,expenseTags[]}',
+    'plan:{ideas,decisions:[{what,why,alt,expect}],note}'
+  ].join('\n  ');
+
+  var SYMPTOMS = '恶心,反酸,干呕,头痛,困倦,失眠,咳嗽,腹痛,其他';
+  var MOOD_TAGS = '平静,开心,充实,焦虑,烦躁,低落,疲惫,兴奋';
+  var EXPENSE_TAGS = '餐饮,交通,学习,娱乐,购物,医疗,住房,其他';
+
+  /**
+   * ① 一句话拆字段的提示词。
+   *
+   * 设计要点（都是踩过的坑）：
+   *   · 明确"没提到的字段一律省略" —— 否则 AI 会热情地填一堆 0 和空串，
+   *     把你的记录污染成看起来记了很多、其实全是噪声
+   *   · 给出正例和反例 —— 只给正例时 AI 倾向于"尽量多填"
+   *   · 强调"不要编造" —— 四个字对降低幻觉很有效
+   */
+  function buildParsePrompt(userText, nowHint) {
+    var hint = nowHint || '';
+    return [
+      '你是「个人规划」App 的录入助手。把用户的一句自然语言拆成结构化 JSON。',
+      '',
+      '【最重要的规则】',
+      '1. 只输出 JSON，不要任何解释、不要 markdown 代码块',
+      '2. **用户没提到的字段一律省略，不要填 0、空串或空数组**',
+      '3. **绝对不要编造用户没说的事**',
+      '4. 时间用 24 小时制 HH:MM；评分 1~5 的整数',
+      '5. 如果整句话没有任何可结构化的信息，输出 {"none":true}',
+      '',
+      '【字段定义】',
+      '  ' + DIM_SPEC,
+      '',
+      '【可选值参考】',
+      '  症状：' + SYMPTOMS,
+      '  情绪标签：' + MOOD_TAGS,
+      '  支出分类：' + EXPENSE_TAGS,
+      '',
+      '【正例】',
+      '输入：今天睡到9点，下午有点困，晚上公园散步，没花钱',
+      '输出：{"body":{"wake":"09:00","energy":3,"symptoms":["困倦"]},"sport":[{"type":"散步"}],"finance":{"expense":0}}',
+      '',
+      '【反例（不要这样）】',
+      '输入：今天睡到9点',
+      '错误输出：{"body":{"wake":"09:00","energy":0,"symptoms":[],"note":""},"mind":{"mood":0},"finance":{"income":0,"expense":0}}',
+      '为什么错：用户只说了起床时间。energy、mood、finance 都是**编出来的**，必须省略。',
+      '',
+      '【再一个例子：决策记录】',
+      '输入：今天决定不投那家实习了，因为通勤要2小时，感觉不划算',
+      '输出：{"plan":{"decisions":[{"what":"不投那家实习","why":"通勤要2小时，不划算"}]}}',
+      '',
+      '【再一个例子：运动】',
+      '输入：早上跑了3公里，感觉还行',
+      '输出：{"sport":[{"type":"跑步","km":3}]}',
+      '',
+      '【再一个例子：一次说好几件事】',
+      '输入：上午看完了 Day2 主观题，掌握得还行，中午花了32块5吃饭，晚上和同学一起吃了饭挺开心的',
+      '输出：{"study":[{"what":"Day2 主观题","mastery":4}],"finance":{"expense":32.5,"expenseTags":["餐饮"]},"social":[{"who":"同学","what":"一起吃饭","feeling":5}]}',
+      '',
+      hint ? '【当前时间参考】' + hint : '',
+      '【现在开始】',
+      '输入：' + userText,
+      '输出：'
+    ].filter(function (x) { return x !== ''; }).join('\n');
+  }
+
+  /**
+   * ② 日复盘的三列提示词（对应截图那套「今日数据 → 今日复盘 → 下一步」）。
+   *
+   * 设计要点：
+   *   · 三列语义写清楚 —— 否则 AI 会把三列写成同一件事换个说法
+   *   · **要求基于事实，不要恭维** —— 否则会变成"你今天真棒"。
+   *     用户要的是能改进的东西，不是情绪价值（情绪价值他自己会给）
+   *   · 数据不足要直说
+   */
+  function buildReviewPrompt(dayDigestText, dateKey) {
+    return [
+      '你是「个人规划」App 的复盘助手。根据用户当天的记录，输出三列分析。',
+      '',
+      '【三列的确切含义（不要混）】',
+      '  fact         —— 今日事实：客观概括今天记了什么（不要评价、不要形容词堆砌）',
+      '  contribution —— 贡献与问题：今天做成了什么 / 哪里卡住了。要具体，指出是哪件事',
+      '  next         —— 下一步：明天可以做的**一件具体的事**（不要写"继续努力"这种空话）',
+      '',
+      '【硬要求】',
+      '1. 只输出 JSON，不要解释、不要 markdown 代码块',
+      '2. **只根据记录里真实存在的内容说，不要编造**',
+      '3. **不要恭维、不要打鸡血** —— 用户要的是能改进的点，不是情绪价值',
+      '4. 记录很少或没有时，直说"今天记的内容太少，看不出什么"，不要硬凑',
+      '5. 每一列 60 字以内，说人话',
+      '',
+      '【输出格式】',
+      '{"fact":"...","contribution":"...","next":"...","insufficient":false}',
+      '',
+      '如果数据太少，把 insufficient 设为 true。',
+      '',
+      '【注意】用户一天可能记了好几条，每条前面有 [HH:MM] 标出记录时刻。',
+      '同一天的睡眠只算一次（晚上补记的那条是最新的，覆盖早上记的）。',
+      '',
+      '日期：' + dateKey,
+      '记录：',
+      dayDigestText,
+      '',
+      '输出：'
+    ].join('\n');
+  }
+
+  /**
+   * ③ 周报/月报提示词。
+   *
+   * ⚠️ 这里用的是「编号清单 + 只回编号」的技巧（来自 Dayflow PR #212）：
+   *    ① 省 token（不重复长描述）
+   *    ② **防幻觉** —— AI 只能引用真实存在的编号，编不出不存在的日子
+   */
+  function buildReportPrompt(rangeDigestText, rangeLabel, count) {
+    return [
+      '你是「个人规划」App 的周报助手。下面按天编号列出了用户的记录。',
+      '',
+      '【硬要求】',
+      '1. 只输出 JSON，不要解释、不要 markdown 代码块',
+      '2. **引用具体日子时必须用编号**（例如 days:[3,9,14]），不要自己编日期',
+      '   —— 这是为了确保你说的每一天都真实存在',
+      '3. **必须给出样本量**：你看到了 ' + count + ' 天数据，就在 sampleSize 里写 ' + count,
+      '4. **数据不够就直说**：某个维度只有 1~2 天数据时，放进 insufficient 数组，不要下结论',
+      '5. 不要恭维、不要打鸡血。指出规律和问题即可',
+      '6. 每条 finding 30 字以内',
+      '',
+      '【输出格式】',
+      '{"sampleSize":' + count + ',',
+      ' "good":[{"dim":"study","days":[1,3],"conclusion":"..."}],',
+      ' "bad":[{"dim":"body","days":[2,5],"conclusion":"..."}],',
+      ' "findings":[{"days":[3,9],"conclusion":"..."}],',
+      ' "insufficient":["社会关系样本太少，无法分析"]}',
+      '',
+      '【警惕】找规律时不要过度解读。3 天数据说明不了趋势，请放进 insufficient。',
+      '',
+      '期间：' + rangeLabel + '（有记录 ' + count + ' 天）',
+      '记录：',
+      rangeDigestText,
+      '',
+      '输出：'
+    ].join('\n');
+  }
+
+  /**
+   * ③b 月报提示词（**分层压缩的第二层**）。
+   *
+   * ⚠️ 关键设计：月报**不喂 30 天原文**，而是喂 4~6 段**周摘要**。
+   *    这就是方案 §7 说的"分层压缩"：
+   *      原始层（用户原话）→ 日摘要（约 40 字/天）→ 周摘要（约 60 字/周）→ 月报
+   *    好处：输入 token 基本不随月份增长而膨胀，还更快。
+   *    代价：细节会丢 —— 但月报本来就该看趋势，不该看单日细节。
+   */
+  function buildMonthPrompt(weekDigests, monthLabel, weekCount) {
+    var lines = [];
+    lines.push('你是「个人规划」App 的月报助手。下面按周列出了用户的记录摘要。');
+    lines.push('');
+    lines.push('【重要：这些是**周摘要**，不是原始记录】');
+    lines.push('明细已经被压缩过了，所以：');
+    lines.push('  · 不要假装知道某一天的细节，你手上只有每周的汇总');
+    lines.push('  · 结论要基于「周与周之间的变化」，而不是某一天');
+    lines.push('');
+    lines.push('【硬要求】');
+    lines.push('1. 只输出 JSON，不要解释、不要 markdown 代码块');
+    lines.push('2. **引用具体周时必须用编号**（例如 weeks:[1,3]），不要自己编周次');
+    lines.push('3. **必须给出样本量**：你看到了 ' + weekCount + ' 周，就写进 sampleSize');
+    lines.push('4. **周数少于 3 就不要下"趋势"结论**，放进 insufficient');
+    lines.push('5. 不要恭维、不要打鸡血。指出趋势和问题即可');
+    lines.push('6. 每条 conclusion 40 字以内');
+    lines.push('');
+    lines.push('【输出格式】');
+    lines.push('{"sampleSize":' + weekCount + ',');
+    lines.push(' "trend":[{"dim":"body","weeks":[1,2,3],"conclusion":"睡眠在变短"}],');
+    lines.push(' "good":["..."],');
+    lines.push(' "bad":["..."],');
+    lines.push(' "suggestion":"下个月最值得改的一件事（只给一件）",');
+    lines.push(' "insufficient":["财务样本不足"]}');
+    lines.push('');
+    lines.push('期间：' + monthLabel + '（有摘要 ' + weekCount + ' 周）');
+    lines.push('周摘要：');
+    (Array.isArray(weekDigests) ? weekDigests : []).forEach(function (t, i) {
+      lines.push((i + 1) + '. ' + t);
+    });
+    lines.push('');
+    lines.push('输出：');
+    return lines.join('\n');
+  }
+
+  /**
+   * ④ 趋势相关性提示词。
+   *
+   * 设计要点：**只发数值序列，不发文字** —— 文字对找相关性没用，还费 token。
+   * 并且**必须要求样本量**（方案 §8.3）。
+   */
+  function buildTrendPrompt(seriesList, days) {
+    var lines = ['下面是用户过去若干天的每日数值序列（数字，按日期升序）：', ''];
+    // ⚠️ 又是那个坑：`(seriesList || []).forEach` 挡不住"truthy 但非数组"的值。
+    // 同一个错我在这个项目里已经犯了 4 次，所以一律 Array.isArray 判。
+    var list = Array.isArray(seriesList) ? seriesList : [];
+    list.forEach(function (s) {
+      if (!s || !s.name || !Array.isArray(s.values) || !s.values.length) return;
+      lines.push(s.name + '（n=' + s.values.length + '）：' + s.values.join(', '));
+    });
+    lines.push('');
+    lines.push('【硬要求】');
+    lines.push('1. 只输出 JSON，不要解释、不要 markdown 代码块');
+    lines.push('2. **每个结论必须带样本量**，样本量写进 n');
+    lines.push('3. **样本量少于 7 的不要下结论**，放进 insufficient');
+    lines.push('4. 区分「相关」和「因果」—— 不要说「因为A所以B」，只说「两者同步变化」');
+    lines.push('5. 这是个人数据，不是实验数据，结论要保守');
+    lines.push('');
+    lines.push('【输出格式】');
+    lines.push('{"n":' + (days || 0) + ',');
+    lines.push(' "correlations":[{"a":"睡眠时长","b":"精力","n":12,"direction":"正相关","strength":"中等","note":"..."}],');
+    lines.push(' "insufficient":["财务数据只有3天，无法分析"]}');
+    lines.push('');
+    lines.push('输出：');
+    return lines.join('\n');
+  }
+
+  /* ==========================================================================
+   * 五、请求体构造
+   *
+   * ⚠️ 两个最容易错的点：
+   *   ① `thinking` 必须放在**请求体顶层**。
+   *      官方 Python 示例写的是 `extra_body={"thinking":...}`，
+   *      但 extra_body 是 OpenAI SDK 的包装层 —— 我们是 fetch 直连，没有这一层。
+   *      照抄会变成"参数被静默忽略"，模型照旧思考、照旧贵 4 倍，而且不报错。
+   *   ② 思考模式下 `temperature` **被静默忽略**（官方明文：设了不报错但也不生效）。
+   *      所以要拿确定性输出，必须**先关思考**再设 temperature。
+   * ======================================================================== */
+
+  /**
+   * 构造请求体。
+   * opts: { model, json, thinking, temperature, maxTokens, system }
+   */
+  function buildRequestBody(prompt, opts) {
+    var o = opts || {};
+    var body = {
+      model: o.model || PROVIDERS[DEFAULT_PROVIDER].defaultModel,
+      messages: [
+        { role: 'user', content: String(prompt) }
+      ]
+    };
+    if (o.system) body.messages.unshift({ role: 'system', content: String(o.system) });
+
+    // JSON 模式（官方四条硬要求之一：必须设 max_tokens，否则可能被截断）
+    if (o.json) {
+      body.response_format = { type: 'json_object' };
+      body.max_tokens = typeof o.maxTokens === 'number' ? o.maxTokens : 2000;
+    } else if (typeof o.maxTokens === 'number') {
+      body.max_tokens = o.maxTokens;
+    }
+
+    // 思考模式开关（顶层！）
+    if (typeof o.thinking === 'boolean') {
+      body.thinking = { type: o.thinking ? 'enabled' : 'disabled' };
+      if (o.thinking && typeof o.reasoningEffort === 'string') {
+        // 注意：medium 实际映射到 high，所以只用 low/high/max
+        body.reasoning_effort = o.reasoningEffort;
+      }
+    }
+    // temperature 只在关思考时才有意义
+    if (typeof o.temperature === 'number' && o.thinking !== true) {
+      body.temperature = o.temperature;
+    }
+    return body;
+  }
+
+  /** 拼完整 URL（处理自定义 Base URL） */
+  function resolveUrl(providerKey, baseUrlOverride) {
+    var p = PROVIDERS[providerKey] || PROVIDERS[DEFAULT_PROVIDER];
+    var base = (baseUrlOverride && String(baseUrlOverride).trim()) || p.baseUrl;
+    base = String(base).replace(/\/+$/, '');
+    // 用户可能填了带 /v1 的地址
+    if (/\/chat\/completions$/.test(base)) return base;
+    if (/\/v\d+$/.test(base)) return base + '/chat/completions';
+    return base + p.path;
+  }
+
+  /* ==========================================================================
+   * 六、调用
+   * ======================================================================== */
+
+  /** 环境是否可调用（有 key 即可；不联网也能构造） */
+  function isReady(settings) {
+    return !!(settings && typeof settings.apiKey === 'string' && settings.apiKey.trim());
+  }
+
+  /**
+   * 带超时的 fetch。
+   * ⚠️ 必须能取消 —— 否则用户点了取消界面还在等，或者超时后 promise 还在挂着。
+   */
+  function fetchWithTimeout(fetchImpl, url, init, timeoutMs, externalSignal) {
+    var ms = typeof timeoutMs === 'number' ? timeoutMs : TIMEOUT_MS;
+    if (typeof AbortController === 'undefined') {
+      return fetchImpl(url, init);                       // 老环境降级：不设超时
+    }
+    var ctl = new AbortController();
+    var timer = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, ms);
+    var init2 = {};
+    Object.keys(init || {}).forEach(function (k) { init2[k] = init[k]; });
+    init2.signal = ctl.signal;
+    if (externalSignal && typeof externalSignal.addEventListener === 'function') {
+      try { externalSignal.addEventListener('abort', function () { ctl.abort(); }); } catch (e) {}
+    }
+    return fetchImpl(url, init2).then(function (r) {
+      clearTimeout(timer);
+      return r;
+    }, function (e) {
+      clearTimeout(timer);
+      throw e;
+    });
+  }
+
+  function sleep(ms) {
+    return new Promise(function (res) { setTimeout(res, ms); });
+  }
+
+  /**
+   * 核心调用。返回 **永不 reject** 的结果对象：
+   *   { ok, data, raw, usage, strategy, error:{kind,icon,text,detail}, retried }
+   *
+   * 为什么永不 reject：调用方是界面事件处理器，
+   * reject 没接住就是白屏。所有失败都变成 ok:false + error。
+   */
+  function call(prompt, opts) {
+    var o = opts || {};
+    var settings = o.settings || {};
+    var fetchImpl = o.fetchImpl ||
+      (typeof fetch !== 'undefined' ? fetch.bind(typeof globalThis !== 'undefined' ? globalThis : null) : null);
+
+    if (!fetchImpl) {
+      return Promise.resolve(fail('no_fetch', '🛠', '这个环境不支持联网（浏览器太旧？）'));
+    }
+    if (!isReady(settings)) {
+      return Promise.resolve(fail('no_key', '🔑', '还没设置 API key，去设置里填一下'));
+    }
+
+    var model = (settings.model && String(settings.model).trim()) || PROVIDERS[DEFAULT_PROVIDER].defaultModel;
+    var url = resolveUrl(DEFAULT_PROVIDER, settings.baseUrl);
+    var wantJson = o.json !== false;
+
+    // 关键：要 JSON 就关思考（才能用 temperature 拿确定性输出，且便宜 4 倍）
+    //       做复盘/趋势时开思考（要它推理）
+    var thinking = typeof o.thinking === 'boolean' ? o.thinking : (wantJson ? false : true);
+    var body = buildRequestBody(prompt, {
+      model: model,
+      json: wantJson,
+      thinking: thinking,
+      temperature: thinking ? undefined : (typeof o.temperature === 'number' ? o.temperature : 0),
+      maxTokens: o.maxTokens
+    });
+
+    function doFetch(b) {
+      return fetchWithTimeout(fetchImpl, url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + settings.apiKey.trim()
+        },
+        body: JSON.stringify(b)
+      }, o.timeoutMs, o.signal);
+    }
+
+    function readResult(res) {
+      // ⚠️ 我方实测：错误响应也带 CORS 头，所以这里能读到状态和正文
+      return res.text().then(function (txt) {
+        return { status: res.status, text: txt };
+      });
+    }
+
+    var attempts = 0;
+    var lastRaw = '';
+
+    function attempt(b) {
+      attempts++;
+      /*
+       * ⚠️ 必须用 Promise.resolve().then(() => doFetch(b)) 包一层。
+       * 踩过的坑：直接 `doFetch(b).then(...)` 时，如果 fetch 实现**同步**抛异常
+       * （测试里的假 fetch、某些 polyfill、或者参数构造出错），
+       * 异常会在 `.then` 链建立之前就飞出去 —— 后面的 `.catch` 根本接不到，
+       * 最终 reject 到调用方，界面白屏。
+       * 包一层之后，同步异常也变成"链上的拒绝"，被下面的 catch 接住。
+       */
+      return Promise.resolve()
+        .then(function () { return doFetch(b); })
+        .then(readResult)
+        .catch(function (e) {
+          // 网络层异常（含超时 abort、以及同步抛出）
+          throw { __thrown: e };
+        })
+        .then(function (r) {
+          if (!r) return null;
+          if (r.status < 200 || r.status >= 300) {
+            var err = classifyError(r.status, r.text, null);
+            // 429 / 5xx 自动重试一次
+            if (err.retryable && attempts < 2) {
+              return sleep(1200).then(function () { return attempt(b); });
+            }
+            return { ok: false, error: err, raw: r.text, retried: attempts > 1 };
+          }
+          var parsed;
+          try { parsed = JSON.parse(r.text); } catch (e) { parsed = null; }
+          // 结构不对（连 choices 都没有）或者 choices 是空数组 → 这是"结构看不懂"，
+          // 和"content 不合法 JSON"是两回事，提示语也不同
+          if (!parsed || !Array.isArray(parsed.choices) || !parsed.choices.length) {
+            return { ok: false, error: { kind: 'bad_response', icon: '⚠️', text: 'AI 返回的结构看不懂' }, raw: r.text, retried: attempts > 1 };
+          }
+          var msg = (parsed.choices[0] && parsed.choices[0].message) || {};
+          /*
+           * ⚠️ content 可能是 null（模型有时把 content 发成 null，而不是空串），
+           * 也可能整个 message 缺失。必须先落到字符串再处理，否则 `.trim()` 会抛异常。
+           */
+          var content = (typeof msg.content === 'string') ? msg.content
+                      : (msg.content === null || msg.content === undefined) ? ''
+                      : (typeof msg.content === 'object' ? JSON.stringify(msg.content) : String(msg.content));
+          lastRaw = content;
+
+          var usage = null;
+          if (parsed.usage && typeof parsed.usage === 'object') {
+            usage = {
+              in: num(parsed.usage.prompt_tokens),
+              out: num(parsed.usage.completion_tokens),
+              total: num(parsed.usage.total_tokens),
+              cached: parsed.usage.prompt_cache_hit_tokens !== undefined ? num(parsed.usage.prompt_cache_hit_tokens) : undefined
+            };
+          }
+
+          // ⚠️ 官方明确：JSON 模式「有概率返回空的 content」→ 必须重试
+          if (!content.trim()) {
+            if (attempts < MAX_EMPTY_RETRY) {
+              /*
+               * 第二次尝试**提高 max_tokens**（空 content 有时是被截断的极端情况）。
+               * 踩过的坑：条件原先写成 `attempts === 2`，但此刻 attempts 才 1
+               * （第二次还没发出去），所以永远不提升 = 这段逻辑形同不存在。
+               * 正确条件是「当前是第 1 次，且还有重试余地」。
+               */
+              if (attempts === 1 && b.max_tokens) {
+                var b2 = JSON.parse(JSON.stringify(b));
+                b2.max_tokens = Math.min(8000, Math.round(b.max_tokens * 2));
+                return sleep(800).then(function () { return attempt(b2); });
+              }
+              return sleep(800).then(function () { return attempt(b); });
+            }
+            return {
+              ok: false,
+              error: { kind: 'empty', icon: '💭', text: 'AI 这次没给出结果，请再点一次' },
+              raw: '',
+              usage: usage,
+              retried: true,
+              attempts: attempts
+            };
+          }
+
+          if (!wantJson) {
+            return { ok: true, data: null, text: content, raw: content, usage: usage, attempts: attempts, retried: attempts > 1 };
+          }
+
+          var pj = parseAIJson(content);
+          if (!pj.ok) {
+            return {
+              ok: false,
+              error: { kind: 'bad_json', icon: '📄', text: 'AI 返回的内容读不懂（已保留原文）', detail: pj.error },
+              raw: content,
+              usage: usage,
+              attempts: attempts,
+              retried: attempts > 1
+            };
+          }
+          return { ok: true, data: pj.data, strategy: pj.strategy, raw: content, usage: usage, attempts: attempts, retried: attempts > 1 };
+        })
+        .catch(function (e) {
+          if (e && e.__thrown) {
+            var err = classifyError(0, '', e.__thrown);
+            if (err.kind === 'network' && attempts < 2 && o.retryNetwork !== false) {
+              return sleep(1200).then(function () { return attempt(b); });
+            }
+            return { ok: false, error: err, raw: '', retried: attempts > 1 };
+          }
+          // 兜底：任何未预期异常都变成 ok:false（绝不 reject）
+          return { ok: false, error: { kind: 'unknown', icon: '⚠️', text: '出错了：' + clip(e && e.message || e, 100) }, raw: '' };
+        });
+    }
+
+    return attempt(body);
+  }
+
+  function num(v) { return typeof v === 'number' && isFinite(v) ? v : (typeof v === 'string' && v.trim() && isFinite(+v) ? +v : 0); }
+
+  function fail(kind, icon, text) {
+    return { ok: false, error: { kind: kind, icon: icon, text: text }, raw: '' };
+  }
+
+  /* ==========================================================================
+   * 七、四个业务动作（界面只调这四个）
+   * ======================================================================== */
+
+  /** ① 一句话拆字段。返回 ok:true 时 data 是归一化后的维度对象 */
+  function parseNote(text, settings, opts) {
+    if (typeof text !== 'string' || !text.trim()) {
+      return Promise.resolve(fail('empty_input', '✍️', '还没写内容'));
+    }
+    var o = opts || {};
+    var L = Logic();
+    var nowHint = o.nowHint || '';
+    var prompt = buildParsePrompt(text.trim(), nowHint);
+    return call(prompt, {
+      settings: settings, json: true,
+      thinking: false,            // 关思考：更快更便宜，且 temperature 才生效
+      temperature: 0,             // 拆字段要确定性
+      maxTokens: L ? 1200 : 1200,
+      fetchImpl: o.fetchImpl, timeoutMs: o.timeoutMs, signal: o.signal
+    }).then(function (r) {
+      if (!r.ok) return r;
+      var cleaned = cleanParsed(r.data);
+      if (cleaned.none) {
+        return { ok: false, error: { kind: 'nothing', icon: '🤔', text: '这句话里没找出可记录的内容，可以写详细一点' }, raw: r.raw, usage: r.usage };
+      }
+      if (!Object.keys(cleaned.dims).length) {
+        return { ok: false, error: { kind: 'nothing', icon: '🤔', text: '没拆出任何维度，可以写详细一点' }, raw: r.raw, usage: r.usage };
+      }
+      r.data = cleaned.dims;
+      return r;
+    });
+  }
+
+  /**
+   * 清洗 AI 拆出来的字段。
+   * ⚠️ 这一步是**必须的**：AI 有时会返回字段名写错、类型不对、多出无关键的内容。
+   *    直接入库会污染数据，而且很难查。
+   */
+  /**
+   * AI 输出的**字段类型白名单**。
+   * ⚠️ 为什么必须要有：`normalizeEntry` 是通用清洗，它只做 trim / 去空，
+   *    **不校验类型** —— AI 给出 `energy:"abc"`、`minutes:"一会儿"` 都会原样通过，
+   *    然后一路存进 state。之后算平均、画图、喂给下一次 AI 全是脏数据，
+   *    而且这种错误很晚才会被发现。
+   *    所以在这里按字段逐一校验：类型不符就丢掉这个字段（宁可少记，不可记错）。
+   */
+  var FIELD_TYPE = {
+    body: { sleepStart: 'time', wake: 'time', energy: 'num15', symptoms: 'strArray',
+            note: 'str' },
+    mind: { mood: 'num15', tags: 'strArray', trigger: 'str', note: 'str' },
+    finance: { income: 'num', expense: 'num', balance: 'num', expenseTags: 'strArray' },
+    plan: { ideas: 'strArray', decisions: 'decisionArray', note: 'str' }
+  };
+
+  function checkFieldType(kind, v) {
+    if (v === undefined || v === null) return false;
+    switch (kind) {
+      case 'time': return typeof v === 'string' && /^\d{1,2}:\d{2}$/.test(v.trim());
+      case 'num': return typeof v === 'number' && isFinite(v);
+      case 'num15': return typeof v === 'number' && isFinite(v) && v >= 1 && v <= 5;
+      case 'str': return typeof v === 'string' && !!v.trim();
+      case 'strArray':
+        if (typeof v === 'string') return !!v.trim();
+        if (!Array.isArray(v)) return false;
+        return v.length > 0 && v.every(function (x) { return typeof x === 'string' && !!x.trim(); });
+      case 'obj': return isPlainObj(v);
+      default: return true;
+    }
+  }
+
+  /** 校验并清洗数组型维度的每个元素（study / social） */
+  function cleanStudyItem(it) {
+    if (!isPlainObj(it)) return null;
+    var o = {};
+    if (checkFieldType('str', it.subject)) o.subject = String(it.subject).trim();
+    if (checkFieldType('str', it.what)) o.what = String(it.what).trim();
+    if (checkFieldType('num', it.minutes) && it.minutes >= 0) o.minutes = it.minutes;
+    if (checkFieldType('num15', it.mastery)) o.mastery = it.mastery;
+    if (checkFieldType('str', it.gap)) o.gap = String(it.gap).trim();
+    return Object.keys(o).length ? o : null;
+  }
+
+  function cleanSocialItem(it) {
+    if (!isPlainObj(it)) return null;
+    var o = {};
+    if (checkFieldType('str', it.who)) o.who = String(it.who).trim();
+    if (checkFieldType('str', it.what)) o.what = String(it.what).trim();
+    if (checkFieldType('num15', it.feeling)) o.feeling = it.feeling;
+    return Object.keys(o).length ? o : null;
+  }
+
+  /**
+   * 运动一条：项目（必填）+ 距离 + 感受 + 备注。
+   * **项目必填** —— 只有距离没有项目的记录没意义（不知道是什么运动）。
+   */
+  function cleanSportItem(it) {
+    if (!isPlainObj(it)) return null;
+    if (!checkFieldType('str', it.type)) return null;
+    var o = { type: String(it.type).trim() };
+    if (checkFieldType('num', it.km) && it.km >= 0) o.km = it.km;
+    if (checkFieldType('num15', it.feeling)) o.feeling = it.feeling;
+    if (checkFieldType('str', it.note)) o.note = String(it.note).trim();
+    return o;
+  }
+
+  /**
+   * 决策记录：**why（原因）是必填**。
+   * 用户确认的字段定义里写明了这条 —— 只记结论不记原因，两周后回看毫无信息量。
+   * AI 偶尔只给 what，这种半条记录直接丢掉。
+   */
+  function cleanDecision(d) {
+    if (!isPlainObj(d)) return null;
+    if (!checkFieldType('str', d.what) || !checkFieldType('str', d.why)) return null;
+    var o = { what: String(d.what).trim(), why: String(d.why).trim() };
+    if (checkFieldType('str', d.alt)) o.alt = String(d.alt).trim();
+    if (checkFieldType('str', d.expect)) o.expect = String(d.expect).trim();
+    return o;
+  }
+
+  function cleanParsed(data) {
+    var L = Logic();
+    var out = { dims: {}, none: false };
+    if (!isPlainObj(data)) return out;
+    if (data.none === true) { out.none = true; return out; }
+
+    var known = {};
+    L.DIMS.forEach(function (d) { known[d.key] = true; });
+
+    Object.keys(data).forEach(function (k) {
+      if (!known[k]) return;                       // 丢掉 AI 编出来的维度
+      var v = data[k];
+      if (v === null || v === undefined) return;
+
+      // --- 清单型维度：逐元素清洗 ---
+      if (k === 'study' || k === 'social' || k === 'sport') {
+        var arr = Array.isArray(v) ? v : [v];
+        var pick = k === 'study' ? cleanStudyItem : (k === 'social' ? cleanSocialItem : cleanSportItem);
+        var items = arr.map(pick).filter(function (x) { return x !== null; });
+        if (items.length) out.dims[k] = items;
+        return;
+      }
+
+      if (!isPlainObj(v)) return;                  // 对象型维度：不是对象就丢
+
+      // --- 对象型维度：逐字段校验类型 ---
+      var spec = FIELD_TYPE[k] || {};
+      var acc = {};
+      Object.keys(v).forEach(function (f) {
+        var val = v[f];
+        if (f === 'decisions') {
+          var ds = Array.isArray(val) ? val : [val];
+          var okD = ds.map(cleanDecision).filter(function (x) { return x !== null; });
+          if (okD.length) acc.decisions = okD;
+          return;
+        }
+        if (f === 'apps') {
+          var as = Array.isArray(val) ? val : [val];
+          var okA = as.map(function (a) {
+            if (!isPlainObj(a)) return null;
+            var o = {};
+            ['company', 'role', 'status', 'next'].forEach(function (f2) {
+              if (checkFieldType('str', a[f2])) o[f2] = String(a[f2]).trim();
+            });
+            return Object.keys(o).length ? o : null;
+          }).filter(function (x) { return x !== null; });
+          if (okA.length) acc.apps = okA;
+          return;
+        }
+        if (f === 'progress') {
+          if (checkFieldType('strArray', val)) {
+            acc.progress = Array.isArray(val) ? val.map(function (x) { return String(x).trim(); })
+                                              : [String(val).trim()];
+          }
+          return;
+        }
+        var kind = spec[f];
+        if (!kind) return;                         // 未知字段丢掉（AI 会编字段名）
+        if (!checkFieldType(kind, val)) return;    // 类型不符丢掉（宁可少记，不可记错）
+        acc[f] = (kind === 'str' || kind === 'time') ? String(val).trim() : val;
+      });
+
+      if (Object.keys(acc).length) out.dims[k] = acc;
+    });
+
+    return out;
+  }
+
+  /** ② 日复盘：汇总当天全部条目（方案 §6.1 + §2.2 教训） */
+  function dailyReview(state, dateKey, settings, opts) {
+    var o = opts || {};
+    var L = Logic();
+    var digest = L.dayDigest(state, dateKey);
+    if (!digest) {
+      return Promise.resolve(fail('no_data', '📭', '这一天还没有记录'));
+    }
+    var prompt = buildReviewPrompt(digest, dateKey);
+    return call(prompt, {
+      settings: settings, json: true,
+      thinking: true,             // 复盘要它推理
+      reasoningEffort: 'high',
+      maxTokens: 2000,
+      fetchImpl: o.fetchImpl, timeoutMs: o.timeoutMs, signal: o.signal
+    }).then(function (r) {
+      if (!r.ok) return r;
+      r.data = cleanReview(r.data);
+      return r;
+    });
+  }
+
+  function cleanReview(data) {
+    var out = { fact: '', contribution: '', next: '', insufficient: false };
+    if (!data || typeof data !== 'object') return out;
+    ['fact', 'contribution', 'next'].forEach(function (k) {
+      if (typeof data[k] === 'string') out[k] = data[k].trim();
+    });
+    out.insufficient = data.insufficient === true;
+    return out;
+  }
+
+  /** ③ 周报/月报（编号清单，只回编号） */
+  function rangeReport(state, fromKey, toKey, settings, opts) {
+    var o = opts || {};
+    var L = Logic();
+    var d = L.rangeDigest(state, fromKey, toKey);
+    if (!d.count) {
+      return Promise.resolve(fail('no_data', '📭', '这段时间还没有记录'));
+    }
+    var label = fromKey + ' ~ ' + toKey;
+    var prompt = buildReportPrompt(d.text, label, d.count);
+    return call(prompt, {
+      settings: settings, json: true,
+      thinking: true,
+      reasoningEffort: 'high',
+      maxTokens: 2500,
+      fetchImpl: o.fetchImpl, timeoutMs: o.timeoutMs, signal: o.signal
+    }).then(function (r) {
+      if (!r.ok) return r;
+      r.data = cleanReport(r.data, d);
+      return r;
+    });
+  }
+
+  /**
+   * 校验报告里引用的编号是否真实存在 —— **这是防幻觉的关键一步**。
+   * AI 可能编出 days:[99]，我们把它剔掉并标记。
+   */
+  function cleanReport(data, digest) {
+    var dg = isPlainObj(digest) ? digest : {};
+    var fallbackCount = typeof dg.count === 'number' ? dg.count : 0;
+    var out = { sampleSize: fallbackCount, good: [], bad: [], findings: [], insufficient: [], invalidRefs: [] };
+    // ⚠️ data 为 null 时不能直接 return out 之前就把 sampleSize 定成 0 ——
+    // 那样"AI 没给 sampleSize"和"AI 给了 0"就分不清了，兜底也就失效了。
+    if (!isPlainObj(data)) return out;
+    out.sampleSize = typeof data.sampleSize === 'number' ? data.sampleSize : fallbackCount;
+    if (Array.isArray(data.insufficient)) {
+      out.insufficient = data.insufficient.filter(function (x) { return typeof x === 'string' && x.trim(); });
+    }
+    ['good', 'bad', 'findings'].forEach(function (k) {
+      var arr = Array.isArray(data[k]) ? data[k] : [];
+      arr.forEach(function (item) {
+        if (!isPlainObj(item)) return;
+        var days = Array.isArray(item.days) ? item.days : [];
+        var valid = [], invalid = [];
+        days.forEach(function (n) {
+          if (typeof n === 'number' && n >= 1 && n <= fallbackCount) valid.push(n);
+          else invalid.push(n);
+        });
+        if (invalid.length) out.invalidRefs = out.invalidRefs.concat(invalid);
+        var one = { days: valid };
+        if (typeof item.dim === 'string') one.dim = item.dim;
+        if (typeof item.conclusion === 'string') one.conclusion = item.conclusion.trim();
+        if (one.conclusion) out[k].push(one);
+      });
+    });
+    return out;
+  }
+
+  /* ==========================================================================
+   * ③b 月报（分层压缩：喂周摘要，不喂 30 天原文）
+   * ======================================================================== */
+
+  /**
+   * 生成月报。
+   * 输入是**周摘要**（由 logic.monthWeekDigests 生成），不是原始记录。
+   */
+  function monthReport(state, year, month, settings, opts) {
+    var o = opts || {};
+    var L = Logic();
+    var digests = L.monthWeekDigests(state, year, month);
+    if (!digests.length) {
+      return Promise.resolve(fail('no_data', '📭', '这个月还没有记录'));
+    }
+    // ⚠️ 周数太少时**不发请求**：省一次调用，也避免 AI 硬凑结论
+    if (digests.length < 2) {
+      return Promise.resolve(fail('too_few', '📉',
+        '这个月只有 ' + digests.length + ' 周有记录，太少，看不出趋势。先多记几周。'));
+    }
+
+    var label = year + ' 年 ' + month + ' 月';
+    var prompt = buildMonthPrompt(digests, label, digests.length);
+    return call(prompt, {
+      settings: settings, json: true,
+      thinking: true,                       // 看趋势要推理
+      reasoningEffort: 'high',
+      maxTokens: 2500,
+      fetchImpl: o.fetchImpl, timeoutMs: o.timeoutMs, signal: o.signal
+    }).then(function (r) {
+      if (!r.ok) return r;
+      r.data = cleanMonth(r.data, digests.length);
+      r.weekCount = digests.length;         // 带给界面显示
+      return r;
+    });
+  }
+
+  /**
+   * 清洗月报结果。
+   * ⚠️ 校验 `weeks:[...]` 里的编号是否真实存在 —— 和日/周报的 days 校验同一个道理（防幻觉）。
+   */
+  function cleanMonth(data, weekCount) {
+    var n = typeof weekCount === 'number' ? weekCount : 0;
+    var out = {
+      sampleSize: n, trend: [], good: [], bad: [],
+      suggestion: '', insufficient: [], invalidRefs: []
+    };
+    if (!isPlainObj(data)) return out;
+    out.sampleSize = typeof data.sampleSize === 'number' ? data.sampleSize : n;
+
+    if (Array.isArray(data.insufficient)) {
+      out.insufficient = data.insufficient.filter(function (x) { return typeof x === 'string' && x.trim(); });
+    }
+    ['good', 'bad'].forEach(function (k) {
+      if (Array.isArray(data[k])) {
+        out[k] = data[k].filter(function (x) { return typeof x === 'string' && x.trim(); })
+                       .map(function (x) { return x.trim(); });
+      }
+    });
+    if (typeof data.suggestion === 'string') out.suggestion = data.suggestion.trim();
+
+    var arr = Array.isArray(data.trend) ? data.trend : [];
+    arr.forEach(function (t) {
+      if (!isPlainObj(t)) return;
+      var weeks = Array.isArray(t.weeks) ? t.weeks : [];
+      var valid = [], invalid = [];
+      weeks.forEach(function (w) {
+        if (typeof w === 'number' && w >= 1 && w <= n) valid.push(w);
+        else invalid.push(w);
+      });
+      if (invalid.length) out.invalidRefs = out.invalidRefs.concat(invalid);
+      var one = { weeks: valid };
+      if (typeof t.dim === 'string') one.dim = t.dim;
+      if (typeof t.conclusion === 'string') one.conclusion = t.conclusion.trim();
+      if (one.conclusion) out.trend.push(one);
+    });
+    return out;
+  }
+
+  /** ④ 趋势相关性（只发数值序列） */
+  function trends(state, days, settings, opts) {
+    var o = opts || {};
+    var L = Logic();
+    var specs = [
+      { name: '睡眠时长(分钟)', series: L.sleepSeries(state) },
+      { name: '精力(1-5)', series: L.seriesOf(state, 'body', 'energy') },
+      { name: '情绪(1-5)', series: L.seriesOf(state, 'mind', 'mood') },
+      { name: '支出(元)', series: L.seriesOf(state, 'finance', 'expense') },
+      { name: '是否有运动(1=有)', series: (function () {
+        var out = [], ds = Object.keys(state.days || {}).sort();
+        ds.forEach(function (dk) {
+          var agg = L.aggregateDay(state.days[dk]);
+          if (Array.isArray(agg.sport) && agg.sport.length) out.push({ date: dk, v: 1 });
+        });
+        return out;
+      })() }
+    ];
+    var list = specs.map(function (s) {
+      var tail = s.series.slice(-(days || 30));
+      return { name: s.name, values: tail.map(function (x) { return x.v; }) };
+    }).filter(function (s) { return s.values.length; });
+
+    if (!list.length) {
+      return Promise.resolve(fail('no_data', '📭', '数值数据还不够，先记几天'));
+    }
+    var prompt = buildTrendPrompt(list, days || 30);
+    return call(prompt, {
+      settings: settings, json: true,
+      thinking: true,
+      reasoningEffort: 'high',
+      maxTokens: 2000,
+      fetchImpl: o.fetchImpl, timeoutMs: o.timeoutMs, signal: o.signal
+    }).then(function (r) {
+      if (!r.ok) return r;
+      r.data = cleanTrends(r.data);
+      return r;
+    });
+  }
+
+  function cleanTrends(data) {
+    var out = { n: 0, correlations: [], insufficient: [] };
+    if (!data || typeof data !== 'object') return out;
+    if (typeof data.n === 'number') out.n = data.n;
+    if (Array.isArray(data.insufficient)) {
+      out.insufficient = data.insufficient.filter(function (x) { return typeof x === 'string' && x.trim(); });
+    }
+    var arr = Array.isArray(data.correlations) ? data.correlations : [];
+    arr.forEach(function (c) {
+      if (!c || typeof c !== 'object') return;
+      var one = {};
+      ['a', 'b', 'direction', 'strength', 'note'].forEach(function (k) {
+        if (typeof c[k] === 'string') one[k] = c[k].trim();
+      });
+      if (typeof c.n === 'number') one.n = c.n;
+      // ⚠️ 样本量太小的结论直接丢掉（方案 §8.3：3 天数据说明不了趋势）
+      if (typeof one.n === 'number' && one.n < 7) return;
+      if (one.a || one.b) out.correlations.push(one);
+    });
+    return out;
+  }
+
+  /* ==========================================================================
+   * 八、成本记账
+   *
+   * ⚠️ 官方明确：估算只是预检，**实际以返回结果的 usage 为准**。
+   *    所以每次调用都要把 usage 记下来，按真实用量算钱。
+   * ======================================================================== */
+
+  // 元 / 百万 token。peak = 周一~周五（不含节假日）09:00-12:00 与 14:00-18:00（北京时间）
+  var PRICE = {
+    deepseek: {
+      'deepseek-flash': { inOff: 1, inPeak: 2, outOff: 4, outPeak: 8, hitOff: 0.02, hitPeak: 0.04 },
+      'deepseek-v4-pro': { inOff: 4.5, inPeak: 9, outOff: 13.5, outPeak: 27, hitOff: 0.09, hitPeak: 0.18 }
+    }
+  };
+
+  /** 某个时间点是否高峰时段（北京时间） */
+  function isPeak(ts) {
+    var d = ts instanceof Date ? ts : new Date(ts === undefined ? Date.now() : ts);
+    if (isNaN(d.getTime())) return false;
+    // 用北京时间判断（UTC+8），不依赖运行环境时区
+    var bj = new Date(d.getTime() + 8 * 3600 * 1000);
+    var wd = bj.getUTCDay();                        // 用 UTC 取值 = 北京时间的星期几
+    if (wd === 0 || wd === 6) return false;         // 周末
+    var mins = bj.getUTCHours() * 60 + bj.getUTCMinutes();
+    var inMorning = mins >= 9 * 60 && mins < 12 * 60;
+    var inAfternoon = mins >= 14 * 60 && mins < 18 * 60;
+    return inMorning || inAfternoon;
+    // 注：法定节假日也算非高峰，但这里不查日历（会引入依赖）。
+    //     节假日少算一点钱，属于保守方向。
+  }
+
+  /** 算这次调用花了多少钱（元） */
+  function usageCost(usage, model, ts) {
+    if (!usage) return 0;
+    var table = PRICE.deepseek[model] || PRICE.deepseek['deepseek-flash'];
+    var peak = isPeak(ts);
+    var inTok = (usage.in || 0) - (usage.cached || 0);
+    if (inTok < 0) inTok = 0;
+    var cached = usage.cached || 0;
+    var rate = {
+      in: peak ? table.inPeak : table.inOff,
+      out: peak ? table.outPeak : table.outOff,
+      hit: peak ? table.hitPeak : table.hitOff
+    };
+    return (inTok / 1e6) * rate.in + (cached / 1e6) * rate.hit + ((usage.out || 0) / 1e6) * rate.out;
+  }
+
+  /** 按官方换算比例估算 token（用于调用前预检，不能当账单） */
+  function estimateTokens(text) {
+    if (typeof text !== 'string' || !text) return 0;
+    var cjk = 0, other = 0;
+    for (var i = 0; i < text.length; i++) {
+      var c = text.charCodeAt(i);
+      if ((c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3000 && c <= 0x303f) || (c >= 0xff00 && c <= 0xffef)) cjk++;
+      else other++;
+    }
+    return Math.ceil(cjk * 0.6 + other * 0.3);
+  }
+
+  /* ==========================================================================
+   * 九、月度用量账本
+   * ======================================================================== */
+
+  function monthKey(ts) {
+    var d = ts instanceof Date ? ts : new Date(ts === undefined ? Date.now() : ts);
+    if (isNaN(d.getTime())) return null;
+    var bj = new Date(d.getTime() + 8 * 3600 * 1000);
+    return bj.getUTCFullYear() + '-' + (bj.getUTCMonth() + 1 < 10 ? '0' : '') + (bj.getUTCMonth() + 1);
+  }
+
+  /**
+   * 把一次调用的用量记进账本。
+   * ledger 形如 { '2026-10': { calls: 3, in: 1234, out: 567, cost: 0.0012 } }
+   */
+  function recordUsage(ledger, usage, model, ts) {
+    var out = {};
+    if (ledger && typeof ledger === 'object') {
+      Object.keys(ledger).forEach(function (k) { out[k] = ledger[k]; });
+    }
+    var mk = monthKey(ts);
+    if (!mk) return out;
+    var cur = out[mk] && typeof out[mk] === 'object'
+      ? { calls: num(out[mk].calls), in: num(out[mk].in), out: num(out[mk].out), cost: num(out[mk].cost) }
+      : { calls: 0, in: 0, out: 0, cost: 0 };
+    cur.calls += 1;
+    if (usage) {
+      cur.in += num(usage.in);
+      cur.out += num(usage.out);
+    }
+    cur.cost = Math.round((cur.cost + usageCost(usage, model, ts)) * 1e6) / 1e6;
+    out[mk] = cur;
+    return out;
+  }
+
+  /** 本月账单 */
+  function monthUsage(ledger, ts) {
+    var mk = monthKey(ts);
+    var zero = { calls: 0, in: 0, out: 0, cost: 0 };
+    if (!mk || !ledger || typeof ledger !== 'object' || !ledger[mk]) return zero;
+    var m = ledger[mk];
+    return { calls: num(m.calls), in: num(m.in), out: num(m.out), cost: num(m.cost) };
+  }
+
+  /** 是否该提醒预算（超过 80%）。目的**不是省钱，是防异常**（循环调用 / key 被他人使用） */
+  function budgetWarning(ledger, budget, ts) {
+    var used = monthUsage(ledger, ts).cost;
+    var b = typeof budget === 'number' && budget > 0 ? budget : 5;
+    return {
+      used: Math.round(used * 1000) / 1000,
+      budget: b,
+      ratio: Math.round((used / b) * 1000) / 1000,
+      warn: used >= b * 0.8,
+      exceeded: used >= b
+    };
+  }
+
+  return {
+    // 常量
+    PROVIDERS: PROVIDERS,
+    DEFAULT_PROVIDER: DEFAULT_PROVIDER,
+    PRICE: PRICE,
+    TIMEOUT_MS: TIMEOUT_MS,
+    MAX_EMPTY_RETRY: MAX_EMPTY_RETRY,
+
+    // 提示词
+    buildParsePrompt: buildParsePrompt,
+    buildReviewPrompt: buildReviewPrompt,
+    buildReportPrompt: buildReportPrompt,
+    buildMonthPrompt: buildMonthPrompt,
+    buildTrendPrompt: buildTrendPrompt,
+
+    // 请求
+    buildRequestBody: buildRequestBody,
+    resolveUrl: resolveUrl,
+    classifyError: classifyError,
+    extractApiMessage: extractApiMessage,
+    isReady: isReady,
+
+    // JSON 兜底（单独导出便于测试）
+    parseAIJson: parseAIJson,
+    isPlainObj: isPlainObj,
+    stripFence: stripFence,
+    balancedObject: balancedObject,
+    repairTruncated: repairTruncated,
+
+    // 调用
+    call: call,
+    parseNote: parseNote,
+    dailyReview: dailyReview,
+    rangeReport: rangeReport,
+    monthReport: monthReport,
+    trends: trends,
+
+    // 清洗
+    cleanParsed: cleanParsed,
+    cleanStudyItem: cleanStudyItem,
+    cleanSocialItem: cleanSocialItem,
+    cleanSportItem: cleanSportItem,
+    cleanDecision: cleanDecision,
+    cleanReview: cleanReview,
+    cleanReport: cleanReport,
+    cleanTrends: cleanTrends,
+
+    // 成本
+    isPeak: isPeak,
+    usageCost: usageCost,
+    estimateTokens: estimateTokens,
+    monthKey: monthKey,
+    recordUsage: recordUsage,
+    monthUsage: monthUsage,
+    budgetWarning: budgetWarning
+  };
+});
+
+
+/* ===========================================================================
+   界面层
+   =========================================================================== */
+(function () {
+  'use strict';
+
+  var L = (typeof PlanLogic !== 'undefined') ? PlanLogic : null;
+  var A = (typeof PlanAI !== 'undefined') ? PlanAI : null;
+
+  /* ---------- 起不来时给一句人话，而不是白屏 ---------- */
+  if (!L) {
+    document.body.innerHTML = '';
+    var m = document.createElement('div');
+    m.style.cssText = 'padding:40px 20px;text-align:center;font:16px/1.7 sans-serif;color:#333';
+    m.textContent = '这个文件还没构建过，或者注入失败了。请在项目目录执行 node build.js 重新生成。';
+    document.body.appendChild(m);
+    return;
+  }
+
+  /* ==========================================================================
+     ⚠️ XSS 规矩（这个 App 的安全底线）
+     AI 返回的内容**一律走 textContent / createElement**，绝不进 innerHTML。
+     原因：模型可以输出 <img onerror=...> 这类内容，
+          一旦用 innerHTML 渲染，就能读走 localStorage 里的 API key。
+     所以下面封装 el()/txt()，并**禁止**在本文件里用 innerHTML 塞用户数据。
+     ======================================================================== */
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined && text !== null) n.textContent = String(text);
+    return n;
+  }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); return n; }
+  function $(id) { return document.getElementById(id); }
+
+  /* ==========================================================================
+     状态
+     ======================================================================== */
+  var state = L.emptyState();
+  var curDate = L.todayKey();
+  var storageOK = true;
+
+  /* ---------- 存储：所有 localStorage 访问都包 try/catch ----------
+     ⚠️ 已核实 MDN：file:// 或用户阻止持久化时，localStorage 会**抛 SecurityError**
+        （不是静默失败）。不包就是白屏。所以：
+          · 读失败 → 用空状态，并标记不可信
+          · 写失败 → 返回 false，界面**绝不能显示"已保存"**
+  ------------------------------------------------------------------------- */
+  function storageProbe() {
+    try {
+      var k = '__pp_probe__';
+      localStorage.setItem(k, '1');
+      var ok = localStorage.getItem(k) === '1';
+      localStorage.removeItem(k);
+      return ok;
+    } catch (e) { return false; }
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(L.STORE_KEY);
+      if (!raw) return L.emptyState();
+      var st = L.deserialize(raw);
+      if (!st) {
+        // 数据损坏：**绝不清空原数据**，保留原始字符串并提示
+        try { localStorage.setItem(L.STORE_KEY + ':corrupt', raw); } catch (e2) {}
+        toast('数据读取失败，已保留原始内容（设置页可导出）');
+        return L.emptyState();
+      }
+      return st;
+    } catch (e) {
+      storageOK = false;
+      return L.emptyState();
+    }
+  }
+
+  function saveState(s) {
+    if (s.settings && s.settings.apiKeySessionOnly) {
+      // 会话模式：key 不落盘
+      var copy = JSON.parse(JSON.stringify(s));
+      copy.settings.apiKey = '';
+      try { localStorage.setItem(L.STORE_KEY, JSON.stringify(copy)); return true; }
+      catch (e) { return false; }
+    }
+    try {
+      localStorage.setItem(L.STORE_KEY, L.serialize(s));
+      return true;
+    } catch (e) {
+      return false;                                   // 写满 / 被拒绝
+    }
+  }
+
+  /* ---------- 提示条 ---------- */
+  var toastTimer = null;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = String(msg);
+    t.classList.add('on');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('on'); }, 2200);
+  }
+
+  function banner(kind, text, actionLabel, action) {
+    var b = el('div', 'banner ' + kind);
+    b.appendChild(el('span', null, text));
+    if (actionLabel) {
+      var btn = el('button', null, actionLabel);
+      btn.onclick = function () { action(); renderBanners(); };
+      b.appendChild(btn);
+    }
+    var x = el('span', 'x', '✕');
+    x.onclick = function () { b.remove(); };
+    b.appendChild(x);
+    return b;
+  }
+
+  function renderBanners() {
+    var box = clear($('banners'));
+
+    if (!storageOK) {
+      box.appendChild(banner('bad',
+        '当前**无法保存数据**（浏览器拒绝了本地存储）。App 能照常用，但关掉页面记录就没了。建议导出备份，或从网页版打开。'));
+    }
+    var br = L.backupReminder(state, Date.now());
+    if (br.level === 'soft') {
+      box.appendChild(banner('soft', '已经 ' + br.days + ' 天没备份了，导出一下更安心', '立即导出', exportBackup));
+    } else if (br.level === 'warn') {
+      box.appendChild(banner('warn',
+        br.neverExported ? '你还没导出过备份。数据只在手机上，丢了无法恢复。' : '已经 ' + br.days + ' 天没备份了！',
+        '立即导出', exportBackup));
+    }
+    if (L.reviewStale(state, curDate)) {
+      box.appendChild(banner('soft', '今天的记录又变过了，要不要重新生成复盘？', '重新生成', runReview));
+    }
+  }
+
+  /* ==========================================================================
+     渲染：时间线
+     ======================================================================== */
+  function dimChip(key) {
+    var d = L.dimOf(key);
+    var c = el('span', 'chip ' + (d && d.group === 'life' ? 'l' : 'g'),
+               (d ? d.icon + ' ' + d.name : key));
+    return c;
+  }
+
+  /**
+   * 一条记录的正文。
+   * ⚠️ **不加维度名前缀** —— 上面那排 chip 已经显示了「🌙 身体」，
+   * 正文再写一遍「身体：睡眠9小时20分」就重复了，又长又啰嗦（第一版就是这样，
+   * 从截图里看出来的）。这里只输出值，维度靠 chip 表达。
+   */
+  function entryText(e) {
+    var bits = [];
+    L.DIMS.forEach(function (d) {
+      var s = L.compactDim(d.key, e[d.key]);
+      if (s) bits.push(s);
+    });
+    return bits.join(' ｜ ');
+  }
+
+  function renderTimeline() {
+    var day = L.getDay(state, curDate);
+    var box = clear($('timeline'));
+    var entries = (day && day.entries) ? day.entries : [];
+    $('tlCount').textContent = entries.length ? '共 ' + entries.length + ' 条' : '';
+
+    if (!entries.length) {
+      box.appendChild(el('div', 'empty', '这一天还没有记录'));
+      return;
+    }
+    entries.forEach(function (e) {
+      var row = el('div', 'entry');
+      row.appendChild(el('div', 't', e.at || ''));
+
+      var body = el('div', 'body');
+      var dims = el('div', 'dims');
+      var got = [];
+      L.DIMS.forEach(function (d) { if (L.hasValue(e[d.key])) got.push(d.key); });
+      got.forEach(function (k) { dims.appendChild(dimChip(k)); });
+      body.appendChild(dims);
+
+      var txt = entryText(e);
+      body.appendChild(el('div', 'txt', txt || (e.raw || '')));
+
+      var acts = el('div', 'acts');
+      var bEdit = el('button', 'tiny', '编辑');
+      bEdit.onclick = function () { openEditSheet(e); };
+      var bDel = el('button', 'tiny', '删除');
+      bDel.onclick = function () { doDelete(e.id); };
+      acts.appendChild(bEdit);
+      acts.appendChild(bDel);
+      body.appendChild(acts);
+
+      row.appendChild(body);
+      box.appendChild(row);
+    });
+  }
+
+  /* ==========================================================================
+     渲染：今日汇总（按 §6.1 三条聚合规则算出来）
+     ======================================================================== */
+  function renderSummary() {
+    var t = L.dayTotals(state, curDate);
+    var box = clear($('summary'));
+    $('sumNote').textContent = t.entries ? '（' + t.entries + ' 条聚合）' : '';
+
+    function kv(k, v) {
+      var w = el('span', 'kv');
+      w.appendChild(el('span', 'k', k));
+      w.appendChild(el('span', 'v', v));
+      box.appendChild(w);
+    }
+
+    if (!t.entries) {
+      box.appendChild(el('span', 'k', '还没有记录'));
+    } else {
+      if (t.sleepMinutes !== null) kv('睡眠', L.formatMinutes(t.sleepMinutes));
+      if (t.expense !== null) kv('支出', '¥' + t.expense);
+      if (t.income !== null && t.income > 0) kv('收入', '¥' + t.income);
+      if (t.studyCount) kv('学习', t.studyCount + ' 件');
+      if (t.ideaCount) kv('想法', t.ideaCount + ' 条');
+      if (t.decisionCount) kv('决策', t.decisionCount + ' 条');
+    }
+
+    var pct = Math.round(t.filled / t.total * 100);
+    $('sumBar').style.width = pct + '%';
+    $('sumMiss').textContent = t.entries
+      ? '记了 ' + t.filled + '/' + t.total + ' 个维度' +
+        (t.missing && false ? '' : '') +
+        (missText(t) ? ' · 还没记：' + missText(t) : '')
+      : '';
+  }
+
+  function missText(t) {
+    var day = L.getDay(state, curDate);
+    if (!day) return '';
+    var c = L.dayCompletion(day);
+    return c.missing.map(function (k) { var d = L.dimOf(k); return d ? d.name : k; }).join('、');
+  }
+
+  /* ==========================================================================
+     渲染：手填表单（六个维度，可折叠）
+     ======================================================================== */
+  var formVal = {};        // 当前表单内容
+
+  var TAGS = {
+    symptoms: ['恶心', '反酸', '干呕', '头痛', '困倦', '失眠', '咳嗽', '腹痛', '其他'],
+    moodTags: ['平静', '开心', '充实', '焦虑', '烦躁', '低落', '疲惫', '兴奋'],
+    expenseTags: ['餐饮', '交通', '学习', '娱乐', '购物', '医疗', '住房', '其他']
+  };
+
+  function field(label, node) {
+    var r = el('div', 'row');
+    r.appendChild(el('label', null, label));
+    var w = el('div', 'fi');
+    w.appendChild(node);
+    r.appendChild(w);
+    return r;
+  }
+  function makeInput(type, path, ph) {
+    var i = document.createElement('input');
+    i.type = type;
+    if (ph) i.placeholder = ph;
+    i.value = getPath(formVal, path) === undefined ? '' : getPath(formVal, path);
+    i.oninput = function () { setPath(formVal, path, i.value); refreshFormStatus(); };
+    return i;
+  }
+  function makeTime(path) {
+    var i = document.createElement('input');
+    i.type = 'time';
+    var v = getPath(formVal, path);
+    if (v) i.value = v;
+    i.oninput = function () { setPath(formVal, path, i.value); refreshFormStatus(); };
+    return i;
+  }
+  function makeArea(path, ph) {
+    var a = document.createElement('textarea');
+    if (ph) a.placeholder = ph;
+    var v = getPath(formVal, path);
+    a.value = v === undefined ? '' : v;
+    a.oninput = function () { setPath(formVal, path, a.value); refreshFormStatus(); };
+    return a;
+  }
+  function makeStars(path) {
+    var w = el('div', 'stars');
+    for (var n = 1; n <= 5; n++) {
+      (function (n) {
+        var b = el('button', 'star', String(n));
+        b.type = 'button';
+        b.setAttribute('aria-pressed', String(getPath(formVal, path) === n));
+        b.onclick = function () {
+          var cur = getPath(formVal, path);
+          setPath(formVal, path, cur === n ? undefined : n);   // 再点一次取消
+          w.querySelectorAll('.star').forEach(function (x, idx) {
+            x.setAttribute('aria-pressed', String(idx + 1 === getPath(formVal, path)));
+          });
+          refreshFormStatus();
+        };
+        w.appendChild(b);
+      })(n);
+    }
+    return w;
+  }
+  function makeTags(path, list) {
+    var w = el('div', 'tags');
+    list.forEach(function (t) {
+      var b = el('button', 'tag', t);
+      b.type = 'button';
+      var arr = getPath(formVal, path) || [];
+      b.setAttribute('aria-pressed', String(arr.indexOf(t) > -1));
+      b.onclick = function () {
+        var a = (getPath(formVal, path) || []).slice();
+        var i = a.indexOf(t);
+        if (i > -1) a.splice(i, 1); else a.push(t);
+        setPath(formVal, path, a.length ? a : undefined);
+        b.setAttribute('aria-pressed', String(a.indexOf(t) > -1));
+        refreshFormStatus();
+      };
+      w.appendChild(b);
+    });
+    return w;
+  }
+
+  function getPath(o, p) {
+    var parts = p.split('.'), cur = o;
+    for (var i = 0; i < parts.length; i++) {
+      if (cur === undefined || cur === null) return undefined;
+      cur = cur[parts[i]];
+    }
+    return cur;
+  }
+  function setPath(o, p, v) {
+    var parts = p.split('.'), cur = o;
+    for (var i = 0; i < parts.length - 1; i++) {
+      if (typeof cur[parts[i]] !== 'object' || cur[parts[i]] === null) cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    if (v === undefined || v === '' ) delete cur[parts[parts.length - 1]];
+    else cur[parts[parts.length - 1]] = v;
+  }
+
+  /** 一个可折叠维度块 */
+  function dimSection(dim, bodyNodes, statusFn) {
+    var det = document.createElement('details');
+    det.className = 'acc';
+    var sm = document.createElement('summary');
+    sm.appendChild(el('span', null, dim.icon));
+    sm.appendChild(el('span', 'nm', dim.name));
+    var st = el('span', 'st', '');
+    sm.appendChild(st);
+    sm.appendChild(el('span', 'arw', '›'));
+    det.appendChild(sm);
+    var bd = el('div', 'bd');
+    bodyNodes.forEach(function (n) { bd.appendChild(n); });
+    det.appendChild(bd);
+    det._status = st;
+    det._statusFn = statusFn;
+    return det;
+  }
+
+  /*
+   * ⚠️ 约定：**所有对 formVal 的写入都必须走 setPath**，不能直接赋值。
+   *
+   * 踩过的坑：三个「＋」按钮里，学习和社交是直接写 `formVal.study = arr`（路径浅，侥幸能用），
+   * 决策写成 `formVal.plan.decisions = arr` —— 而 `formVal.plan` 还不存在，
+   * 于是抛 `Cannot set properties of undefined (setting 'decisions')`，
+   * 表现就是**点了「加一条决策」完全没反应**（异常被浏览器吞掉，控制台才有）。
+   * setPath 会逐级建出中间对象，用它就不会有这个问题。
+   */
+  function addSub(kind) {
+    var path = kind === 'study' ? 'study'
+             : kind === 'social' ? 'social'
+             : kind === 'sport' ? 'sport'
+             : 'plan.decisions';
+    var arr = getPath(formVal, path);
+    if (!Array.isArray(arr)) arr = [];
+    arr.push({});
+    setPath(formVal, path, arr);
+    renderForm();
+    refreshFormStatus();
+    // 新加的那块滚进视野，让用户知道点到了
+    var subs = $('form').querySelectorAll('.sub');
+    if (subs.length) subs[subs.length - 1].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  /** 删掉某条子记录（用下标，和 formVal 保持一致） */
+  function removeSub(kind, index) {
+    var path = kind === 'study' ? 'study'
+             : kind === 'social' ? 'social'
+             : kind === 'sport' ? 'sport'
+             : 'plan.decisions';
+    var arr = getPath(formVal, path);
+    if (!Array.isArray(arr)) return;
+    arr.splice(index, 1);
+    if (!arr.length) setPath(formVal, path, undefined);
+    renderForm();
+    refreshFormStatus();
+  }
+
+  function renderForm() {
+    var box = clear($('form'));
+    var secs = [];
+
+    /* 身体 */
+    var bodyNodes = [];
+    var br1 = el('div', 'row');
+    br1.appendChild(el('label', null, '入睡'));
+    var w1 = el('div', 'fi'); w1.appendChild(makeTime('body.sleepStart')); br1.appendChild(w1);
+    br1.appendChild(el('label', null, '起床'));
+    var w2 = el('div', 'fi'); w2.appendChild(makeTime('body.wake')); br1.appendChild(w2);
+    bodyNodes.push(br1);
+    bodyNodes.push(field('精力', makeStars('body.energy')));
+    bodyNodes.push(field('症状', makeTags('body.symptoms', TAGS.symptoms)));
+    bodyNodes.push(el('p', 'hint', '入睡 → 起床会自动算时长，跨天也算得对（23:40 睡、09:00 起 = 9小时20分）'));
+    secs.push(dimSection(L.dimOf('body'), bodyNodes, function () {
+      var m = L.sleepMinutes(getPath(formVal, 'body.sleepStart'), getPath(formVal, 'body.wake'));
+      return m !== null ? L.formatMinutes(m) : '';
+    }));
+
+    /* 精神 */
+    secs.push(dimSection(L.dimOf('mind'), [
+      field('情绪', makeStars('mind.mood')),
+      field('标签', makeTags('mind.tags', TAGS.moodTags)),
+      field('触发', makeInput('text', 'mind.trigger', '是什么引起的'))
+    ], function () {
+      var v = getPath(formVal, 'mind.mood');
+      return v ? '情绪 ' + v : '';
+    }));
+
+    /* 运动：可加多条（用户常运动，独立成一个大类） */
+    var sportBox = el('div', null);
+    function addSport(v, index) {
+      var s = el('div', 'sub');
+      var h = el('h4', null, '运动一条');
+      var rm = el('button', 'mini2 rm', '删除');
+      rm.type = 'button';
+      rm.onclick = function () { removeSub('sport', index); };
+      h.appendChild(rm);
+      s.appendChild(h);
+      s.appendChild(field('项目', (function () {
+        var i = makeInput('text', '', '跑步 / 健身 / 篮球…');
+        i.value = v.type || '';
+        i.oninput = function () { v.type = i.value; refreshFormStatus(); };
+        return i;
+      })()));
+      s.appendChild(field('距离', (function () {
+        var i = makeInput('number', '', '公里，可选');
+        i.value = (v.km === undefined ? '' : v.km);
+        i.oninput = function () { v.km = i.value === '' ? undefined : Number(i.value); refreshFormStatus(); };
+        return i;
+      })()));
+      s.appendChild(field('感受', (function () {
+        var w = el('div', 'stars');
+        for (var n = 1; n <= 5; n++) {
+          (function (n) {
+            var b = el('button', 'star', String(n)); b.type = 'button';
+            b.setAttribute('aria-pressed', String(v.feeling === n));
+            b.onclick = function () {
+              v.feeling = (v.feeling === n) ? undefined : n;
+              w.querySelectorAll('.star').forEach(function (x, i2) { x.setAttribute('aria-pressed', String(v.feeling === i2 + 1)); });
+              refreshFormStatus();
+            };
+            w.appendChild(b);
+          })(n);
+        }
+        return w;
+      })()));
+      s.appendChild(field('备注', (function () {
+        var i = makeInput('text', '', '如 40分钟 / 5组（可选）');
+        i.value = v.note || '';
+        i.oninput = function () { v.note = i.value; };
+        return i;
+      })()));
+      sportBox.appendChild(s);
+    }
+    var addSp = el('button', 'btn', '＋ 加一条运动');
+    addSp.type = 'button';
+    addSp.onclick = function () { addSub('sport'); };
+    (function () {
+      var arr = getPath(formVal, 'sport');
+      if (Array.isArray(arr)) arr.forEach(function (v, i) { addSport(v, i); });
+    })();
+    secs.push(dimSection(L.dimOf('sport'), [sportBox, addSp], function () {
+      var a = getPath(formVal, 'sport');
+      return Array.isArray(a) && a.length ? a.length + ' 条' : '';
+    }));
+
+    /* 学习：可加多条 */
+    var studyBox = el('div', null);
+    function addStudy(v, index) {
+      var s = el('div', 'sub');
+      var h = el('h4', null, '学习一条');
+      var rm = el('button', 'mini2 rm', '删除');
+      rm.type = 'button';
+      rm.onclick = function () { removeSub('study', index); };
+      h.appendChild(rm);
+      s.appendChild(h);
+      s.appendChild(field('科目', (function () {
+        var i = makeInput('text', '', '如 数学'); i.value = v.subject || '';
+        i.oninput = function () { v.subject = i.value; refreshFormStatus(); }; return i;
+      })()));
+      s.appendChild(field('内容', (function () {
+        var i = makeInput('text', '', '如 Day2 主观题'); i.value = v.what || '';
+        i.oninput = function () { v.what = i.value; refreshFormStatus(); }; return i;
+      })()));
+      s.appendChild(field('时长', (function () {
+        var i = makeInput('number', '', '分钟'); i.value = (v.minutes === undefined ? '' : v.minutes);
+        i.oninput = function () { v.minutes = i.value === '' ? undefined : Number(i.value); refreshFormStatus(); }; return i;
+      })()));
+      s.appendChild(field('掌握', (function () {
+        var w = el('div', 'stars');
+        for (var n = 1; n <= 5; n++) {
+          (function (n) {
+            var b = el('button', 'star', String(n)); b.type = 'button';
+            b.setAttribute('aria-pressed', String(v.mastery === n));
+            b.onclick = function () {
+              v.mastery = (v.mastery === n) ? undefined : n;
+              w.querySelectorAll('.star').forEach(function (x, i2) { x.setAttribute('aria-pressed', String(v.mastery === i2 + 1)); });
+              refreshFormStatus();
+            };
+            w.appendChild(b);
+          })(n);
+        }
+        return w;
+      })()));
+      s.appendChild(field('漏点', (function () {
+        var i = makeInput('text', '', '哪里还不懂'); i.value = v.gap || '';
+        i.oninput = function () { v.gap = i.value; }; return i;
+      })()));
+      studyBox.appendChild(s);
+    }
+    var addS = el('button', 'btn', '＋ 加一条学习');
+    addS.type = 'button';
+    addS.onclick = function () { addSub('study'); };
+    var studyNodes = [studyBox, addS];
+    /* 按 formVal 里的实际条数渲染（渲染即真相，不靠手工增删 DOM） */
+    (function () {
+      var arr = getPath(formVal, 'study');
+      if (Array.isArray(arr)) arr.forEach(function (v, i) { addStudy(v, i); });
+    })();
+    secs.push(dimSection(L.dimOf('study'), studyNodes, function () {
+      var a = getPath(formVal, 'study');
+      return Array.isArray(a) && a.length ? a.length + ' 条' : '';
+    }));
+
+    /* 工作 */
+    secs.push(dimSection(L.dimOf('work'), [
+      field('进展', makeArea('work.progress', '今天推进了什么')),
+      field('下一步', makeInput('text', 'work.next', '接下来要做什么'))
+    ], function () {
+      return getPath(formVal, 'work.progress') ? '已填' : '';
+    }));
+
+    /* 社会关系：可加多条 */
+    var socBox = el('div', null);
+    function addSoc(v, index) {
+      var s = el('div', 'sub');
+      var h = el('h4', null, '互动一条');
+      var rm = el('button', 'mini2 rm', '删除');
+      rm.type = 'button';
+      rm.onclick = function () { removeSub('social', index); };
+      h.appendChild(rm);
+      s.appendChild(h);
+      s.appendChild(field('和谁', (function () {
+        var i = makeInput('text', '', '如 同学'); i.value = v.who || '';
+        i.oninput = function () { v.who = i.value; refreshFormStatus(); }; return i;
+      })()));
+      s.appendChild(field('做了什么', (function () {
+        var i = makeInput('text', '', '如 一起吃饭'); i.value = v.what || '';
+        i.oninput = function () { v.what = i.value; refreshFormStatus(); }; return i;
+      })()));
+      s.appendChild(field('感受', (function () {
+        var w = el('div', 'stars');
+        for (var n = 1; n <= 5; n++) {
+          (function (n) {
+            var b = el('button', 'star', String(n)); b.type = 'button';
+            b.setAttribute('aria-pressed', String(v.feeling === n));
+            b.onclick = function () {
+              v.feeling = (v.feeling === n) ? undefined : n;
+              w.querySelectorAll('.star').forEach(function (x, i2) { x.setAttribute('aria-pressed', String(v.feeling === i2 + 1)); });
+              refreshFormStatus();
+            };
+            w.appendChild(b);
+          })(n);
+        }
+        return w;
+      })()));
+      socBox.appendChild(s);
+    }
+    var addSo = el('button', 'btn', '＋ 加一条互动');
+    addSo.type = 'button';
+    addSo.onclick = function () { addSub('social'); };
+    (function () {
+      var arr = getPath(formVal, 'social');
+      if (Array.isArray(arr)) arr.forEach(function (v, i) { addSoc(v, i); });
+    })();
+    secs.push(dimSection(L.dimOf('social'), [socBox, addSo], function () {
+      var a = getPath(formVal, 'social');
+      return Array.isArray(a) && a.length ? a.length + ' 条' : '';
+    }));
+
+    /* 财务 */
+    secs.push(dimSection(L.dimOf('finance'), [
+      field('收入', makeInput('number', 'finance.income', '0')),
+      field('支出', makeInput('number', 'finance.expense', '0')),
+      field('余额', makeInput('number', 'finance.balance', '可选')),
+      field('分类', makeTags('finance.expenseTags', TAGS.expenseTags))
+    ], function () {
+      var e = getPath(formVal, 'finance.expense');
+      return (e !== undefined && e !== '') ? '支出 ' + e : '';
+    }));
+
+    /* 规划与想法 */
+    var planNodes = [
+      field('想法', makeArea('plan.ideas', '想到什么就写，一句也行'))
+    ];
+    var decBox = el('div', null);
+    function addDec(v, index) {
+      var s = el('div', 'sub');
+      var h = el('h4', null, '决策一条');
+      var rm = el('button', 'mini2 rm', '删除');
+      rm.type = 'button';
+      rm.onclick = function () { removeSub('plan', index); };
+      h.appendChild(rm);
+      s.appendChild(h);
+      s.appendChild(field('决定', (function () {
+        var i = makeInput('text', '', '做了什么决定'); i.value = v.what || '';
+        i.oninput = function () { v.what = i.value; refreshFormStatus(); }; return i;
+      })()));
+      s.appendChild(field('原因', (function () {
+        var i = makeInput('text', '', '为什么这么决定（必填）'); i.value = v.why || '';
+        i.oninput = function () { v.why = i.value; refreshFormStatus(); }; return i;
+      })()));
+      s.appendChild(field('备选', (function () {
+        var i = makeInput('text', '', '还考虑过什么'); i.value = v.alt || '';
+        i.oninput = function () { v.alt = i.value; }; return i;
+      })()));
+      s.appendChild(field('预期', (function () {
+        var i = makeInput('text', '', '希望达到什么效果'); i.value = v.expect || '';
+        i.oninput = function () { v.expect = i.value; }; return i;
+      })()));
+      decBox.appendChild(s);
+    }
+    var addD = el('button', 'btn', '＋ 加一条决策');
+    addD.type = 'button';
+    addD.onclick = function () { addSub('plan'); };
+    planNodes.push(el('p', 'hint', '决策记录的「原因」是必填 —— 只记结论不记原因，过两周回看就没信息量了'));
+    planNodes.push(decBox);
+    planNodes.push(addD);
+    (function () {
+      var arr = getPath(formVal, 'plan.decisions');
+      if (Array.isArray(arr)) arr.forEach(function (v, i) { addDec(v, i); });
+    })();
+    secs.push(dimSection(L.dimOf('plan'), planNodes, function () {
+      var n = 0;
+      if (getPath(formVal, 'plan.ideas')) n++;
+      var a = getPath(formVal, 'plan.decisions');
+      if (Array.isArray(a)) n += a.length;
+      return n ? n + ' 项' : '';
+    }));
+
+    secs.forEach(function (s2) { box.appendChild(s2); });
+    refreshFormStatus();
+  }
+
+  function refreshFormStatus() {
+    var box = $('form');
+    if (!box) return;
+    box.querySelectorAll('.acc').forEach(function (d) {
+      if (!d._statusFn) return;
+      var txt = '';
+      try { txt = d._statusFn() || ''; } catch (e) { txt = ''; }
+      d._status.textContent = txt;
+    });
+    // 有内容时自动展开该维度，让用户看见自己填了什么
+    box.querySelectorAll('.acc').forEach(function (d) {
+      if (d._status && d._status.textContent && !d.open) d.open = true;
+    });
+  }
+
+  /* ==========================================================================
+     动作
+     ======================================================================== */
+  function doSaveEntry(entry) {
+    var r = L.addEntry(state, curDate, entry, Date.now());
+    if (r.error) { toast(r.error); return false; }
+    state = r.state;
+    if (!saveState(state)) {
+      // ⚠️ 写失败时**绝不能显示"已保存"**（课程表踩过这个坑）
+      toast('保存失败：本地存储写不进去，请先导出备份');
+      return false;
+    }
+    renderAll();
+    return true;
+  }
+
+  function doDelete(id) {
+    var r = L.removeEntry(state, curDate, id);
+    if (r.error) { toast(r.error); return; }
+    state = r.state;
+    saveState(state);
+    renderAll();
+    toast('已删除');
+  }
+
+  /* ---------- 编辑弹层 ---------- */
+  function openEditSheet(e) {
+    openSheet(function (panel) {
+      panel.appendChild(el('h3', null, '编辑这条记录（' + (e.at || '') + '）'));
+      var ta = document.createElement('textarea');
+      ta.value = entryText(e) || e.raw || '';
+      panel.appendChild(el('p', 'hint',
+        '改完点「保存文字」即可。也可以点「🤖 重新让 AI 解析」——' +
+        '把这段文字重新拆一遍（原文永久保留，所以重复解析不会丢东西）。'));
+      panel.appendChild(ta);
+      var btns = el('div', 'btns');
+      var b1 = el('button', 'btn p grow', '保存文字');
+      b1.onclick = function () {
+        var patch = { raw: ta.value };
+        // 只改 raw 不够直观，这里同时把 raw 存起来，字段留给表单编辑
+        var r = L.updateEntry(state, curDate, e.id, patch, Date.now());
+        if (r.error) { toast(r.error); return; }
+        state = r.state; saveState(state); renderAll(); closeSheet(); toast('已保存');
+      };
+      /*
+       * 重新让 AI 解析这段文字。
+       * 这条路径的价值：`raw` 是**永久保留**的（方案 §6 设计决定 1），
+       * 所以提示词改进后、或者当时 AI 拆错了，都能重新解析而不丢任何数据。
+       */
+      var bRe = el('button', 'btn', '🤖 重新解析');
+      bRe.onclick = function () {
+        if (!A) { toast('AI 模块没加载'); return; }
+        if (!aiReady()) { toast('还没设置 API key'); openSettings(); return; }
+        var text = ta.value.trim();
+        if (!text) { toast('内容为空'); return; }
+        bRe.disabled = true; bRe.textContent = '⏳ 解析中…';
+        var now = new Date();
+        A.parseNote(text, aiSettings(), {
+          nowHint: '现在是 ' + L.toDateKey(now) + ' ' + L.nowHHMM(now)
+        }).then(function (res) {
+          bRe.disabled = false; bRe.textContent = '🤖 重新解析';
+          accountUsage(res.usage);
+          if (!res.ok) { aiFail(res.error); return; }
+          // 用新解析的字段覆盖这条记录（raw 同时更新成用户改过的文字）
+          var patch = { raw: text };
+          Object.keys(res.data).forEach(function (k) { patch[k] = res.data[k]; });
+          var r = L.updateEntry(state, curDate, e.id, patch, Date.now());
+          if (r.error) { toast(r.error); return; }
+          state = r.state;
+          if (!saveState(state)) { toast('解析成功了，但存不进去'); return; }
+          closeSheet(); renderAll();
+          toast('已重新解析并更新这条记录');
+        }).catch(function (err) {
+          bRe.disabled = false; bRe.textContent = '🤖 重新解析';
+          toast('出错了：' + (err && err.message || err));
+        });
+      };
+      var b2 = el('button', 'btn', '在表单里改');
+      b2.onclick = function () {
+        formVal = JSON.parse(JSON.stringify(e));
+        delete formVal.id; delete formVal.at; delete formVal.createdAt;
+        delete formVal.updatedAt; delete formVal.raw;
+        editingId = e.id;
+        renderForm();
+        closeSheet();
+        toast('已载入表单，改完点「保存这条记录」');
+      };
+      var b3 = el('button', 'btn', '取消');
+      b3.onclick = closeSheet;
+      btns.appendChild(b1); btns.appendChild(bRe); btns.appendChild(b2); btns.appendChild(b3);
+      panel.appendChild(btns);
+    });
+  }
+
+  var editingId = null;
+
+  function openSheet(build) {
+    var panel = clear($('sheetPanel'));
+    build(panel);
+    $('sheet').classList.add('on');
+    $('sheet').onclick = function (ev) { if (ev.target === $('sheet')) closeSheet(); };
+  }
+  function closeSheet() { $('sheet').classList.remove('on'); }
+
+  /* ---------- 导出备份 ---------- */
+  function exportBackup() {
+    var obj = L.exportForBackup(state, Date.now());
+    var text = JSON.stringify(obj, null, 2);
+    downloadText('个人规划备份-' + L.todayKey() + '.json', text, 'application/json');
+    state.settings.lastExportAt = Date.now();
+    saveState(state);
+    renderBanners();
+    toast('已导出（备份里**不含** API key，可以放心传）');
+  }
+
+  function downloadText(filename, text, mime) {
+    try {
+      var blob = new Blob([text], { type: (mime || 'text/plain') + ';charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 500);
+    } catch (e) {
+      // 降级：弹层里显示全文，让用户自己复制
+      openSheet(function (panel) {
+        panel.appendChild(el('h3', null, '导出（浏览器不支持直接下载，请手动复制）'));
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.minHeight = '46vh';
+        panel.appendChild(ta);
+        ta.select();
+        var b = el('button', 'btn p', '关闭');
+        b.onclick = closeSheet;
+        panel.appendChild(b);
+      });
+    }
+  }
+
+  /* ==========================================================================
+     M4：AI 交互
+     ======================================================================== */
+
+  /** 当前是否配好了 AI */
+  function aiReady() { return !!(A && A.isReady(state.settings)); }
+
+  /** 把设置里的 key 交给 ai.js 用（会话模式时不落盘，但本次可用） */
+  function aiSettings() {
+    return {
+      apiKey: state.settings.apiKey || '',
+      model: state.settings.model || 'deepseek-flash',
+      baseUrl: state.settings.baseUrl || ''
+    };
+  }
+
+  /** 记一次用量（按真实 usage 记账，不是估算） */
+  function accountUsage(usage) {
+    if (!usage) return;
+    if (!state.settings.ledger || typeof state.settings.ledger !== 'object') state.settings.ledger = {};
+    state.settings.ledger = A.recordUsage(state.settings.ledger, usage, state.settings.model || 'deepseek-flash', Date.now());
+    saveState(state);
+  }
+
+  /** 统一的 AI 失败提示（把 ai.js 的错误对象变成人话） */
+  function aiFail(err) {
+    var e = err || {};
+    var msg = (e.icon ? e.icon + ' ' : '') + (e.text || 'AI 调用失败');
+    toast(msg);
+    if (e.kind === 'no_key') { openSettings(); }
+    return false;
+  }
+
+  /**
+   * 一句话 → AI 拆字段 → **弹层让用户确认**（D2：你看一眼改完再存）
+   *
+   * 为什么必须确认：个人档案最怕脏数据。一旦你发现记的不对，信任就崩了，
+   * 就不会再记 —— 整个 App 就白做了。所以 AI 的结果只是"草稿"。
+   */
+  function runAIParse(text) {
+    if (!A) { toast('AI 模块没加载'); return; }
+    if (!aiReady()) { toast('还没设置 API key'); openSettings(); return; }
+
+    var btn = $('btnAI');
+    var oldLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ 正在整理…';
+
+    var now = new Date();
+    var hint = '现在是 ' + L.toDateKey(now) + ' ' + L.nowHHMM(now) +
+               '（星期' + '一二三四五六日'[L.isoDayOfWeek(L.toDateKey(now)) - 1] + '）';
+
+    A.parseNote(text, aiSettings(), { nowHint: hint }).then(function (r) {
+      btn.disabled = false;
+      btn.textContent = oldLabel;
+      accountUsage(r.usage);
+      if (!r.ok) { aiFail(r.error); return; }
+      showAIConfirm(text, r.data, function (dims) {
+        // 用户确认（可能改过）→ 载入表单让他继续调，或直接保存
+        applyDimsToForm(dims);
+        $('quick').value = '';
+        toast('已填进表单，检查一下再点「保存这条记录」');
+      });
+    }).catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = oldLabel;
+      toast('出错了：' + (e && e.message || e));
+    });
+  }
+
+  /** 把 AI 拆出的字段灌进表单 */
+  function applyDimsToForm(dims) {
+    Object.keys(dims || {}).forEach(function (k) { formVal[k] = dims[k]; });
+    renderForm();
+    // 展开第一个有内容的维度，让用户看到
+    var acc = $('form').querySelectorAll('.acc');
+    for (var i = 0; i < acc.length; i++) {
+      if (acc[i]._status && acc[i]._status.textContent) { acc[i].open = true; break; }
+    }
+    $('form').scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
+  /**
+   * AI 结果确认弹层。
+   * ⚠️ 全程用 textContent，不用 innerHTML —— AI 的内容不能进 HTML 解析，
+   *    否则模型可以输出 <img onerror=...> 读走 localStorage 里的 API key。
+   */
+  function showAIConfirm(rawText, dims, onConfirm) {
+    openSheet(function (panel) {
+      panel.appendChild(el('h3', null, 'AI 整理结果（检查一下）'));
+
+      panel.appendChild(el('p', 'hint', '原文：' + rawText));
+
+      var keys = Object.keys(dims || {});
+      if (!keys.length) {
+        panel.appendChild(el('div', 'prev', 'AI 没拆出任何字段。可以写详细一点再试，或者点「手填」自己记。'));
+      }
+
+      keys.forEach(function (k) {
+        var d = L.dimOf(k);
+        var c = el('div', 'sub');
+        c.appendChild(el('h4', null, (d ? d.icon + ' ' + d.name : k)));
+        // 用 compactDim 把结构化内容压成一行可读文字
+        var txt = L.compactDim(k, dims[k]);
+        c.appendChild(el('div', 'txt', txt || JSON.stringify(dims[k])));
+        panel.appendChild(c);
+      });
+
+      if (keys.length) {
+        panel.appendChild(el('p', 'hint', '要改就直接改文字（M5 会支持在这里编辑字段）；现在确认后会填进下面的表单。'));
+      }
+
+      var btns = el('div', 'btns');
+      var b1 = el('button', 'btn p grow', '✅ 填进表单');
+      b1.onclick = function () { closeSheet(); onConfirm(dims); };
+      var b2 = el('button', 'btn', '重试');
+      b2.onclick = function () { closeSheet(); runAIParse(rawText); };
+      var b3 = el('button', 'btn', '取消');
+      b3.onclick = closeSheet;
+      btns.appendChild(b1); btns.appendChild(b2); btns.appendChild(b3);
+      panel.appendChild(btns);
+    });
+  }
+
+  /**
+   * 生成今日复盘（三列）。
+   */
+  function runReview() {
+    if (!A) { toast('AI 模块没加载'); return; }
+    if (!aiReady()) { toast('还没设置 API key'); openSettings(); return; }
+
+    var day = L.getDay(state, curDate);
+    if (!day || !day.entries.length) { toast('这一天还没有记录'); return; }
+
+    var btn = $('btnReview');
+    var oldLabel = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ 正在分析今天…';
+
+    A.dailyReview(state, curDate, aiSettings()).then(function (r) {
+      btn.disabled = false;
+      btn.textContent = oldLabel;
+      accountUsage(r.usage);
+      if (!r.ok) { aiFail(r.error); return; }
+      // 存档到 days[date].ai（并记下条目数，之后又加条目就能提示重新生成）
+      var s = L.normalizeState(state);
+      if (!s.days[curDate]) s.days[curDate] = { date: curDate, entries: [] };
+      s.days[curDate].ai = {
+        review: { fact: r.data.fact, contribution: r.data.contribution, next: r.data.next },
+        at: Date.now(),
+        model: state.settings.model || 'deepseek-flash',
+        tokens: r.usage ? { in: r.usage.in, out: r.usage.out } : undefined,
+        entryCount: s.days[curDate].entries.length,
+        lastEntryAt: (function () {
+          var last = 0;
+          s.days[curDate].entries.forEach(function (e) { if (e.updatedAt > last) last = e.updatedAt; });
+          return last;
+        })()
+      };
+      state = s;
+      if (!saveState(state)) { toast('复盘生成了，但存不进去（存储写失败）'); }
+      renderAll();
+      toast(r.data.insufficient ? '数据有点少，AI 说看不出太多' : '复盘已生成');
+    }).catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = oldLabel;
+      toast('出错了：' + (e && e.message || e));
+    });
+  }
+
+  /** 渲染已保存的复盘 */
+  function renderReview() {
+    var box = clear($('reviewBox'));
+    var day = L.getDay(state, curDate);
+    if (!day || !day.ai || !day.ai.review) return;
+    var r = day.ai.review;
+
+    var c = el('div', 'review');
+    function col(title, body, cls) {
+      var d = el('div', 'rc' + (cls ? ' ' + cls : ''));
+      d.appendChild(el('div', 'rt', title));
+      d.appendChild(el('div', 'rb', body || '（空）'));
+      return d;
+    }
+    if (r.fact) c.appendChild(col('今日事实', r.fact));
+    if (r.contribution) c.appendChild(col('贡献与问题', r.contribution));
+    if (r.next) c.appendChild(col('下一步', r.next));
+    box.appendChild(c);
+
+    var when = day.ai.at ? new Date(day.ai.at) : null;
+    var meta = '由 ' + (day.ai.model || 'AI') + ' 生成';
+    if (when) meta += '（' + L.nowHHMM(when) + '）';
+    if (day.ai.tokens) meta += ' · 用了 ' + (day.ai.tokens.in || 0) + '+' + (day.ai.tokens.out || 0) + ' token';
+    box.appendChild(el('p', 'hint', meta));
+  }
+
+  /* ==========================================================================
+     M5：仪表盘（趋势图手绘 Canvas，不引图表库）
+     ======================================================================== */
+  var dashRange = 30;         // 近 30 天
+  var chartDim = 'sleep';     // 当前看哪个指标
+  var pairA = 'sleep', pairB = 'energy';
+
+  function switchView(v) {
+    $('view-today').style.display = (v === 'today') ? '' : 'none';
+    $('view-dash').style.display = (v === 'dash') ? '' : 'none';
+    document.querySelectorAll('nav button').forEach(function (x) {
+      x.setAttribute('aria-current', String(x.getAttribute('data-view') === v));
+    });
+    if (v === 'dash') renderDash();
+  }
+
+  function renderDash() {
+    if (!L) return;
+    var s = L.dashSummary(state, dashRange, curDate);
+    $('dashNote').textContent = s.from + ' ~ ' + s.to;
+
+    var box = clear($('dashStats'));
+    function kv(k, v) {
+      var w = el('span', 'kv');
+      w.appendChild(el('span', 'k', k));
+      w.appendChild(el('span', 'v', v));
+      box.appendChild(w);
+    }
+    kv('记录了', s.daysWithRecords + '/' + s.days + ' 天');
+    kv('坚持', L.streak(state, curDate) + ' 天');
+    kv('维度完成度', Math.round(s.ratio * 100) + '%');
+    if (s.mostMissed.length) {
+      kv('最常漏记', s.mostMissed.map(function (m) { return m.name + '×' + m.missed; }).join('、'));
+    }
+
+    // 范围按钮状态
+    document.querySelectorAll('#view-dash [data-range]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(Number(b.getAttribute('data-range')) === dashRange));
+      b.onclick = function () { dashRange = Number(b.getAttribute('data-range')); renderDash(); };
+    });
+
+    renderHeat();
+    renderChartPickers();
+    drawChart();
+    renderPair();
+    renderReports();
+  }
+
+  /* ---------- 日历热力图 ---------- */
+  function renderHeat() {
+    var box = clear($('heat'));
+    var h = L.calendarHeat(state, Math.min(dashRange, 91), curDate);
+    if (!h.weeks.length) { box.appendChild(el('div', 'empty', '还没有记录')); return; }
+
+    var wrap = el('div', 'heat');
+    // 月份标签行
+    var moRow = el('div', 'mo-row');
+    h.weeks.forEach(function (w, i) {
+      var lab = '';
+      for (var k = 0; k < h.months.length; k++) {
+        if (h.months[k].weekIndex === i) { lab = Number(h.months[k].m.slice(5)) + '月'; break; }
+      }
+      var c = el('div', 'mo', lab);
+      c.style.width = '12px';
+      moRow.appendChild(c);
+    });
+    var outer = el('div');
+    outer.appendChild(moRow);
+    moRow.style.display = 'flex';
+    moRow.style.gap = '3px';
+    moRow.style.minWidth = 'max-content';
+
+    h.weeks.forEach(function (w) {
+      var col = el('div', 'wk');
+      w.forEach(function (cell) {
+        var c = el('div', 'cell' + (cell.level ? ' l' + cell.level : (cell.inRange === false ? ' out' : '')));
+        c.title = cell.date + (cell.count ? '：' + cell.count + ' 条、' + cell.filled + ' 个维度' : '：没记');
+        col.appendChild(c);
+      });
+      wrap.appendChild(col);
+    });
+    outer.appendChild(wrap);
+    box.appendChild(outer);
+    /*
+     * 提示语分两行（挤一行在窄屏会折得很乱）。
+     * ⚠️ 必须"复用同一个元素"，不能每次都新建 —— heatHint 每次 renderDash 都会重跑，
+     *    每次 append 一个就会越积越多（这个错很容易犯，因为界面上看不出问题，
+     *    只有反复切视图才会发现下面堆了一排重复文字）。
+     */
+    $('heatHint').textContent = h.from + ' ~ ' + h.to;
+    var line2 = $('heatLine2');
+    if (!line2) {
+      line2 = el('p', 'hint');
+      line2.id = 'heatLine2';
+      $('heatHint').parentNode.insertBefore(line2, $('heatHint').nextSibling);
+    }
+    line2.textContent = '颜色越深 = 那天记的维度越多；空白 = 那天没记';
+  }
+
+  /* ---------- 指标选择 ---------- */
+  function renderChartPickers() {
+    var series = L.chartSeries(state, dashRange, curDate);
+    var pick = clear($('chartPick'));
+    series.forEach(function (sr) {
+      var b = el('button', 'mini', sr.name);
+      b.setAttribute('aria-pressed', String(sr.key === chartDim));
+      b.onclick = function () { chartDim = sr.key; renderDash(); };
+      pick.appendChild(b);
+    });
+
+    var pa = clear($('pairPick'));
+    [['pairA', 'A：'], ['pairB', 'B：']].forEach(function (pr) {
+      var lab = el('span', 'k', pr[1]);
+      lab.style.alignSelf = 'center';
+      pa.appendChild(lab);
+      series.forEach(function (sr) {
+        var cur = (pr[0] === 'pairA') ? pairA : pairB;
+        var b = el('button', 'mini', sr.name);
+        b.setAttribute('aria-pressed', String(sr.key === cur));
+        b.onclick = function () {
+          if (pr[0] === 'pairA') pairA = sr.key; else pairB = sr.key;
+          renderDash();
+        };
+        pa.appendChild(b);
+      });
+      pa.appendChild(el('div', '', ''));
+    });
+  }
+
+  /* ---------- 折线图（手绘）----------
+   * 不引图表库的理由：App 是零依赖的（CSP 也不允许外部脚本）。
+   * 朴素折线足够回答"在变好还是变差"这个问题。
+   */
+  function drawChart() {
+    var cv = $('chart');
+    if (!cv || !cv.getContext) return;
+    var series = L.chartSeries(state, dashRange, curDate);
+    var sr = null;
+    for (var i = 0; i < series.length; i++) if (series[i].key === chartDim) sr = series[i];
+    if (!sr) return;
+
+    var dpr = Math.min(2, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1));
+    var cssW = cv.clientWidth || 320, cssH = 200;
+    cv.width = Math.round(cssW * dpr);
+    cv.height = Math.round(cssH * dpr);
+    cv.style.height = cssH + 'px';
+    var g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, cssW, cssH);
+
+    var dark = (typeof matchMedia === 'function') && matchMedia('(prefers-color-scheme: dark)').matches;
+    var ink3 = dark ? '#7d838d' : '#8a8f98';
+    var line = dark ? '#2c3037' : '#e4e6eb';
+    var brand = dark ? '#2dd4bf' : '#0f766e';
+
+    var padL = 30, padR = 8, padT = 12, padB = 20;
+    var plotW = cssW - padL - padR, plotH = cssH - padT - padB;
+    var vals = sr.values.filter(function (v) { return typeof v === 'number'; });
+    if (!vals.length) {
+      g.fillStyle = ink3;
+      g.font = '13px sans-serif';
+      g.textAlign = 'center';
+      g.fillText('这段时间还没有 ' + sr.name + ' 的数据', cssW / 2, cssH / 2);
+      $('chartStats').textContent = '';
+      $('chartHint').textContent = '';
+      return;
+    }
+    var min = Math.min.apply(null, vals), max = Math.max.apply(null, vals);
+    if (min === max) { min -= 1; max += 1; }
+    var span = max - min;
+
+    // 横向网格 + y 轴刻度
+    g.strokeStyle = line; g.lineWidth = 1;
+    g.font = '10px sans-serif'; g.fillStyle = ink3; g.textAlign = 'right';
+    for (var k = 0; k <= 3; k++) {
+      var y = padT + plotH * (k / 3);
+      g.beginPath(); g.moveTo(padL, Math.round(y) + 0.5); g.lineTo(padL + plotW, Math.round(y) + 0.5); g.stroke();
+      var tv = max - span * (k / 3);
+      g.fillText((Math.round(tv * 10) / 10) + '', padL - 4, y + 3);
+    }
+
+    var n = sr.values.length;
+    function xAt(i) { return padL + (n <= 1 ? plotW / 2 : plotW * (i / (n - 1))); }
+    function yAt(v) { return padT + plotH * (1 - (v - min) / span); }
+
+    // 折线：在"空档"（null）处断开，不要把缺失连成直线
+    g.strokeStyle = brand; g.lineWidth = 2; g.lineJoin = 'round';
+    var started = false;
+    g.beginPath();
+    for (var j = 0; j < n; j++) {
+      var v = sr.values[j];
+      if (typeof v !== 'number') { started = false; continue; }
+      var x = xAt(j), y = yAt(v);
+      if (!started) { g.moveTo(x, y); started = true; }
+      else g.lineTo(x, y);
+    }
+    g.stroke();
+
+    // 数据点（有值的日子）
+    g.fillStyle = brand;
+    for (var m = 0; m < n; m++) {
+      if (typeof sr.values[m] !== 'number') continue;
+      g.beginPath();
+      g.arc(xAt(m), yAt(sr.values[m]), 2.2, 0, Math.PI * 2);
+      g.fill();
+    }
+
+    // x 轴首尾日期
+    g.fillStyle = ink3; g.textAlign = 'left';
+    g.fillText(sr.dates[0].slice(5), padL, cssH - 6);
+    g.textAlign = 'right';
+    g.fillText(sr.dates[n - 1].slice(5), padL + plotW, cssH - 6);
+
+    // 统计
+    var st = clear($('chartStats'));
+    function sv(k, v) {
+      var w = el('span');
+      w.appendChild(el('b', null, v));
+      w.appendChild(document.createTextNode(' ' + k));
+      st.appendChild(w);
+    }
+    sv('天有数据', st.hmm = String(sr.stat.n));
+    if (sr.stat.mean !== null) sv('平均', sr.stat.mean + sr.unit);
+    if (sr.last !== null) sv('最近一次', sr.last + sr.unit);
+    if (sr.stat.min !== null) sv('最低', sr.stat.min + sr.unit);
+    if (sr.stat.max !== null) sv('最高', sr.stat.max + sr.unit);
+
+    $('chartNote').textContent = sr.name + '（' + dashRange + ' 天）';
+    $('chartHint').textContent = sr.stat.n < 7
+      ? '⚠️ 只有 ' + sr.stat.n + ' 天数据，看不出趋势。多记几天再看。'
+      : '断开的缺口 = 那天没记录（不是记成了 0）。';
+  }
+
+  /* ---------- 两个指标一起看 ---------- */
+  function renderPair() {
+    var box = clear($('pairOut'));
+    var series = L.chartSeries(state, dashRange, curDate);
+    var a = null, b = null;
+    series.forEach(function (s) { if (s.key === pairA) a = s; if (s.key === pairB) b = s; });
+    if (!a || !b) { box.appendChild(el('div', 'empty', '选两个指标')); return; }
+    if (a.key === b.key) { box.appendChild(el('div', 'empty', 'A 和 B 是同一个指标，换一个看看')); return; }
+
+    var cm = L.coMove(a, b);
+    var row = el('div', 'pair-row');
+    row.appendChild(el('div', 'nm', a.name + ' ↔ ' + b.name));
+    row.appendChild(el('div', 'rt', cm.rate === null ? '—' : Math.round(cm.rate * 100) + '%'));
+    box.appendChild(row);
+    box.appendChild(el('div', 'rr',
+      cm.n < 3
+        ? '只有 ' + cm.n + ' 天两边都有数据，太少，算不了'
+        : '共同有数据的 ' + cm.n + ' 天里，有 ' + Math.round(cm.rate * 100) + '% 的天是同向变化' +
+          (cm.n < 7 ? '（⚠️ 样本少于 7 天，别当结论）' : '')));
+  }
+
+  /* ==========================================================================
+     M6：周报 / 月报 / 按周导出
+     ======================================================================== */
+
+  /** 当前所在的周键 */
+  function curWeek() { return L.isoWeekKey(curDate) || L.isoWeekKey(L.todayKey()); }
+
+  /** 周报 */
+  function runWeekReport() {
+    if (!A) { toast('AI 模块没加载'); return; }
+    if (!aiReady()) { toast('还没设置 API key'); openSettings(); return; }
+    var wk = curWeek();
+    var r = L.weekRange(wk);
+    if (!r) { toast('周次算不出来'); return; }
+    var w = L.weekSummary(state, wk);
+    if (!w || !w.daysWithRecords) { toast('这一周还没有记录'); return; }
+
+    var btn = $('btnWeekReport');
+    var old = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ 分析本周…';
+
+    A.rangeReport(state, r.from, r.to, aiSettings()).then(function (res) {
+      btn.disabled = false; btn.textContent = old;
+      accountUsage(res.usage);
+      if (!res.ok) { aiFail(res.error); return; }
+      saveReport(wk, 'week', res.data, res.usage);
+      renderReports();
+      toast('周报已生成（' + res.data.sampleSize + ' 天数据）');
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = old;
+      toast('出错了：' + (e && e.message || e));
+    });
+  }
+
+  /** 月报（分层压缩：喂周摘要） */
+  function runMonthReport() {
+    if (!A) { toast('AI 模块没加载'); return; }
+    if (!aiReady()) { toast('还没设置 API key'); openSettings(); return; }
+    var d = L.fromDateKey(curDate) || new Date();
+    var y = d.getFullYear(), m = d.getMonth() + 1;
+
+    var btn = $('btnMonthReport');
+    var old = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ 分析本月…';
+
+    A.monthReport(state, y, m, aiSettings()).then(function (res) {
+      btn.disabled = false; btn.textContent = old;
+      accountUsage(res.usage);
+      if (!res.ok) { aiFail(res.error); return; }
+      saveReport(y + '-' + (m < 10 ? '0' : '') + m, 'month', res.data, res.usage);
+      renderReports();
+      toast('月报已生成（基于 ' + (res.weekCount || 0) + ' 周摘要）');
+    }).catch(function (e) {
+      btn.disabled = false; btn.textContent = old;
+      toast('出错了：' + (e && e.message || e));
+    });
+  }
+
+  /** 报告存档（放 state.reports） */
+  function saveReport(key, kind, data, usage) {
+    var s = L.normalizeState(state);
+    if (!s.reports) s.reports = {};
+    s.reports[key] = {
+      kind: kind,
+      text: JSON.stringify(data),
+      at: Date.now(),
+      tokens: usage ? { in: usage.in, out: usage.out } : undefined
+    };
+    state = s;
+    if (!saveState(state)) toast('报告生成了，但存不进去（存储写失败）');
+  }
+
+  /** 读出最近一份报告并渲染 */
+  function renderReports() {
+    var box = clear($('reportBox'));
+    var keys = Object.keys(state.reports || {}).sort();
+    if (!keys.length) { box.appendChild(el('p', 'hint', '还没有报告。点上面的按钮生成一份。')); return; }
+
+    var latest = keys[keys.length - 1];
+    var rep = state.reports[latest];
+    var data = null;
+    try { data = JSON.parse(rep.text); } catch (e) { data = null; }
+
+    var head = el('div', 'rep-head');
+    head.appendChild(el('b', null, rep.kind === 'month' ? '月报 ' : '周报 '));
+    head.appendChild(document.createTextNode(latest));
+    var when = rep.at ? new Date(rep.at) : null;
+    head.appendChild(el('span', 'rr', when ? '　生成于 ' + L.nowHHMM(when) : ''));
+    box.appendChild(head);
+
+    if (!data) { box.appendChild(el('div', 'empty', '这份报告读不出来')); return; }
+
+    var st = el('div', 'chart-stats');
+    st.appendChild(el('span', null, '样本：' + (data.sampleSize || 0) + (rep.kind === 'month' ? ' 周' : ' 天')));
+    if (rep.tokens) st.appendChild(el('span', null, 'token ' + rep.tokens.in + '+' + rep.tokens.out));
+    box.appendChild(st);
+
+    if (rep.kind === 'month') {
+      if (Array.isArray(data.trend) && data.trend.length) {
+        box.appendChild(el('div', 'sh', '趋势'));
+        data.trend.forEach(function (t) {
+          var row = el('div', 'rc');
+          row.appendChild(el('div', 'rt', (L.dimOf(t.dim) ? L.dimOf(t.dim).name : t.dim) +
+            (t.weeks && t.weeks.length ? '（第 ' + t.weeks.join('、') + ' 周）' : '')));
+          row.appendChild(el('div', 'rb', t.conclusion || ''));
+          box.appendChild(row);
+        });
+      }
+      if (data.suggestion) {
+        box.appendChild(el('div', 'sh', '下个月最值得改的一件事'));
+        var g = el('div', 'rc next');
+        g.appendChild(el('div', 'rb', data.suggestion));
+        box.appendChild(g);
+      }
+    } else {
+      [['good', '做得好'], ['bad', '要留意'], ['findings', '发现的规律']].forEach(function (p) {
+        var arr = data[p[0]];
+        if (!Array.isArray(arr) || !arr.length) return;
+        box.appendChild(el('div', 'sh', p[1]));
+        arr.forEach(function (x) {
+          var row = el('div', 'rc');
+          if (x.dim || (x.days && x.days.length)) {
+            var meta = [];
+            if (x.dim) meta.push(L.dimOf(x.dim) ? L.dimOf(x.dim).name : x.dim);
+            if (x.days && x.days.length) meta.push('第 ' + x.days.join('、') + ' 天');
+            if (meta.length) row.appendChild(el('div', 'rt', meta.join('　')));
+          }
+          row.appendChild(el('div', 'rb', x.conclusion || JSON.stringify(x)));
+          box.appendChild(row);
+        });
+      });
+    }
+
+    if (Array.isArray(data.insufficient) && data.insufficient.length) {
+      box.appendChild(el('div', 'sh', '数据不足、没下结论的地方'));
+      data.insufficient.forEach(function (x) {
+        box.appendChild(el('div', 'rr', '· ' + x));
+      });
+    }
+    if (Array.isArray(data.invalidRefs) && data.invalidRefs.length) {
+      // 防御性展示：AI 引用了不存在的编号，说明它编了 —— 让用户知道我们剔除了
+      box.appendChild(el('p', 'hint',
+        '⚠️ AI 引用了 ' + data.invalidRefs.length + ' 个不存在的编号，已自动剔除（防幻觉）。'));
+    }
+
+    if (keys.length > 1) {
+      box.appendChild(el('p', 'hint', '共 ' + keys.length + ' 份报告，显示最新一份（' + latest + '）。'));
+    }
+  }
+
+  /** 导出本周素材（给「我的生活」文件夹） */
+  function exportWeek() {
+    var wk = curWeek();
+    var md = L.exportWeekMarkdown(state, wk);
+    if (md === null) { toast('周次算不出来'); return; }
+    var r = L.weekRange(wk);
+    var w = L.weekSummary(state, wk);
+    if (w && !w.daysWithRecords) {
+      toast('这一周没有记录，导出的会是空档');
+    }
+    downloadText('个人规划导出-' + wk + '.md', md, 'text/markdown');
+    // 记一下导出时间，让备份提醒能感知
+    state.settings.lastExportAt = Date.now();
+    saveState(state);
+    renderBanners();
+    toast('已导出 ' + wk + '（丢进 U 盘 我的生活\\素材\\）');
+  }
+
+  /* ==========================================================================
+     渲染总入口
+     ======================================================================== */
+  function renderAll() {
+    var d = L.fromDateKey(curDate);
+    if (d) {
+      $('dateText').textContent = curDate;
+      var wk = '一二三四五六日'[L.isoDayOfWeek(curDate) - 1];
+      $('dayLabel').textContent = '星期' + wk + (curDate === L.todayKey() ? ' · 今天' : '');
+    }
+    renderBanners();
+    renderTimeline();
+    renderSummary();
+    renderReview();
+  }
+
+  /* ==========================================================================
+     事件绑定
+     ======================================================================== */
+  function go(delta) {
+    var n = delta === 'today' ? L.todayKey() : L.addDays(curDate, delta);
+    if (!n) return;
+    curDate = n;
+    editingId = null;
+    formVal = {};
+    renderForm();
+    renderAll();
+  }
+
+  $('btnPrev').onclick = function () { go(-1); };
+  $('btnNext').onclick = function () { go(1); };
+  $('btnToday').onclick = function () { go('today'); };
+
+  $('btnSaveRaw').onclick = function () {
+    var ta = $('quick');
+    var txt = ta.value.trim();
+    if (!txt) { toast('先写点什么'); return; }
+    var ok = editingId
+      ? (function () {
+          var r = L.updateEntry(state, curDate, editingId, { raw: txt }, Date.now());
+          if (r.error) { toast(r.error); return false; }
+          state = r.state;
+          if (!saveState(state)) { toast('保存失败：存储写不进去'); return false; }
+          editingId = null; renderAll(); return true;
+        })()
+      : doSaveEntry({ raw: txt });
+    if (ok) { ta.value = ''; toast('已保存'); }
+  };
+
+  $('btnClear').onclick = function () { $('quick').value = ''; $('quick').focus(); };
+  $('btnAI').onclick = function () {
+    var txt = $('quick').value.trim();
+    if (!txt) { toast('先写点什么，比如「今天睡到9点，跑了3公里」'); $('quick').focus(); return; }
+    runAIParse(txt);
+  };
+  $('btnReview').onclick = runReview;
+  $('btnWeekReport').onclick = runWeekReport;
+  $('btnMonthReport').onclick = runMonthReport;
+  $('btnExportWeek').onclick = exportWeek;
+
+  $('btnAddEntry').onclick = function () {
+    if (!Object.keys(formVal).length) { toast('表单还是空的，先填一项'); return; }
+    if (editingId) {
+      var r = L.updateEntry(state, curDate, editingId, formVal, Date.now());
+      if (r.error) { toast(r.error); return; }
+      state = r.state;
+      if (!saveState(state)) { toast('保存失败：存储写不进去'); return; }
+      editingId = null; formVal = {}; renderForm(); renderAll(); toast('已更新');
+      return;
+    }
+    if (doSaveEntry(formVal)) {
+      formVal = {}; renderForm(); toast('已保存');
+    }
+  };
+
+  $('btnResetForm').onclick = function () {
+    formVal = {}; editingId = null; renderForm(); toast('表单已重置');
+  };
+
+  /*
+   * ⚠️ 齿轮按钮只能有**一处**赋值。
+   * 踩过的坑：这里原先还有一行占位 `toast('设置页在 M4/M6 做')`，
+   * 它排在 M4 接线**之后**，于是把真正的 openSettings 覆盖掉了 ——
+   * 表现是"点齿轮没反应 / 设置页打不开"，而且不报错，很难查。
+   * 修的时候我第一次又把整行删了（连 openSettings 一起删了），设置页直接没入口。
+   * 教训：接完线要 grep 确认同一个 id 只有一处 onclick。
+   */
+  $('btnSettings').onclick = openSettings;
+
+  document.querySelectorAll('nav button').forEach(function (b) {
+    b.onclick = function () {
+      var v = b.getAttribute('data-view');
+      if (v === 'history') { openHistory(); return; }
+      if (v === 'settings') { openSettings(); return; }
+      // today / dash 是"视图切换"，由 switchView 统一处理（含 aria-current）
+      switchView(v);
+    };
+  });
+
+  function openHistory() {
+    openSheet(function (panel) {
+      panel.appendChild(el('h3', null, '历史记录'));
+      var dates = L.datesWithRecords(state);
+      if (!dates.length) { panel.appendChild(el('div', 'empty', '还没有任何记录')); return; }
+      dates.slice(0, 90).forEach(function (dk) {
+        var day = L.getDay(state, dk);
+        var t = L.dayTotals(state, dk);
+        var row = el('div', 'entry');
+        row.appendChild(el('div', 't', dk.slice(5)));
+        var b = el('div', 'body');
+        var bits = [];
+        if (t.sleepMinutes !== null) bits.push('睡眠' + L.formatMinutes(t.sleepMinutes));
+        if (t.expense !== null) bits.push('支出' + t.expense);
+        b.appendChild(el('div', 'txt', bits.length ? bits.join(' · ') : (day.entries.length + ' 条记录')));
+        b.appendChild(el('div', 'hint', '记了 ' + t.filled + '/' + t.total + ' 个维度 · ' + day.entries.length + ' 条'));
+        row.appendChild(b);
+        row.style.cursor = 'pointer';
+        row.onclick = function () { curDate = dk; closeSheet(); formVal = {}; renderForm(); renderAll(); };
+        panel.appendChild(row);
+      });
+      panel.appendChild(el('p', 'hint', '只显示最近 90 天。点某一天可以跳过去。'));
+    });
+  }
+
+  function openSettings() {
+    openSheet(function (panel) {
+      panel.appendChild(el('h3', null, '设置'));
+
+      /* ---------- AI 设置 ---------- */
+      panel.appendChild(el('div', 'sh', 'AI（DeepSeek）'));
+
+      var keyRow = el('div', 'row');
+      keyRow.appendChild(el('label', null, 'API key'));
+      var keyWrap = el('div', 'fi');
+      var keyInput = document.createElement('input');
+      keyInput.type = 'password';
+      keyInput.placeholder = 'sk-...';
+      keyInput.value = state.settings.apiKey || '';
+      keyInput.autocomplete = 'off';
+      keyInput.spellcheck = false;
+      keyWrap.appendChild(keyInput);
+      keyRow.appendChild(keyWrap);
+      panel.appendChild(keyRow);
+
+      var keyBtns = el('div', 'btns');
+      var showBtn = el('button', 'btn', '👁 显示');
+      showBtn.onclick = function () {
+        var showing = keyInput.type === 'text';
+        keyInput.type = showing ? 'password' : 'text';
+        showBtn.textContent = showing ? '👁 显示' : '🙈 隐藏';
+      };
+      var saveKey = el('button', 'btn p', '保存 key');
+      saveKey.onclick = function () {
+        state.settings.apiKey = keyInput.value.trim();
+        if (saveState(state)) toast('key 已保存到本机');
+        else toast('保存失败：存储写不进去');
+      };
+      keyBtns.appendChild(showBtn); keyBtns.appendChild(saveKey);
+      panel.appendChild(keyBtns);
+
+      panel.appendChild(el('p', 'hint',
+        'key 只存在你这台手机上，不会发到任何别的地方（除了 DeepSeek 官方接口）。' +
+        '申请地址：platform.deepseek.com/api_keys'));
+
+      /* 会话模式 */
+      var sessRow = el('div', 'row');
+      var sessCb = document.createElement('input');
+      sessCb.type = 'checkbox';
+      sessCb.checked = !!state.settings.apiKeySessionOnly;
+      sessCb.style.width = 'auto';
+      sessCb.onchange = function () {
+        state.settings.apiKeySessionOnly = sessCb.checked;
+        saveState(state);
+        toast(sessCb.checked ? '已改为「仅本次会话」：关掉页面 key 就没了' : '已改为长期保存');
+      };
+      var sessWrap = el('div', 'fi');
+      sessWrap.appendChild(sessCb);
+      sessWrap.appendChild(el('span', null, ' 仅本次会话（不写进手机存储）'));
+      sessRow.appendChild(sessWrap);
+      panel.appendChild(sessRow);
+
+      /* 模型 */
+      var modelRow = el('div', 'row');
+      modelRow.appendChild(el('label', null, '模型'));
+      var modelSel = document.createElement('select');
+      (A ? A.PROVIDERS.deepseek.models : ['deepseek-flash', 'deepseek-v4-pro']).forEach(function (m) {
+        var o = document.createElement('option');
+        o.value = m; o.textContent = m;
+        if ((state.settings.model || 'deepseek-flash') === m) o.selected = true;
+        modelSel.appendChild(o);
+      });
+      modelSel.onchange = function () { state.settings.model = modelSel.value; saveState(state); toast('模型改为 ' + modelSel.value); };
+      var mw = el('div', 'fi'); mw.appendChild(modelSel); modelRow.appendChild(mw);
+      panel.appendChild(modelRow);
+      panel.appendChild(el('p', 'hint', 'deepseek-flash 便宜快；v4-pro 更聪明但贵几倍。日常用 flash 就够。'));
+
+      /* 自定义地址 */
+      var urlRow = el('div', 'row');
+      urlRow.appendChild(el('label', null, '自定义地址'));
+      var urlInput = document.createElement('input');
+      urlInput.type = 'text';
+      urlInput.placeholder = '留空 = 官方 api.deepseek.com';
+      urlInput.value = state.settings.baseUrl || '';
+      urlInput.oninput = function () { state.settings.baseUrl = urlInput.value.trim(); };
+      urlInput.onblur = function () { saveState(state); };
+      var uw = el('div', 'fi'); uw.appendChild(urlInput); urlRow.appendChild(uw);
+      panel.appendChild(urlRow);
+      panel.appendChild(el('p', 'hint', '只有用到自建代理时才填。⚠️ 填了别的域名会被 CSP 拦掉（安全设计）。'));
+
+      /* 预算与用量 */
+      panel.appendChild(el('div', 'sh', '用量与预算'));
+      var budRow = el('div', 'row');
+      budRow.appendChild(el('label', null, '月预算'));
+      var budInput = document.createElement('input');
+      budInput.type = 'number';
+      budInput.min = '0';
+      budInput.value = (typeof state.settings.monthlyBudget === 'number' ? state.settings.monthlyBudget : 5);
+      budInput.onchange = function () {
+        var v = Number(budInput.value);
+        state.settings.monthlyBudget = (isFinite(v) && v >= 0) ? v : 5;
+        saveState(state);
+      };
+      var bw = el('div', 'fi'); bw.appendChild(budInput); budRow.appendChild(bw);
+      budRow.appendChild(el('label', null, '元/月'));
+      panel.appendChild(budRow);
+
+      if (A) {
+        var mu = A.monthUsage(state.settings.ledger, Date.now());
+        var warn = A.budgetWarning(state.settings.ledger, state.settings.monthlyBudget, Date.now());
+        panel.appendChild(el('div', 'prev',
+          '本月已用：' + mu.cost.toFixed(4) + ' 元（' + mu.calls + ' 次调用，' +
+          mu.in + ' + ' + mu.out + ' token）\n' +
+          '预算：' + warn.budget + ' 元　已用 ' + Math.round(warn.ratio * 100) + '%' +
+          (warn.exceeded ? '\n⚠️ 已超预算，检查一下是不是有异常调用' :
+           (warn.warn ? '\n⚠️ 快到预算了' : ''))));
+        panel.appendChild(el('p', 'hint',
+          '这是按接口返回的真实 token 数记的账，不是估算。' +
+          '预算告警的目的不是省钱，是防异常（比如代码 bug 导致循环调用）。'));
+      }
+
+      /* ---------- 存储与数据 ---------- */
+      panel.appendChild(el('div', 'sh', '存储与数据'));
+      panel.appendChild(el('div', 'prev',
+        '存储状态：' + (storageOK ? '✅ 可以保存' : '❌ 无法保存（浏览器拒绝了本地存储）') + '\n' +
+        'AI：' + (aiReady() ? '✅ 已配置' : '⚠️ 还没填 API key')));
+
+      var btns = el('div', 'btns');
+      var b1 = el('button', 'btn p', '导出备份 (JSON)');
+      b1.onclick = function () { exportBackup(); closeSheet(); };
+      var b2 = el('button', 'btn', '导出纯文本（给 AI 网页版分析）');
+      b2.onclick = function () {
+        var dates = L.datesWithRecords(state);
+        if (!dates.length) { toast('还没有记录'); return; }
+        var from = dates[dates.length - 1], to = dates[0];
+        var txt = L.exportPlainText(state, from, to);
+        downloadText('个人规划-' + from + '_' + to + '.txt', txt, 'text/plain');
+      };
+      var b3 = el('button', 'btn', '导出今天的 Markdown');
+      b3.onclick = function () {
+        var md = L.exportMarkdown(state, curDate);
+        if (!md) { toast('今天还没记录'); return; }
+        downloadText('个人规划-' + curDate + '.md', md, 'text/markdown');
+      };
+      var b4 = el('button', 'btn', '导入备份');
+      b4.onclick = function () { importBackup(); };
+      btns.appendChild(b1); btns.appendChild(b2); btns.appendChild(b3); btns.appendChild(b4);
+      panel.appendChild(btns);
+
+      var cnt = L.datesWithRecords(state).length;
+      var total = 0;
+      Object.keys(state.days).forEach(function (k) { total += state.days[k].entries.length; });
+      panel.appendChild(el('p', 'hint', '当前共 ' + cnt + ' 天、' + total + ' 条记录。'));
+    });
+  }
+
+  function importBackup() {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.json,application/json';
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        var st = null;
+        try { st = L.deserialize(String(fr.result)); } catch (e) { st = null; }
+        if (!st) { toast('这个文件不是有效的备份'); return; }
+        // 导入前自动快照，提供撤销
+        try {
+          localStorage.setItem(L.BACKUP_KEY, L.serialize(state));
+          localStorage.setItem(L.BACKUP_AT_KEY, String(Date.now()));
+        } catch (e2) {}
+        // 保留当前 key（备份里不含 key）
+        var keepKey = state.settings.apiKey;
+        var keepSession = state.settings.apiKeySessionOnly;
+        st.settings.apiKey = keepKey;
+        st.settings.apiKeySessionOnly = keepSession;
+        state = st;
+        if (!saveState(state)) { toast('导入后写入失败'); return; }
+        closeSheet();
+        renderForm(); renderAll();
+        toast('导入完成（可用「撤销上次导入」还原）');
+      };
+      fr.readAsText(f);
+    };
+    inp.click();
+  }
+
+  /* ==========================================================================
+     启动
+     ======================================================================== */
+  storageOK = storageProbe();
+  state = loadState();
+  renderForm();
+  renderAll();
+  if (!storageOK) { /* banner 在 renderBanners 里会显示 */ }
+})();
+</script>
+<!-- PWA 增强层：注册离线缓存、处理「安装到桌面」与系统提醒。
+     它不读写 App 的业务数据；file:// 打开时整段直接跳过。 -->
+<script>
+/* ===========================================================================
+ * 个人规划 —— PWA 增强层（由 pwa/build-pwa.js 注入到 index.html 末尾）
+ *
+ * 职责只有两件：
+ *   ① 注册 Service Worker → 装到桌面后离线可用
+ *   ② 处理「安装到桌面」提示
+ *
+ * 严格隔离：不读取、不修改 App 的任何业务数据。
+ * 通过 file:// 打开时下面的判断会直接返回，App 行为与从前完全一致。
+ *
+ * ⚠️ 和课程表那份 hook 的三处差异（都是这个 App 特有的）：
+ *
+ *   ① **横幅挂载点是 #banners**（不是 #bannerHost）——
+ *      个人规划里 #banners 是主容器顶部的横幅区，已经在用。
+ *   ② **CSS 变量名不同**：这个 App 用 --brand / --brand-soft / --ink2 / --ink3，
+ *      课程表用 --accent / --accent-soft / --ink-2 / --ink-3。
+ *      写错了不会报错，只是样式全丢（横幅变成没样式的光秃秃一段）。
+ *   ③ **文案必须提醒"AI 要联网"** —— 这是这个 App 和前三个最大的不同：
+ *      它装到桌面后能离线看和手填，但**调 AI 必须联网**。
+ *      不写清楚的话，用户断网时点 AI 没反应会以为 App 坏了。
+ * =========================================================================== */
+(function () {
+  'use strict';
+  try {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+
+    /* 这个 App 的 CSS 变量名（写错不报错，只是样式全丢） */
+    var STYLE_BOX = [
+      'margin:0 0 10px', 'padding:12px 14px', 'border-radius:12px',
+      'background:var(--brand-soft)', 'border:1px solid var(--brand)',
+      'color:var(--ink)', 'font-size:13.5px', 'line-height:1.5',
+      'display:flex', 'gap:10px', 'align-items:flex-start'
+    ].join(';');
+
+    var STYLE_GO = 'background:var(--brand);color:#fff;font-weight:600;font-size:13px;' +
+                   'padding:8px 16px;border-radius:99px;border:0;min-height:34px';
+    var STYLE_LATER = 'font-size:12.5px;color:var(--ink2);padding:8px 10px;border:0;' +
+                      'background:transparent;min-height:34px';
+
+    /* ---------- ① 离线缓存 ---------- */
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js', { scope: './' }).catch(function (e) {
+        console.warn('离线缓存注册失败（不影响正常使用）：', e);
+      });
+    });
+
+    /* ---------- ② 安装到桌面 ---------- */
+    var installEvent = null;
+
+    function showInstallBanner() {
+      var host = document.getElementById('banners');
+      if (!host || document.getElementById('pwa-install-banner')) return;
+
+      var box = document.createElement('div');
+      box.id = 'pwa-install-banner';
+      box.setAttribute('style', STYLE_BOX);
+
+      /*
+       * ⚠️ 这里用 innerHTML 是**可以**的：内容全是本文件里的静态字面量，
+       *    没有任何用户数据或 AI 输出。这个 App 的 XSS 底线是
+       *    "AI 内容和用户数据绝不进 innerHTML"，不是"禁用 innerHTML"。
+       */
+      box.innerHTML =
+        '<span style="font-size:16px">📲</span>' +
+        '<div style="flex:1">' +
+        '<b>装到桌面，用起来更像 App</b>' +
+        '<div style="font-size:12px;color:var(--ink2);margin-top:2px">' +
+        '装好后全屏打开、没有地址栏。<b>手填和查看断网也能用</b>；' +
+        '只有调 AI（拆字段、日复盘、周报）需要联网。' +
+        '</div>' +
+        '<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button id="pwa-install-go" style="' + STYLE_GO + '">立即安装</button>' +
+        '<button id="pwa-install-hide" style="' + STYLE_LATER + '">以后再说</button>' +
+        '</div></div>';
+
+      host.appendChild(box);
+
+      box.querySelector('#pwa-install-go').addEventListener('click', function () {
+        if (!installEvent) return;
+        installEvent.prompt();
+        installEvent.userChoice.then(function () {
+          installEvent = null;
+          removeBanner();
+        });
+      });
+      box.querySelector('#pwa-install-hide').addEventListener('click', removeBanner);
+    }
+
+    function removeBanner() {
+      var b = document.getElementById('pwa-install-banner');
+      if (b && b.parentNode) b.parentNode.removeChild(b);
+    }
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      installEvent = e;
+      showInstallBanner();
+    });
+
+    window.addEventListener('appinstalled', removeBanner);
+  } catch (e) {
+    /* PWA 增强失败绝不能影响 App 本身 */
+    try { console.warn('PWA 增强层跳过：', e); } catch (e2) {}
+  }
+})();
+</script>
+</body>
+</html>
