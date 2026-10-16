@@ -1793,6 +1793,34 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
     return weekKey + '：' + bits.join('，');
   }
 
+  /**
+   * 最近一个"有记录"的周键（从 endKey 往后找）。
+   *
+   * ⚠️ 为什么需要这个：导出按钮原先写死取「当前显示日期所在的周」。
+   * 于是出现一种很常见又很坑的情况 ——
+   *   周一到周五记了一堆，周末忘了导出；下周一打开 App，
+   *   「导出本周素材」导出的是**新一周的空档**，而你的记录明明还在。
+   *   用户会以为"要记满一周才能导出"，其实记录都在，只是选错了周。
+   *
+   * 所以默认改成「**最近有记录的那一周**」：只要记过就导得出东西。
+   * 找不到就返回 null（界面据此提示"还没有任何记录"）。
+   */
+  function lastWeekWithRecords(state, endKey) {
+    var cur = fromDateKey(endKey) ? endKey : todayKey();
+    var guard = 0;
+    while (guard++ < 400) {
+      var wk = isoWeekKey(cur);
+      if (!wk) return null;
+      var w = weekSummary(state, wk);
+      if (w && w.daysWithRecords) {
+        return { week: wk, from: w.from, to: w.to, daysWithRecords: w.daysWithRecords };
+      }
+      cur = addDays(cur, -7);
+      if (!cur) return null;
+    }
+    return null;
+  }
+
   /** 一个月的周摘要列表（分层压缩用） */
   function monthWeekDigests(state, year, month) {
     var out = [];
@@ -1963,6 +1991,7 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
     exportWeekMarkdown: exportWeekMarkdown,
     weekDigest: weekDigest,
     monthWeekDigests: monthWeekDigests,
+    lastWeekWithRecords: lastWeekWithRecords,
 
     // 序列化
     serialize: serialize,
@@ -4424,6 +4453,8 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
     drawChart();
     renderPair();
     renderReports();
+    // 刷新导出按钮文案（写明要导出哪一周、几天有记录，避免误导出空档）
+    resolveExportTarget();
   }
 
   /* ---------- 日历热力图 ---------- */
@@ -4782,22 +4813,93 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
     }
   }
 
-  /** 导出本周素材（给「我的生活」文件夹） */
+  /* ---------- 导出素材（改动 ②③：默认最近有记录的那一周）----------
+   *
+   * ⚠️ 这里解决的是一个很常见的坑：
+   *   周一到周五记了一堆、周末忘了导出，下周一打开 App 点导出 ——
+   *   原先写死取「当前日期所在的周」，于是导出的是**新一周的空档**。
+   *   你的记录明明还在，但导出文件是空的，很容易以为是「要记满一周才能导」。
+   *
+   * 现在：
+   *   · 默认导出**最近有记录的那一周**（只要记过就导得出东西）
+   *   · 按钮上直接写明「哪一周 · 几天有记录」，不会误点
+   *   · 如果当前这一周是空的，但更早有记录 → **先问一句**再导
+   * ------------------------------------------------------------------------ */
+
+  /** 算出"该导出哪一周"，并刷新按钮文案 */
+  function resolveExportTarget() {
+    var btn = $('btnExportWeek');
+    var curWk = curWeek();
+    var curW = L.weekSummary(state, curWk);
+    var last = L.lastWeekWithRecords(state, curDate);
+
+    if (!last) {
+      if (btn) btn.textContent = '⬇️ 导出本周素材（还没有记录）';
+      return null;
+    }
+    var curEmpty = !(curW && curW.daysWithRecords);
+    if (btn) {
+      btn.textContent = '⬇️ 导出素材：' + last.week + '（' + last.daysWithRecords + '/7 天）';
+    }
+    return {
+      week: last.week,
+      daysWithRecords: last.daysWithRecords,
+      curWeek: curWk,
+      curEmpty: curEmpty
+    };
+  }
+
+  /** 点导出按钮 */
   function exportWeek() {
-    var wk = curWeek();
+    var t = resolveExportTarget();
+    if (!t) { toast('还没有任何记录，没什么可导出的'); return; }
+
+    /*
+     * 改动 ③：当前这一周是空的（但更早有记录）→ 先问一句。
+     * 不弹这个确认的话，用户在"新的一周刚打开"时会不知不觉导出空档，
+     * 还以为是 App 出问题了。
+     */
+    if (t.curEmpty && t.week !== t.curWeek) {
+      var w2 = L.weekSummary(state, t.curWeek);
+      openSheet(function (panel) {
+        panel.appendChild(el('h3', null, '这一周还没记录'));
+        panel.appendChild(el('p', 'hint',
+          '当前这一周（' + t.curWeek + '）一条记录都没有。\n' +
+          '最近有记录的是 ' + t.week + '（' + t.daysWithRecords + '/7 天）。'));
+
+        var btns = el('div', 'btns');
+        var b1 = el('button', 'btn p grow', '导出 ' + t.week);
+        b1.onclick = function () { closeSheet(); doExportWeek(t.week); };
+        var b2 = el('button', 'btn', '还是导出空的 ' + t.curWeek);
+        b2.onclick = function () { closeSheet(); doExportWeek(t.curWeek); };
+        var b3 = el('button', 'btn', '取消');
+        b3.onclick = closeSheet;
+        btns.appendChild(b1); btns.appendChild(b2); btns.appendChild(b3);
+        panel.appendChild(btns);
+      });
+      return;
+    }
+
+    doExportWeek(t.week);
+  }
+
+  /** 真正导出某一周 */
+  function doExportWeek(wk) {
     var md = L.exportWeekMarkdown(state, wk);
     if (md === null) { toast('周次算不出来'); return; }
-    var r = L.weekRange(wk);
     var w = L.weekSummary(state, wk);
-    if (w && !w.daysWithRecords) {
-      toast('这一周没有记录，导出的会是空档');
-    }
+    var days = w ? w.daysWithRecords : 0;
+
     downloadText('个人规划导出-' + wk + '.md', md, 'text/markdown');
+
     // 记一下导出时间，让备份提醒能感知
     state.settings.lastExportAt = Date.now();
     saveState(state);
     renderBanners();
-    toast('已导出 ' + wk + '（丢进 U 盘 我的生活\\素材\\）');
+
+    toast(days
+      ? '已导出 ' + wk + '（' + days + '/7 天）→ 丢进 U 盘 我的生活\\素材\\'
+      : '已导出 ' + wk + '（这一周没有记录，文件是空档）');
   }
 
   /* ==========================================================================
