@@ -617,7 +617,38 @@ details.collapsed[open]>summary{margin-bottom:2px}
     };
   }
 
-  /** 相对日期的人话：今天 / 昨天 / 6月3日 */
+  /**
+   * ⭐ 带「完成状态」的截止状态 —— **界面应该用这个，而不是裸的 dueStatus**。
+   *
+   * 修的是一个真实 bug：作业一旦标了完成，卡片上还是显示「🗓 逾期 12 天」，
+   * 而且这个天数**天天在涨**（已完成的作业永远"越来越逾期"）。
+   * 原因是 dueStatus 只接收 (due, today)，**根本不知道它已经完成了**。
+   *
+   * 现在的语义：
+   *   · 已完成 → 不显示逾期、不算紧急，short 给一个中性的「已完成」
+   *     （截止日期本身仍由界面单独显示，因为"哪天交的"仍然是有用信息）
+   *   · 未完成 → 完全走原来的 dueStatus
+   *
+   * 为什么保留原来的 dueStatus 不动：
+   *   它是纯日期计算（"这个日期相对今天是什么状态"），语义单一、好测。
+   *   把"完成状态"混进去会让它既要管日期又要管业务，反而更难维护。
+   */
+  function dueStatusForItem(item, todayKey) {
+    var st = dueStatus(item && item.due, todayKey);
+    if (item && item.done) {
+      return {
+        level: 'done', days: st.days,
+        overdue: false,        // ← 关键：已完成就不再算逾期
+        urgent: false,         // ← 也不再算紧急
+        text: '已完成', short: '已完成'
+      };
+    }
+    return st;
+  }
+
+  /**
+   * 相对日期的人话：今天 / 昨天 / 6月3日
+   */
   function relativeDate(dateKey, todayKey) {
     var days = daysUntil(dateKey, todayKey);
     if (days === null) return '';
@@ -1129,7 +1160,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
     pad2: pad2, toDateKey: toDateKey, fromDateKey: fromDateKey, isValidDateKey: isValidDateKey,
     daysBetween: daysBetween, daysUntil: daysUntil, relativeDate: relativeDate, longDate: longDate,
     // 状态
-    dueStatus: dueStatus, bucketByUrgency: bucketByUrgency, kindSummary: kindSummary,
+    dueStatus: dueStatus, dueStatusForItem: dueStatusForItem, bucketByUrgency: bucketByUrgency, kindSummary: kindSummary,
     matchesQuery: matchesQuery, groupMemoByDate: groupMemoByDate,
     // 数据
     emptyState: emptyState, normalizeState: normalizeState, uid: uid,
@@ -1570,7 +1601,14 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
   function itemCard(it, tk) {
     const cfg = KINDS[it.kind];
-    const ds = L.dueStatus(it.due, tk);
+    /*
+     * ⚠️ 必须用 dueStatusForItem（带完成状态），不能用裸的 dueStatus。
+     * 修过的 bug：作业标了完成后，卡片仍然显示「🗓 逾期 12 天」，
+     * 而且天数天天在涨（已完成的作业永远"越来越逾期"）。
+     * 原因是 dueStatus 只收 (due, today)，不知道它已经完成了。
+     */
+    const ds = L.dueStatusForItem(it, tk);
+    // 已完成的不再染危险色/警告色
     const tone = it.done ? '' : (ds.overdue ? 'tone-danger' : (ds.urgent ? 'tone-warn' : ''));
 
     const isMemo = it.kind === 'memo';
@@ -1603,8 +1641,23 @@ details.collapsed[open]>summary{margin-bottom:2px}
     // 元信息胶囊
     let chips = '';
     if (cfg.hasDue && it.due) {
-      const cls = ds.overdue ? 'danger' : (ds.urgent ? 'warn' : 'calm');
-      chips += `<span class="chip ${cls}">🗓 ${esc(ds.short)}<span class="d">· ${esc(L.relativeDate(it.due, tk))}</span></span>`;
+      /*
+       * ⚠️ 已完成的任务不再显示「逾期 N 天」。
+       *
+       * 之前的 bug：标了完成之后卡片仍然是「🗓 逾期 12 天」，
+       * 而且这个天数天天在涨 —— 已完成的作业永远"越来越逾期"，很误导。
+       *
+       * 现在：
+       *   · 已完成 → 「🗓 10月5日」（只留日期，不重复说"已完成"——
+       *     下面本来就有专门的 ✅ 已完成 胶囊，说两遍反而啰嗦）
+       *   · 未完成 → 照旧「逾期 N 天 / 今天 / 还有 N 天」
+       */
+      if (it.done) {
+        chips += `<span class="chip calm">🗓 ${esc(L.relativeDate(it.due, tk))}</span>`;
+      } else {
+        const cls = ds.overdue ? 'danger' : (ds.urgent ? 'warn' : 'calm');
+        chips += `<span class="chip ${cls}">🗓 ${esc(ds.short)}<span class="d">· ${esc(L.relativeDate(it.due, tk))}</span></span>`;
+      }
     }
     // 备忘录显示记录时间（它没有截止日期）
     if (isMemo && memoDate) {
