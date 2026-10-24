@@ -116,6 +116,11 @@ input,select,textarea{font:inherit;color:inherit}
   margin-top:12px;background:#fff;color:#0b7d72;font-weight:600;font-size:13.5px;
   padding:9px 16px;border-radius:99px;
 }
+/* 主卡片底部的周期说明（哪一段周期、剩余天数是否估的、自控目标） */
+.hero-period{
+  margin-top:10px;font-size:11.5px;line-height:1.45;
+  color:rgba(255,255,255,.72);
+}
 
 /* ============================ 通用行 ============================ */
 .alert{
@@ -161,6 +166,20 @@ input,select,textarea{font:inherit;color:inherit}
 .tx .mid .name{font-weight:600;font-size:14.5px}
 .tx .mid .note{font-size:12.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .tx .amt{font-weight:700;font-size:16px;letter-spacing:-.2px}
+
+/* ---------- 生活费（收入）----------
+   用绿色 +¥ 和支出的 -¥ 区分。不只靠颜色：前面还有 💰 图标和「生活费」字样。 */
+.tx.inc .amt.inc{color:#12a150}
+.tx.inc .em{background:rgba(18,161,80,.12)}
+.daygroup-head .day-inc{margin-left:8px;color:#12a150;font-weight:600;font-size:12px}
+.inc-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 2px;font-size:13.5px;
+}
+.inc-row:active{background:var(--line-2);border-radius:8px}
+.inc-row .d{color:var(--ink-2);font-weight:500}
+.inc-row .d .d2{color:var(--ink-3);font-size:11.5px;margin-left:6px}
+.inc-row .v{font-weight:700;color:#12a150;letter-spacing:-.2px}
 
 .empty{text-align:center;padding:44px 20px;color:var(--ink-3)}
 .empty .big{font-size:40px;margin-bottom:10px;opacity:.65}
@@ -475,6 +494,14 @@ input,select,textarea{font:inherit;color:inherit}
     <section class="view active" id="view-home">
       <div id="homeHero"></div>
       <div id="homeAlerts"></div>
+      <!-- 生活费（收入）：它的日期决定"周期"从哪天开始，所以单独一块、不混进记账弹层 -->
+      <div class="card tight" id="homeIncomeCard">
+        <div class="card-head" style="margin-bottom:9px">
+          <span class="card-title">💰 生活费</span>
+          <button id="btnAddIncome" style="font-size:12.5px;color:var(--accent);font-weight:600">＋ 记一笔</button>
+        </div>
+        <div id="homeIncomeList"></div>
+      </div>
       <div class="card tight" id="homeQuickCard">
         <div class="card-head" style="margin-bottom:9px">
           <span class="card-title">常记的几笔</span>
@@ -499,7 +526,7 @@ input,select,textarea{font:inherit;color:inherit}
     <section class="view" id="view-budget">
       <div class="card">
         <div class="card-head">
-          <span class="card-title big">本月总预算</span>
+          <span class="card-title big">自控目标（选填）</span>
           <span style="font-size:11.5px;color:var(--ink-3)" id="budMonthLabel"></span>
         </div>
         <div class="bud-total">
@@ -646,6 +673,46 @@ input,select,textarea{font:inherit;color:inherit}
       <button class="key" data-k="0">0</button>
       <button class="key fn" data-k="del">⌫</button>
       <button class="key ok" data-k="ok" id="keyOk">记下</button>
+    </div>
+  </div>
+
+  <!-- ==================== 生活费弹层 ==================== -->
+  <!--
+    为什么单独一个弹层，不复用「记一笔」：
+    记一笔那个弹层里有分类格、数字键盘、借出开关、冷静期，全是支出专用的。
+    生活费只需要「金额 + 日期 + 备注」，塞进去反而要藏一堆东西，更容易出错。
+  -->
+  <div class="mask" id="incMask"></div>
+  <div class="sheet" id="incSheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <button class="cancel" id="incDelete" style="display:none;color:var(--danger)">删除</button>
+      <span class="st" id="incTitle">记生活费</span>
+      <button class="cancel" id="incCancel">取消</button>
+    </div>
+
+    <div class="field-row" style="margin-top:4px">
+      <div class="field" style="flex:0 0 48%">
+        <label for="incAmount">金额</label>
+        <input type="text" inputmode="decimal" id="incAmount" placeholder="0.00" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="incDate">到账日期</label>
+        <input type="date" id="incDate">
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:8px">
+      <label for="incNote">备注（选填）</label>
+      <input type="text" id="incNote" maxlength="60" placeholder="比如：家里打的" autocomplete="off">
+    </div>
+
+    <p style="font-size:11.5px;color:var(--ink-3);margin:9px 0 0;line-height:1.5" id="incHint">
+      到账日期决定周期从哪天开始：每记一笔生活费，就开一个新周期。
+    </p>
+
+    <div style="margin-top:12px">
+      <button class="btn-primary" id="incSave" style="width:100%;padding:13px 0">记下</button>
     </div>
   </div>
 
@@ -827,6 +894,8 @@ input,select,textarea{font:inherit;color:inherit}
     return {
       version: DATA_VERSION,
       transactions: [],
+      // 生活费（收入）单独存：它不影响"花了多少"，但决定周期从哪天开始
+      incomes: [],
       budgets: {},          // { '2025-06': { food: 80000, fun: 20000 } }  单位：分
       totalBudgets: {},     // { '2025-06': 200000 }                     单位：分
       settings: {
@@ -879,6 +948,8 @@ input,select,textarea{font:inherit;color:inherit}
 
     st.budgets = sanitizeBudgetMap(raw.budgets);
     st.totalBudgets = sanitizeTotalBudgetMap(raw.totalBudgets);
+    // 生活费：清洗掉金额<=0、日期非法、id 重复的项（incomesOf 内部已做全部校验）
+    st.incomes = incomesOf({ incomes: Array.isArray(raw.incomes) ? raw.incomes : [] });
     if (raw.settings && typeof raw.settings === 'object') {
       st.settings.carryOver = !!raw.settings.carryOver;
       if (raw.settings.coolOff !== undefined) st.settings.coolOff = !!raw.settings.coolOff;
@@ -891,21 +962,43 @@ input,select,textarea{font:inherit;color:inherit}
     return st;
   }
 
+  /*
+   * ⚠️ 预算键的格式迁移（这是第 4 步唯一可能丢数据的地方）
+   *
+   * 以前：budgets['2026-10']            （按日历月）
+   * 之后：budgets['2026-10-12']          （按周期起始日）
+   *
+   * 做法：清洗时**两种格式都认**，统一转成日期形式：
+   *   '2026-10'      → '2026-10-01'
+   *   '2026-10-12'   → '2026-10-12'（原样）
+   *
+   * 为什么这样做，而不是"遇到不认识的键就跳过"：
+   *   原来的代码是 `if (!isValidMonthKey(mk)) continue;` ——
+   *   一旦键变成 '2026-10-01'，它会被认为非法，**所有历史预算被静默丢掉**
+   *   而且不报错，用户只会发现"预算怎么全没了"。
+   *
+   * 为什么不需要 DATA_VERSION 标记：
+   *   迁移是**幂等**的 —— '2026-10-01' 再迁移一次还是 '2026-10-01'。
+   *   幂等的迁移每读一次都对，不会因为"漏了某次版本判断"而重复处理或漏处理。
+   */
   function sanitizeBudgetMap(map) {
     var out = {};
     if (!map || typeof map !== 'object') return out;
     for (var mk in map) {
       if (!Object.prototype.hasOwnProperty.call(map, mk)) continue;
-      if (!isValidMonthKey(mk)) continue;
+      var key = normalizePeriodKey(mk);
+      if (!key) continue;
       var inner = map[mk];
       if (!inner || typeof inner !== 'object') continue;
       var clean = {};
+      var has = false;
       for (var ck in inner) {
         if (!Object.prototype.hasOwnProperty.call(inner, ck)) continue;
         var v = inner[ck];
-        if (typeof v === 'number' && isFinite(v) && v > 0) clean[ck] = Math.round(v);
+        if (typeof v === 'number' && isFinite(v) && v > 0) { clean[ck] = Math.round(v); has = true; }
       }
-      out[mk] = clean;
+      // 空的分类预算表不保留（否则会堆一堆 {} 出来）
+      if (has) out[key] = clean;
     }
     return out;
   }
@@ -915,9 +1008,10 @@ input,select,textarea{font:inherit;color:inherit}
     if (!map || typeof map !== 'object') return out;
     for (var mk in map) {
       if (!Object.prototype.hasOwnProperty.call(map, mk)) continue;
-      if (!isValidMonthKey(mk)) continue;
+      var key = normalizePeriodKey(mk);
+      if (!key) continue;
       var v = map[mk];
-      if (typeof v === 'number' && isFinite(v) && v > 0) out[mk] = Math.round(v);
+      if (typeof v === 'number' && isFinite(v) && v > 0) out[key] = Math.round(v);
     }
     return out;
   }
@@ -964,29 +1058,345 @@ input,select,textarea{font:inherit;color:inherit}
   }
 
   /**
-   * 生成某月的完整概览。
-   * 返回 { monthKey, label, daysInMonth, spentCents, count, totalBudgetCents,
-   *        remainingCents, percent, dailyAllowanceCents, dailySpentCents,
-   *        projectedCents, rows: [...], avgPerDayCents, noBudget: bool }
+   * 这批记录占了**几个不同的日期**（"有记录的天数"）。
+   *
+   * 用途：算日均。为什么不除以日历天数，见 monthSummary 里 avgPerDayCents 的注释。
+   */
+  function countDistinctDates(list) {
+    var seen = {};
+    var n = 0;
+    for (var i = 0; i < list.length; i++) {
+      var d = list[i] && list[i].date;
+      if (!d) continue;
+      if (!seen[d]) { seen[d] = 1; n++; }
+    }
+    return n;
+  }
+
+  /**
+   * 生成某个「周期」的完整概览（**保留旧接口名**）。
+   *
+   * ⚠️ 现在它只是 periodSummary 的薄包装：
+   *   · 没有生活费记录时，周期 == 日历月 → 行为和改造前**完全一致**
+   *   · 有生活费记录时，周期按到账日切分
+   *
+   * 为什么保留这个名字：界面还在用它（第 4 步才会整体换成 periodSummary）。
+   * 保留薄包装比同时维护两套汇总逻辑安全 —— 两套一定会慢慢分叉，
+   * 到时候就是"改了一处忘了另一处"。
    */
   function monthSummary(state, monthKey, categories, todayKey) {
+    return periodSummary(state, normalizePeriodKey(monthKey), categories, todayKey);
+  }
+
+  /* ======================================================================
+   * 生活费周期（方案 A：到账日自动定周期）
+   *
+   * 规则一句话：
+   *   **每记一笔生活费，就开一个新周期；上一个周期在到账前一天结束。**
+   *
+   * 于是「发放后的数据就不统计了」天然成立 —— 不需要任何手动调整。
+   *
+   * 三条必须守住的边界：
+   *   ① 同一天记了两笔生活费 → 合并成一个周期起点，金额相加
+   *   ② 一条生活费都没记过   → **回退到日历月**，老用户行为完全不变
+   *   ③ 支出早于第一笔生活费 → 单独归入「周期外」，不混进任何周期（用户选的）
+   * ==================================================================== */
+
+  /** 日期加减天数；非法输入返回 '' */
+  function shiftDateKey(dateKey, delta) {
+    var d = fromDateKey(dateKey);
+    if (!d) return '';
+    var n = isFinite(delta) ? Math.round(delta) : 0;
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    x.setDate(x.getDate() + n);
+    return toDateKey(x);
+  }
+
+  /**
+   * 周期键规范化：'YYYY-MM' → 'YYYY-MM-01'；'YYYY-MM-DD' 原样；非法 → ''
+   *
+   * ⚠️ 这个函数是**兼容旧数据的关键**：
+   *   预算以前按 'YYYY-MM' 存，之后按周期起始日 'YYYY-MM-DD' 存。
+   *   两边都认、统一成日期形式，旧备份才不会丢预算。
+   */
+  function normalizePeriodKey(key) {
+    if (typeof key !== 'string') return '';
+    var s = key.trim();
+    if (isValidMonthKey(s)) return s + '-01';
+    if (fromDateKey(s)) return s;
+    return '';
+  }
+
+  /** 两个日期相差几天（b - a）；非法返回 null */
+  function daysBetweenKeys(a, b) {
+    var da = fromDateKey(a), db = fromDateKey(b);
+    if (!da || !db) return null;
+    var ms = new Date(db.getFullYear(), db.getMonth(), db.getDate()) -
+             new Date(da.getFullYear(), da.getMonth(), da.getDate());
+    return Math.round(ms / 86400000);
+  }
+
+  /** 某个月的「周期」形式（回退用：没有生活费时，周期就等于日历月） */
+  function calendarMonthPeriod(monthKey) {
+    if (!isValidMonthKey(monthKey)) return null;
+    var parts = monthKey.split('-');
+    var y = +parts[0], m = +parts[1];
+    var dim = daysInMonth(y, m);
+    var start = monthKey + '-01';
+    return {
+      key: start,
+      start: start,
+      end: monthKey + '-' + pad2(dim),
+      monthKey: monthKey,
+      incomeCents: 0,
+      source: 'calendar',
+      isOpen: false,
+      isCurrent: false,
+      isFuture: false,
+      periodDays: dim,
+      label: monthLabel(monthKey)
+    };
+  }
+
+  /** 有生活费记录时，按到账日切出周期列表 */
+  function buildIncomePeriods(incomes, todayKey) {
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var inc = Array.isArray(incomes) ? incomes : [];
+
+    /* ① 同一天的多笔合并成一个起点，金额相加 */
+    var starts = [];
+    for (var i = 0; i < inc.length; i++) {
+      var x = inc[i];
+      var last = starts.length ? starts[starts.length - 1] : null;
+      if (last && last.date === x.date) {
+        last.cents += x.cents;
+        last.count += 1;
+      } else {
+        starts.push({ date: x.date, cents: x.cents, count: 1 });
+      }
+    }
+
+    var out = [];
+    for (var j = 0; j < starts.length; j++) {
+      var start = starts[j].date;
+      var isLast = j === starts.length - 1;
+      var end;
+      if (isLast) {
+        // 最后一个周期还没有"下一笔生活费"，先开到今天
+        end = tk > start ? tk : start;
+      } else {
+        end = shiftDateKey(starts[j + 1].date, -1) || start;
+      }
+      out.push({
+        key: start,
+        start: start,
+        end: end,
+        monthKey: monthKeyOf(start),
+        incomeCents: starts[j].cents,
+        incomeCount: starts[j].count,
+        source: 'income',
+        isOpen: isLast,
+        isCurrent: false,
+        isFuture: start > tk,
+        periodDays: (daysBetweenKeys(start, end) || 0) + 1
+      });
+    }
+
+    /* ② 标记当前周期：起点不晚于今天的最后一个 */
+    var curIdx = -1;
+    for (var k = 0; k < out.length; k++) {
+      if (out[k].start <= tk) curIdx = k;
+    }
+    if (curIdx >= 0) out[curIdx].isCurrent = true;
+
+    /* ③ 补 label */
+    for (var m = 0; m < out.length; m++) out[m].label = periodLabel(out[m]);
+    return out;
+  }
+
+  /** 周期的中文标签：'10月12日 ~ 11月11日'；未结束的写「至今」 */
+  function periodLabel(p) {
+    if (!p || !p.start) return '';
+    if (p.source === 'calendar') return monthLabel(p.monthKey || monthKeyOf(p.start));
+    var a = fromDateKey(p.start), b = fromDateKey(p.end);
+    if (!a) return p.start;
+    var head = (a.getMonth() + 1) + '月' + a.getDate() + '日';
+    if (p.isOpen || !b) return head + ' ~ 至今';
+    var tail = (b.getMonth() + 1) + '月' + b.getDate() + '日';
+    // 跨年时把年份带上，否则"12月15日 ~ 1月11日"看不出是哪一年
+    if (a.getFullYear() !== b.getFullYear()) {
+      return a.getFullYear() + '年' + head + ' ~ ' + b.getFullYear() + '年' + tail;
+    }
+    return head + ' ~ ' + tail;
+  }
+
+  /**
+   * 已结束周期的平均长度。
+   * 用途：给"还没结束的当前周期"估一个总天数 —— 否则算不出"每天还能花多少"。
+   * 没有历史周期时按 30 天（一个常规月）。
+   */
+  function averagePeriodDays(state, todayKey) {
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var list = periodsOf(state, tk);
+    var lens = [];
+    for (var i = 0; i < list.length; i++) {
+      if (!list[i].isOpen && !list[i].isFuture && list[i].periodDays > 0) {
+        lens.push(list[i].periodDays);
+      }
+    }
+    if (!lens.length) return 30;
+    var sum = 0;
+    for (var j = 0; j < lens.length; j++) sum += lens[j];
+    return Math.round(sum / lens.length);
+  }
+
+  /**
+   * 全部周期（按时间升序）。
+   * 有生活费 → 按到账日切；没有 → 回退到日历月。
+   */
+  function periodsOf(state, todayKey) {
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var inc = incomesOf(state);
+    if (inc.length) return buildIncomePeriods(inc, tk);
+
+    /* 回退：从最早一笔记录所在月，一直到今天所在月 */
+    var list = state && Array.isArray(state.transactions) ? state.transactions : [];
+    var earliest = '';
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] && fromDateKey(list[i].date)) {
+        if (!earliest || list[i].date < earliest) earliest = list[i].date;
+      }
+    }
+    var curMk = monthKeyOf(tk);
+    var startMk = earliest ? monthKeyOf(earliest) : curMk;
+    // 最多回溯 36 个月，避免数据很老时生成一大堆
+    var back = 0, guard = 0, probeMk = curMk;
+    while (probeMk > startMk && guard++ < 40) {
+      var parts = probeMk.split('-');
+      probeMk = toMonthKey(new Date(+parts[0], +parts[1] - 2, 1));
+      back++;
+    }
+    if (back > 36) { back = 36; }
+
+    var out = [];
+    var cur = new Date(+curMk.split('-')[0], +curMk.split('-')[1] - 1 - back, 1);
+    for (var n = 0; n <= back; n++) {
+      var mk = toMonthKey(new Date(cur.getFullYear(), cur.getMonth() + n, 1));
+      var p = calendarMonthPeriod(mk);
+      if (p) {
+        p.isCurrent = (mk === curMk);
+        p.isFuture = (mk > curMk);
+        out.push(p);
+      }
+    }
+    return out;
+  }
+
+  /** 某天属于哪个周期；不在任何周期里（早于第一笔生活费）返回 { outside: true } */
+  function periodOf(state, dateKey, todayKey) {
+    var k = normalizePeriodKey(dateKey);
+    if (!k) return null;
+    var list = periodsOf(state, todayKey);
+    for (var i = 0; i < list.length; i++) {
+      if (k >= list[i].start && k <= list[i].end) return list[i];
+    }
+    if (!list.length) return null;
+    // 早于第一个周期 → 周期外
+    if (k < list[0].start) return { outside: true, key: '', start: '', end: '' };
+    // 晚于最后一个周期（未来日期）→ 归到最后一个
+    return list[list.length - 1];
+  }
+
+  /** 当前周期；没有任何周期时返回 null */
+  function currentPeriod(state, todayKey) {
+    var list = periodsOf(state, todayKey);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].isCurrent) return list[i];
+    }
+    return list.length ? list[list.length - 1] : null;
+  }
+
+  /** 按周期键取周期；取不到就当成"那个月的日历月"处理 */
+  function resolvePeriod(state, periodKey, todayKey) {
+    var k = normalizePeriodKey(periodKey);
+    if (!k) return null;
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var inc = incomesOf(state);
+    if (inc.length) {
+      var list = buildIncomePeriods(inc, tk);
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].key === k) return list[i];
+      }
+    }
+    // 回退：把键当成某个月的起点
+    var p = calendarMonthPeriod(monthKeyOf(k));
+    if (p) {
+      // ⚠️ 这里必须补 isFuture，否则未来月份会被算成"已过整月"，
+      //    elapsedDays 会和旧 monthSummary 的"未来月份按 1 天算"不一致。
+      p.isFuture = p.start > tk;
+      p.isCurrent = (p.monthKey === monthKeyOf(tk));
+    }
+    return p;
+  }
+
+  /**
+   * 周期的完整概览（取代 monthSummary 的通用版）。
+   * 字段兼容 monthSummary，额外带周期与生活费信息。
+   */
+  function periodSummary(state, periodKey, categories, todayKey) {
     categories = categories && categories.length ? categories : DEFAULT_CATEGORIES;
-    var txs = transactionsOfMonth(state, monthKey);
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var p = resolvePeriod(state, periodKey, tk);
+    if (!p) return null;
+
+    /* 该周期内的支出 */
+    var all = state && Array.isArray(state.transactions) ? state.transactions : [];
+    var txs = [];
+    for (var i = 0; i < all.length; i++) {
+      var d = all[i] && all[i].date;
+      if (d && d >= p.start && d <= p.end) txs.push(all[i]);
+    }
     var spent = sumCents(txs);
 
-    var budgetMap = (state && state.budgets && state.budgets[monthKey]) || {};
-    var budgetSum = 0;
-    for (var k in budgetMap) {
-      if (Object.prototype.hasOwnProperty.call(budgetMap, k)) budgetSum += budgetMap[k];
+    /*
+     * 预算查找：先精确匹配周期键，**找不到再退回「起始月」的旧键**。
+     *
+     * 为什么需要退一步：老数据是按月存的。迁移后 '2026-10' 变成 '2026-10-01'，
+     * 而按到账日切的周期键可能是 '2026-10-12' —— 精确匹配就落空了，
+     * 用户会觉得"我明明设过预算，升级后没了"。
+     * 退一步之后，那个月的预算仍然能用在"从那个月开始的周期"上。
+     */
+    var budgetMap = {};
+    var totalBudget = 0;
+    var monthStartKey = monthKeyOf(p.start) + '-01';
+    function lookupByKey(mapObj, wantKey, fallbackKey) {
+      var hit = null;
+      Object.keys(mapObj).forEach(function (k) {
+        if (normalizePeriodKey(k) === wantKey) hit = k;
+      });
+      if (hit === null && fallbackKey && fallbackKey !== wantKey) {
+        Object.keys(mapObj).forEach(function (k) {
+          if (normalizePeriodKey(k) === fallbackKey) hit = k;
+        });
+      }
+      return hit;
     }
-    var totalBudget = (state && state.totalBudgets && state.totalBudgets[monthKey]) || 0;
-    // 若没设总预算，则用分类预算之和作为总预算（更符合直觉）
+    var bAll = (state && state.budgets) || {};
+    var bKey = lookupByKey(bAll, p.key, monthStartKey);
+    if (bKey !== null) budgetMap = bAll[bKey] || {};
+    var tAll = (state && state.totalBudgets) || {};
+    var tKey = lookupByKey(tAll, p.key, monthStartKey);
+    if (tKey !== null) totalBudget = tAll[tKey] || 0;
+    var budgetSum = 0;
+    for (var bk in budgetMap) {
+      if (Object.prototype.hasOwnProperty.call(budgetMap, bk)) budgetSum += budgetMap[bk];
+    }
     if (!totalBudget && budgetSum > 0) totalBudget = budgetSum;
 
-    // 每个分类一行
+    /* 分类行 */
     var byCat = {};
-    for (var i = 0; i < txs.length; i++) {
-      byCat[txs[i].category] = (byCat[txs[i].category] || 0) + txs[i].cents;
+    for (var t = 0; t < txs.length; t++) {
+      byCat[txs[t].category] = (byCat[txs[t].category] || 0) + txs[t].cents;
     }
     var rows = categories.map(function (c) {
       var used = byCat[c.key] || 0;
@@ -999,8 +1409,6 @@ input,select,textarea{font:inherit;color:inherit}
         remainsCents: limit > 0 ? limit - used : 0
       };
     });
-
-    // 不在默认分类里的历史分类也要显示出来，否则钱会“消失”
     var known = {};
     categories.forEach(function (c) { known[c.key] = true; });
     Object.keys(byCat).forEach(function (k) {
@@ -1013,37 +1421,77 @@ input,select,textarea{font:inherit;color:inherit}
         remainsCents: budgetMap[k] > 0 ? budgetMap[k] - byCat[k] : 0
       });
     });
-
-    // 只在有花费或有预算的分类才展示，避免一排空行
     var visibleRows = rows.filter(function (r) { return r.usedCents > 0 || r.limitCents > 0; });
     visibleRows.sort(function (a, b) { return b.usedCents - a.usedCents; });
 
-    var parts = monthKey.split('-');
-    var dim = daysInMonth(+parts[0], +parts[1]);
-
-    // 已过天数：当月就是已过天数（含今天），过去月份是整月，未来月份按 1 天算
+    /* 已过天数 / 剩余天数 */
+    var actualDays = p.periodDays || 1;
     var elapsed;
-    var todayMonth = monthKeyOf(todayKey || '');
-    if (monthKey === todayMonth) {
-      var td = fromDateKey(todayKey || '');
-      elapsed = td ? td.getDate() : 1;
-    } else if (todayMonth && monthKey < todayMonth) {
-      elapsed = dim;
-    } else {
+    if (p.isFuture) {
       elapsed = 1;
+    } else if (p.start <= tk && (p.isOpen || tk <= p.end)) {
+      elapsed = (daysBetweenKeys(p.start, tk) || 0) + 1;
+    } else {
+      elapsed = actualDays;          // 已结束的周期
     }
-    elapsed = Math.max(1, Math.min(elapsed, dim));
-    var remainDays = Math.max(1, dim - elapsed + 1);
+
+    /*
+     * ⚠️ 开放的当前周期（还没记下一笔生活费）**不能直接用 periodDays**。
+     * 那时 end 就是今天，periodDays = 已过天数，于是 remainDays 恒等于 1 ——
+     * "每天还能花"会变成"把全部结余当成今天一天能花"，荒谬。
+     * 所以用**过去周期的平均长度**估一个总天数（没有历史就按 30 天）。
+     */
+    var totalDays = actualDays;
+    var isEstimated = false;
+    if (p.isOpen && !p.isFuture) {
+      var avgLen = averagePeriodDays(state, tk);
+      totalDays = Math.max(elapsed, avgLen);
+      isEstimated = true;
+    }
+    elapsed = Math.max(1, Math.min(elapsed, totalDays));
+    var remainDays = Math.max(1, totalDays - elapsed + 1);
 
     var percent = totalBudget > 0 ? Math.round(spent / totalBudget * 100) : 0;
     var remaining = totalBudget - spent;
+    var recordedDays = countDistinctDates(txs);
+    var avgBase = recordedDays > 0 ? recordedDays : 1;
+
+    /*
+     * 生活费结余：这是"还剩多少钱"的主数字（预算只是可选自控目标）。
+     * 没有生活费记录时 incomeCents = 0，界面应回退到显示预算口径。
+     */
+    var incomeCents = p.incomeCents || 0;
+    var remainAfterIncome = incomeCents > 0 ? incomeCents - spent : 0;
+    // 按生活费算的"每天还能花"：剩余生活费 ÷ 剩余天数
+    var incomeDailyAllowance = incomeCents > 0
+      ? Math.floor(Math.max(0, remainAfterIncome) / remainDays) : 0;
 
     return {
-      monthKey: monthKey,
-      label: monthLabel(monthKey),
-      daysInMonth: dim,
+      /* 周期信息 */
+      key: p.key,
+      start: p.start,
+      end: p.end,
+      isOpen: p.isOpen,
+      isCurrent: p.isCurrent,
+      isFuture: p.isFuture,
+      source: p.source,
+      periodDays: totalDays,
+      /* 总天数是"估的"还是真实的（开放周期用历史平均长度估） */
+      isEstimatedDays: isEstimated,
+      label: p.label || periodLabel(p),
+      /* 兼容 monthSummary 的旧字段 */
+      monthKey: p.monthKey || monthKeyOf(p.start),
+      daysInMonth: totalDays,
+      /* 金额 */
       spentCents: spent,
       count: txs.length,
+      recordedDays: recordedDays,
+      incomeCents: incomeCents,
+      incomeCount: p.incomeCount || 0,
+      remainAfterIncomeCents: remainAfterIncome,
+      incomeDailyAllowanceCents: incomeDailyAllowance,
+      incomePercent: incomeCents > 0 ? Math.round(spent / incomeCents * 100) : 0,
+      /* 预算 */
       totalBudgetCents: totalBudget,
       categoryBudgetSumCents: budgetSum,
       remainingCents: remaining,
@@ -1051,11 +1499,95 @@ input,select,textarea{font:inherit;color:inherit}
       elapsedDays: elapsed,
       remainDays: remainDays,
       dailyAllowanceCents: totalBudget > 0 ? Math.floor(Math.max(0, remaining) / remainDays) : 0,
-      avgPerDayCents: Math.round(spent / elapsed),
-      projectedCents: Math.round(spent / elapsed * dim),
+      avgPerDayCents: Math.round(spent / avgBase),
+      projectedCents: Math.round(spent / elapsed * totalDays),
       noBudget: totalBudget <= 0,
       rows: visibleRows
     };
+  }
+
+  /**
+   * 周期外：早于第一笔生活费的支出。
+   *
+   * 用户选择「单独显示」而不是归入第一个周期 —— 因为那些钱是
+   * 记生活费之前花的，混进任何周期都会让那个周期的数字失真。
+   */
+  function outsideSummary(state, todayKey) {
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var list = periodsOf(state, tk);
+    if (!list.length || list[0].source !== 'income') {
+      return { hasData: false, spentCents: 0, count: 0, recordedDays: 0, from: '', to: '' };
+    }
+    var firstStart = list[0].start;
+    var all = state && Array.isArray(state.transactions) ? state.transactions : [];
+    var txs = [];
+    for (var i = 0; i < all.length; i++) {
+      var d = all[i] && all[i].date;
+      if (d && d < firstStart) txs.push(all[i]);
+    }
+    if (!txs.length) {
+      return { hasData: false, spentCents: 0, count: 0, recordedDays: 0, from: '', to: '' };
+    }
+    var dates = txs.map(function (x) { return x.date; }).sort();
+    return {
+      hasData: true,
+      spentCents: sumCents(txs),
+      count: txs.length,
+      recordedDays: countDistinctDates(txs),
+      from: dates[0],
+      to: dates[dates.length - 1]
+    };
+  }
+
+  /**
+   * 最近 N 个周期的花费（给"近 6 个周期趋势"用）。
+   * 只统计到今天为止的周期，未来/空的也算（值是 0），保持图表横轴连续。
+   */
+  function periodTotals(state, n, todayKey) {
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var count = isFinite(n) && n > 0 ? Math.round(n) : 6;
+    var list = periodsOf(state, tk);
+    var past = list.filter(function (p) { return !p.isFuture; });
+    var tail = past.slice(-count);
+    var all = state && Array.isArray(state.transactions) ? state.transactions : [];
+    return tail.map(function (p) {
+      var s = 0;
+      for (var i = 0; i < all.length; i++) {
+        var d = all[i] && all[i].date;
+        if (d && d >= p.start && d <= p.end) s += all[i].cents;
+      }
+      return {
+        key: p.key,
+        start: p.start,
+        end: p.end,
+        label: p.source === 'calendar'
+          ? ((+p.start.split('-')[1]) + '月')
+          : ((+p.start.split('-')[1]) + '/' + (+p.start.split('-')[2])),
+        cents: s,
+        incomeCents: p.incomeCents || 0,
+        isCurrent: p.isCurrent
+      };
+    });
+  }
+
+  /**
+   * 是不是忘了记生活费？
+   * 当前周期持续超过 thresholdDays（默认 40 天）就提示 ——
+   * 正常一个月 28~31 天，40 天留了 9 天余量。
+   */
+  function needsIncomeReminder(state, todayKey, thresholdDays) {
+    var tk = fromDateKey(todayKey) ? todayKey : toDateKey(new Date());
+    var limit = isFinite(thresholdDays) && thresholdDays > 0 ? Math.round(thresholdDays) : 40;
+    var list = periodsOf(state, tk);
+    if (!list.length) return { show: false, days: 0, start: '', limit: limit };
+    var cur = null;
+    for (var i = 0; i < list.length; i++) if (list[i].isCurrent) cur = list[i];
+    if (!cur || cur.source !== 'income') {
+      // 没有任何生活费记录时不提示"漏记"（用户可能压根不用这个功能）
+      return { show: false, days: 0, start: '', limit: limit };
+    }
+    var days = (daysBetweenKeys(cur.start, tk) || 0) + 1;
+    return { show: days > limit, days: days, start: cur.start, limit: limit };
   }
 
   /** 某天某分类的花费合计（分） */
@@ -1065,8 +1597,7 @@ input,select,textarea{font:inherit;color:inherit}
     for (var i = 0; i < list.length; i++) {
       if (!categoryKey || list[i].category === categoryKey) s += list[i].cents;
     }
-    return s;
-  }
+    return s;  }
 
   /**
    * 最近 n 天（含今天）的每日花费，用于柱状图。
@@ -1221,6 +1752,53 @@ input,select,textarea{font:inherit;color:inherit}
     };
   }
 
+  /**
+   * 人情往来汇总（按**任意日期区间**算）。
+   * 周期化之后，"本月人情往来"要变成"本周期人情往来"，
+   * 而周期不是日历月，所以不能再用 transactionsOfMonth。
+   * 逻辑与 renqingStats 一致，只是把"取哪批"换掉。
+   */
+  function renqingStatsInRange(state, start, end) {
+    var st = normalizeState(state);
+    var a = fromDateKey(start) ? start : null;
+    var b = fromDateKey(end) ? end : null;
+    if (!a || !b || a > b) return renqingStats(state, '');
+    var list = [];
+    for (var i = 0; i < st.transactions.length; i++) {
+      var t = st.transactions[i];
+      if (t.date >= a && t.date <= b) list.push(t);
+    }
+    var total = 0, lent = 0, lentCount = 0, count = 0, items = [];
+    for (var j = 0; j < list.length; j++) {
+      var x = list[j];
+      if (x.category !== LENDING_CATEGORY) continue;
+      count++;
+      total += x.cents;
+      if (x.isLending) { lent += x.cents; lentCount++; }
+      items.push(x);
+    }
+    var lentAllTime = 0, lentAllTimeCount = 0;
+    for (var k = 0; k < st.transactions.length; k++) {
+      var y = st.transactions[k];
+      if (y.category === LENDING_CATEGORY && y.isLending) {
+        lentAllTime += y.cents;
+        lentAllTimeCount++;
+      }
+    }
+    return {
+      monthKey: '',
+      periodStart: a,
+      periodEnd: b,
+      count: count,
+      totalCents: total,
+      lentCents: lent,
+      lentCount: lentCount,
+      lentAllTimeCents: lentAllTime,
+      lentAllTimeCount: lentAllTimeCount,
+      items: sortByDateDesc(items)
+    };
+  }
+
   /* ----------------------------- 变更操作 ----------------------------- */
 
   /** 新增一笔；返回 { state, tx } 或 { error } —— 不修改入参 */
@@ -1308,34 +1886,160 @@ input,select,textarea{font:inherit;color:inherit}
     return next;
   }
 
-  /** 设置某月某分类预算（分）；传 0 或负数表示清除 */
-  function setBudget(state, monthKey, categoryKey, cents) {
+  /* ----------------------------- 生活费（收入） ----------------------------- */
+
+  /*
+   * 为什么单独存一个 incomes 数组，而不是混进 transactions：
+   *   transactions 是**支出**，monthSummary 直接对它求和来算"花了多少"。
+   *   混进收入会让"本月花费"当场算错（而且还不好排查）。
+   *   独立存的好处是：支出侧的代码一行都不用改，收入也不影响任何支出统计。
+   *
+   * 生活费的日期就是**周期起点**（方案 A）：
+   *   每记一笔生活费，就从那天开始一个新周期。
+   */
+
+  /** 取出全部生活费记录（按日期升序，同日按创建时间升序）；非法项被跳过 */
+  function incomesOf(state) {
+    var list = state && state.incomes;
+    if (!Array.isArray(list)) return [];
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i];
+      if (!x || typeof x !== 'object') continue;
+      if (!fromDateKey(x.date)) continue;
+      var cents = typeof x.cents === 'number' && isFinite(x.cents) && x.cents > 0
+        ? Math.round(x.cents) : 0;
+      if (cents <= 0) continue;
+      out.push({
+        id: typeof x.id === 'string' && x.id ? x.id : uid(),
+        date: x.date,
+        cents: cents,
+        note: typeof x.note === 'string' ? x.note.slice(0, 60) : '',
+        createdAt: typeof x.createdAt === 'number' && isFinite(x.createdAt) ? x.createdAt : 0,
+        updatedAt: typeof x.updatedAt === 'number' && isFinite(x.updatedAt) ? x.updatedAt : 0
+      });
+    }
+    out.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      return (a.createdAt || 0) - (b.createdAt || 0);
+    });
+    return out;
+  }
+
+  function sumIncomeCents(list) {
+    var s = 0;
+    for (var i = 0; i < (Array.isArray(list) ? list : []).length; i++) s += list[i].cents;
+    return s;
+  }
+
+  /** 新增一笔生活费；返回 { state, income } 或 { error } */
+  function addIncome(state, input, now) {
+    var cents = parseAmountToCents(input && input.amount);
+    if (cents === null) return { error: '金额格式不对' };
+    if (cents <= 0) return { error: '金额要大于 0' };
+    if (cents > 100000000) return { error: '金额太大了' };
+    var date = fromDateKey(input && input.date) ? input.date : null;
+    if (!date) return { error: '日期不对' };
+
+    var ts = typeof now === 'number' && isFinite(now) ? now : Date.now();
     var next = normalizeState(state);
-    if (!isValidMonthKey(monthKey)) return next;
-    if (!next.budgets[monthKey]) next.budgets[monthKey] = {};
-    var v = Math.round(Number(cents));
-    if (!isFinite(v) || v <= 0) delete next.budgets[monthKey][categoryKey];
-    else next.budgets[monthKey][categoryKey] = v;
+    var income = {
+      id: uid(),
+      date: date,
+      cents: cents,
+      note: typeof (input && input.note) === 'string' ? input.note.slice(0, 60) : '',
+      createdAt: ts,
+      updatedAt: ts
+    };
+    next.incomes.push(income);
+    return { state: next, income: income };
+  }
+
+  /** 修改一笔生活费；返回 { state, income } 或 { error } */
+  function updateIncome(state, id, patch, now) {
+    var ts = typeof now === 'number' && isFinite(now) ? now : Date.now();
+    var next = normalizeState(state);
+    var idx = -1;
+    for (var i = 0; i < next.incomes.length; i++) {
+      if (next.incomes[i].id === id) { idx = i; break; }
+    }
+    if (idx === -1) return { error: '这笔生活费不存在' };
+
+    var old = next.incomes[idx];
+    var p = patch || {};
+
+    var cents = old.cents;
+    if (p.amount !== undefined) {
+      var c = parseAmountToCents(p.amount);
+      if (c === null) return { error: '金额格式不对' };
+      if (c <= 0) return { error: '金额要大于 0' };
+      if (c > 100000000) return { error: '金额太大了' };
+      cents = c;
+    }
+    var date = old.date;
+    if (p.date !== undefined) {
+      if (!fromDateKey(p.date)) return { error: '日期不对' };
+      date = p.date;
+    }
+
+    next.incomes[idx] = {
+      id: old.id,
+      date: date,
+      cents: cents,
+      note: p.note !== undefined
+        ? (typeof p.note === 'string' ? p.note.slice(0, 60) : '')
+        : old.note,
+      createdAt: old.createdAt || ts,
+      updatedAt: ts
+    };
+    return { state: next, income: next.incomes[idx] };
+  }
+
+  /** 删除一笔生活费；返回新 state */
+  function removeIncome(state, id) {
+    var next = normalizeState(state);
+    next.incomes = next.incomes.filter(function (x) { return x.id !== id; });
     return next;
   }
 
-  /** 设置某月总预算（分）；0 或负数表示清除 */
-  function setTotalBudget(state, monthKey, cents) {
+  /**
+   * 设置某周期某分类预算（分）；传 0 或负数表示清除。
+   * ⚠️ 键一律走 normalizePeriodKey，这样 '2026-10' 和 '2026-10-01' 写进去是同一个位置，
+   *    不会出现"写了一个键、之后读另一个键"的诡异问题。
+   */
+  function setBudget(state, periodKey, categoryKey, cents) {
     var next = normalizeState(state);
-    if (!isValidMonthKey(monthKey)) return next;
+    var key = normalizePeriodKey(periodKey);
+    if (!key) return next;
+    if (!next.budgets[key]) next.budgets[key] = {};
     var v = Math.round(Number(cents));
-    if (!isFinite(v) || v <= 0) delete next.totalBudgets[monthKey];
-    else next.totalBudgets[monthKey] = v;
+    if (!isFinite(v) || v <= 0) delete next.budgets[key][categoryKey];
+    else next.budgets[key][categoryKey] = v;
+    // 清空后把空表也删掉，免得堆一堆 {}
+    if (next.budgets[key] && Object.keys(next.budgets[key]).length === 0) delete next.budgets[key];
     return next;
   }
 
-  /** 把上个月的预算复制到本月（仅当本月还没有任何预算时使用） */
-  function copyBudgetsFrom(state, fromMonthKey, toMonthKey) {
+  /** 设置某周期"自控目标"（原总预算，分）；0 或负数表示清除 */
+  function setTotalBudget(state, periodKey, cents) {
     var next = normalizeState(state);
-    if (!isValidMonthKey(fromMonthKey) || !isValidMonthKey(toMonthKey)) return next;
-    var src = next.budgets[fromMonthKey];
-    if (src) next.budgets[toMonthKey] = JSON.parse(JSON.stringify(src));
-    if (next.totalBudgets[fromMonthKey]) next.totalBudgets[toMonthKey] = next.totalBudgets[fromMonthKey];
+    var key = normalizePeriodKey(periodKey);
+    if (!key) return next;
+    var v = Math.round(Number(cents));
+    if (!isFinite(v) || v <= 0) delete next.totalBudgets[key];
+    else next.totalBudgets[key] = v;
+    return next;
+  }
+
+  /** 把上一个周期的预算复制到指定周期 */
+  function copyBudgetsFrom(state, fromPeriodKey, toPeriodKey) {
+    var next = normalizeState(state);
+    var a = normalizePeriodKey(fromPeriodKey);
+    var b = normalizePeriodKey(toPeriodKey);
+    if (!a || !b) return next;
+    var src = next.budgets[a];
+    if (src) next.budgets[b] = JSON.parse(JSON.stringify(src));
+    if (next.totalBudgets[a]) next.totalBudgets[b] = next.totalBudgets[a];
     return next;
   }
 
@@ -1348,6 +2052,8 @@ input,select,textarea{font:inherit;color:inherit}
       version: DATA_VERSION,
       exportedAt: new Date().toISOString(),
       transactions: st.transactions,
+      // ⚠️ 生活费必须一起导出，否则换手机后「周期」和「还剩多少钱」全错
+      incomes: st.incomes,
       budgets: st.budgets,
       totalBudgets: st.totalBudgets,
       settings: st.settings
@@ -1366,7 +2072,15 @@ input,select,textarea{font:inherit;color:inherit}
     if (!data || typeof data !== 'object') return { error: '文件内容不是记账数据' };
     if (!Array.isArray(data.transactions)) return { error: '文件里没有找到账单记录' };
     var st = normalizeState(data);
-    if (st.transactions.length === 0) return { error: '文件里没有有效的账单记录' };
+    /*
+     * ⚠️ 判"空备份"时**必须把生活费也算上**。
+     * 原先写的是 `st.transactions.length === 0` 就报错，
+     * 于是"只记过生活费、还没记过支出"的人**自己的备份导不回来** ——
+     * 加了生活费功能之后这就是个真 bug（用户会以为备份坏了）。
+     */
+    if (st.transactions.length === 0 && st.incomes.length === 0) {
+      return { error: '文件里没有有效的记录' };
+    }
     return { state: st };
   }
 
@@ -1446,11 +2160,21 @@ input,select,textarea{font:inherit;color:inherit}
     sortByDateDesc: sortByDateDesc, sumCents: sumCents, monthSummary: monthSummary,
     spentOn: spentOn, dailySeries: dailySeries, pieData: pieData,
     donutSegments: donutSegments,
+    // 生活费（收入）
+    incomesOf: incomesOf, sumIncomeCents: sumIncomeCents,
+    addIncome: addIncome, updateIncome: updateIncome, removeIncome: removeIncome,
+    // 周期（方案 A：到账日自动定周期）
+    shiftDateKey: shiftDateKey, normalizePeriodKey: normalizePeriodKey,
+    daysBetweenKeys: daysBetweenKeys,
+    periodsOf: periodsOf, periodOf: periodOf, currentPeriod: currentPeriod,
+    resolvePeriod: resolvePeriod, periodSummary: periodSummary, periodLabel: periodLabel,
+    outsideSummary: outsideSummary, periodTotals: periodTotals,
+    needsIncomeReminder: needsIncomeReminder,
     // 冷静期
     needsCoolOff: needsCoolOff, reviewAtFor: reviewAtFor, pendingReviews: pendingReviews,
     clearReview: clearReview, setCoolOff: setCoolOff,
     // 人情往来
-    renqingStats: renqingStats,
+    renqingStats: renqingStats, renqingStatsInRange: renqingStatsInRange,
     // 变更
     addTransaction: addTransaction, updateTransaction: updateTransaction,
     removeTransaction: removeTransaction, setBudget: setBudget,
@@ -1482,15 +2206,11 @@ input,select,textarea{font:inherit;color:inherit}
   const todayKey = () => L.toDateKey(new Date());
   const thisMonthKey = () => L.toMonthKey(new Date());
 
-  /** 某月某分类的花费合计（分） */
-  function usedThisMonth(monthKey, categoryKey) {
-    let s = 0;
-    for (let i = 0; i < state.transactions.length; i++) {
-      const t = state.transactions[i];
-      if (t.category === categoryKey && L.monthKeyOf(t.date) === monthKey) s += t.cents;
-    }
-    return s;
-  }
+  /*
+   * （原来有个 usedThisMonth(monthKey, cat)：按日历月自己扫一遍算分类用量。
+   *  周期化之后删掉了 —— 周期不是日历月，用它会把跨月的日子算错。
+   *  现在统一从 periodSummary().rows 里取，保证和顶部合计同源。）
+   */
 
   /* ---------- 持久化：localStorage 不可用时降级为内存，保证不白屏 ---------- */
   let storageOK = true;
@@ -1525,7 +2245,13 @@ input,select,textarea{font:inherit;color:inherit}
 
   /* ---------- 视图状态 ---------- */
   let activeTab = 'home';
-  let statMonth = thisMonthKey();
+  /*
+   * 当前查看的**周期键**（'YYYY-MM-DD' = 周期起始日）。
+   * 空串表示"还没选过"，由 ensureStatPeriod() 补成当前周期。
+   * ⚠️ 以前这里是"月份"，周期化之后含义变了 —— 名字也跟着改了，
+   *    免得以后看到 statMonth 却拿到一个日期键而困惑。
+   */
+  let statPeriod = '';
   let draft = null;                    // 记账弹层草稿
 
   /* ============================ ③ 渲染 ============================ */
@@ -1542,21 +2268,57 @@ input,select,textarea{font:inherit;color:inherit}
 
   /* ---------------- 账单页 ---------------- */
   function renderHome(tk) {
-    const mk = L.monthKeyOf(tk);
-    const sum = L.monthSummary(state, mk, CATS, tk);
+    const cur = L.currentPeriod(state, tk);
+    const periodKey = cur ? cur.key : (thisMonthKey() + '-01');
+    const sum = L.periodSummary(state, periodKey, CATS, tk) ||
+                L.periodSummary(state, thisMonthKey() + '-01', CATS, tk);
     const todaySpent = L.spentOn(state, tk, null);
+    const hasIncome = !!sum && sum.incomeCents > 0;
+    // 没有生活费记录时，周期 = 日历月，文案就说"本月"；否则说"本周期"
+    const word = (sum && sum.source === 'calendar') ? '本月' : '本周期';
+    const endWord = (sum && sum.source === 'calendar') ? '月底' : '周期末';
 
     /* 主卡片 */
     let hero;
-    if (sum.noBudget) {
+    if (hasIncome) {
+      /*
+       * 生活费口径：**主数字是"还剩多少"**（生活费 − 已花）。
+       * 预算（现在叫"自控目标"）降级成可选项，只在设了时才在下面提一句 ——
+       * 否则界面上会同时出现两个"剩余"，用户不知道该信哪个。
+       */
+      const over = sum.remainAfterIncomeCents < 0;
+      const pct = sum.incomePercent;
+      const cls = over ? 'over' : (pct >= 80 ? 'warn' : '');
       hero = `
         <div class="card hero">
-          <div class="card-title">本月已花</div>
+          <div class="card-title">${over ? '本周期已超支' : '本周期还剩'}</div>
+          <div class="hero-amount ${over ? 'over' : ''}">
+            <span class="cur">¥</span>${L.formatCents(Math.abs(sum.remainAfterIncomeCents))}
+          </div>
+          <div class="hero-sub">
+            生活费 <b>¥${L.formatCents(sum.incomeCents)}</b> ｜ 已花 <b>¥${L.formatCents(sum.spentCents)}</b>（${pct}%）
+          </div>
+          <div class="hero-bar"><i class="${cls}" style="width:${Math.min(100, pct)}%"></i></div>
+          <div class="hero-meta">
+            <div class="m"><div class="k">今天已花</div><div class="v">¥${L.formatCents(todaySpent)}</div></div>
+            <div class="m"><div class="k">${over ? '已超支' : '每天还能花'}</div>
+              <div class="v">¥${L.formatCents(over ? -sum.remainAfterIncomeCents : sum.incomeDailyAllowanceCents)}</div></div>
+            <div class="m"><div class="k">按这速度到${endWord}</div><div class="v">¥${L.formatCents(sum.projectedCents)}</div></div>
+          </div>
+          <div class="hero-period">
+            ${esc(sum.label)}${sum.isEstimatedDays ? ' · 剩余天数按往期估' : ''}
+            ${sum.noBudget ? '' : ` ｜ 自控目标 ¥${L.formatCents(sum.totalBudgetCents)}（剩 ¥${L.formatCents(Math.max(0, sum.remainingCents))}）`}
+          </div>
+        </div>`;
+    } else if (sum.noBudget) {
+      hero = `
+        <div class="card hero">
+          <div class="card-title">${word}已花</div>
           <div class="hero-amount"><span class="cur">¥</span>${L.formatCents(sum.spentCents)}</div>
           <div class="hero-sub">共 <b>${sum.count}</b> 笔 ｜ 今天花了 <b>¥${L.formatCents(todaySpent)}</b></div>
           <div class="hero-empty">
-            还没设这个月的预算，设了才知道每天还能花多少。
-            <div><button id="heroSetBudget">去设预算</button></div>
+            记一笔生活费，就能按发放日算"这周期还剩多少"。
+            <div><button id="heroAddIncome">记生活费</button></div>
           </div>
         </div>`;
     } else {
@@ -1565,7 +2327,7 @@ input,select,textarea{font:inherit;color:inherit}
       const barW = Math.min(100, sum.percent);
       hero = `
         <div class="card hero">
-          <div class="card-title">${over ? '本月已超支' : '本月还能花'}</div>
+          <div class="card-title">${over ? word + '已超支' : word + '还能花'}</div>
           <div class="hero-amount ${over ? 'over' : ''}">
             <span class="cur">¥</span>${L.formatCents(Math.abs(sum.remainingCents))}
           </div>
@@ -1577,22 +2339,64 @@ input,select,textarea{font:inherit;color:inherit}
             <div class="m"><div class="k">今天已花</div><div class="v">¥${L.formatCents(todaySpent)}</div></div>
             <div class="m"><div class="k">${over ? '已超支' : '每天还能花'}</div>
               <div class="v">¥${L.formatCents(over ? -sum.remainingCents : sum.dailyAllowanceCents)}</div></div>
-            <div class="m"><div class="k">按这速度月底</div><div class="v">¥${L.formatCents(sum.projectedCents)}</div></div>
+            <div class="m"><div class="k">按这速度到${endWord}</div><div class="v">¥${L.formatCents(sum.projectedCents)}</div></div>
           </div>
         </div>`;
     }
 
     el('homeHero').innerHTML = hero;
+    // 生活费卡片（放在 hero 之后、明细之前）
+    renderIncomeCard();
 
     /* 提醒 */
     const alerts = [];
-    if (!sum.noBudget && sum.remainingCents < 0) {
-      alerts.push(`<div class="alert danger"><span class="ico">🚨</span><span>本月已经超支
-        <b>¥${L.formatCents(-sum.remainingCents)}</b>。接下来先只花必要的钱，或者去预算页把额度调准一点。</span></div>`);
+    if (hasIncome && sum.remainAfterIncomeCents < 0) {
+      alerts.push(`<div class="alert danger"><span class="ico">🚨</span><span>这个周期的生活费已经超支
+        <b>¥${L.formatCents(-sum.remainAfterIncomeCents)}</b>。接下来先只花必要的钱，等下一笔生活费。</span></div>`);
+    } else if (!sum.noBudget && sum.remainingCents < 0) {
+      alerts.push(`<div class="alert danger"><span class="ico">🚨</span><span>${word}已经超出自控目标
+        <b>¥${L.formatCents(-sum.remainingCents)}</b>。要么少花点，要么去预算页把目标调准一点。</span></div>`);
     } else if (!sum.noBudget && sum.projectedCents > sum.totalBudgetCents) {
-      alerts.push(`<div class="alert warn"><span class="ico">⚠️</span><span>照目前的速度，这个月会花到
-        <b>¥${L.formatCents(sum.projectedCents)}</b>，比预算多 <b>¥${L.formatCents(sum.projectedCents - sum.totalBudgetCents)}</b>。
+      alerts.push(`<div class="alert warn"><span class="ico">⚠️</span><span>照目前的速度，这个周期会花到
+        <b>¥${L.formatCents(sum.projectedCents)}</b>，比自控目标多 <b>¥${L.formatCents(sum.projectedCents - sum.totalBudgetCents)}</b>。
         每天控制在 <b>¥${L.formatCents(sum.dailyAllowanceCents)}</b> 以内就刚好。</span></div>`);
+    }
+
+    /*
+     * 漏记生活费提醒（40 天阈值，用户定的）。
+     * 只在**已经开始记生活费**的人身上提示 —— 压根不用这个功能的人不该被打扰。
+     */
+    const rem = L.needsIncomeReminder(state, tk, 40);
+    if (rem.show) {
+      alerts.push(`<div class="alert warn" style="display:block">
+        <div style="display:flex;gap:9px;align-items:flex-start">
+          <span class="ico">💰</span>
+          <span>这个周期已经 <b>${rem.days}</b> 天了（从 ${rem.start} 算起），
+          是不是<b>忘了记生活费</b>？不补的话，两个周期的账会混在一起算。</span>
+        </div>
+        <div style="margin-top:7px"><button class="btn-primary" id="alertAddIncome"
+          style="padding:7px 16px;font-size:13px">补记一笔</button></div>
+      </div>`);
+    }
+
+    /*
+     * 周期外：早于第一笔生活费的支出。
+     * 用户明确要求**单独显示**，不归进任何周期 —— 那些钱是记生活费之前花的，
+     * 混进去会让第一个周期的数字失真。
+     */
+    const outside = L.outsideSummary(state, tk);
+    if (outside.hasData) {
+      alerts.push(`<div class="alert warn" style="display:block">
+        <div style="display:flex;gap:9px;align-items:flex-start">
+          <span class="ico">📦</span>
+          <span><b>周期外</b>：¥${L.formatCents(outside.spentCents)}（${outside.count} 笔）
+          <span style="color:var(--ink-3);font-size:12.5px">
+          · ${outside.from.slice(5).replace('-', '/')} ~ ${outside.to.slice(5).replace('-', '/')}</span></span>
+        </div>
+        <div style="margin-top:5px;font-size:12px;color:var(--ink-3)">
+          这些是记生活费之前花的，不混进任何周期，也不影响"本周期还剩"。
+        </div>
+      </div>`);
     }
     const overRows = sum.rows.filter((r) => r.over);
     if (overRows.length && (!sum.remainingCents || sum.remainingCents >= 0)) {
@@ -1658,13 +2462,19 @@ input,select,textarea{font:inherit;color:inherit}
       }).join('');
     }
 
-    /* 明细：近 30 天，按日分组 */
+    /* 明细：近 30 天，**支出和生活费混排**、按日分组
+     * 生活费单独存（state.incomes），这里只是把它们并进同一条时间线，
+     * 视觉上用绿色 +¥ 和支出区分；点它走 data-income-edit，不会误当成支出。 */
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - 29);
     const cutoffKey = L.toDateKey(cutoff);
-    const recent = L.sortByDateDesc(state.transactions.filter((t) => t.date >= cutoffKey));
 
-    if (state.transactions.length === 0) {
+    const allIncomes = L.incomesOf(state);
+    const recentIncomes = allIncomes.filter((x) => x.date >= cutoffKey);
+    const recentTx = state.transactions.filter((t) => t.date >= cutoffKey);
+
+    // 空状态：支出和生活费都没有，才算"还没有记账"
+    if (state.transactions.length === 0 && allIncomes.length === 0) {
       el('homeList').innerHTML = `
         <div class="empty">
           <div class="big">🧾</div>
@@ -1674,21 +2484,55 @@ input,select,textarea{font:inherit;color:inherit}
       return;
     }
 
+    // 合成一条时间线：日期倒序，同日按创建时间倒序
+    const entries = [];
+    recentTx.forEach((t) => {
+      entries.push({ kind: 'expense', date: t.date, at: t.createdAt || 0, item: t });
+    });
+    recentIncomes.forEach((x) => {
+      entries.push({ kind: 'income', date: x.date, at: x.createdAt || 0, item: x });
+    });
+    entries.sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return b.at - a.at;
+    });
+
     let html = '';
-    if (recent.length === 0) {
+    if (entries.length === 0) {
       html += `<div class="empty" style="padding:26px 20px"><div class="big">🗓️</div><p>最近 30 天没有记录。<br>更早的账在「统计」里按月份看。</p></div>`;
     } else {
       const groups = {};
-      recent.forEach((t) => { (groups[t.date] = groups[t.date] || []).push(t); });
+      entries.forEach((e) => { (groups[e.date] = groups[e.date] || []).push(e); });
       Object.keys(groups).sort().reverse().forEach((date) => {
         const items = groups[date];
-        const dayTotal = L.sumCents(items);
+        const dayExpense = L.sumCents(items.filter((e) => e.kind === 'expense').map((e) => e.item));
+        const dayIncome = L.sumIncomeCents(items.filter((e) => e.kind === 'income').map((e) => e.item));
+
+        // 头部的「合计」始终是花费；那天有进账就额外标一个绿色 +¥
+        let headRight = `合计 ¥${L.formatCents(dayExpense)}`;
+        if (dayIncome > 0) {
+          headRight += `<span class="day-inc">进账 +¥${L.formatCents(dayIncome)}</span>`;
+        }
+
         html += `<div class="daygroup">
           <div class="daygroup-head">
             <span class="d"><b>${L.friendlyDate(date, todayKey())}</b><span>${date.slice(5).replace('-', '/')}</span></span>
-            <span>合计 ¥${L.formatCents(dayTotal)}</span>
+            <span>${headRight}</span>
           </div>`;
-        items.forEach((t) => {
+        items.forEach((e) => {
+          if (e.kind === 'income') {
+            const x = e.item;
+            html += `<div class="tx inc" data-income-edit="${x.id}">
+              <span class="em">💰</span>
+              <span class="mid">
+                <span class="name">生活费</span>
+                ${x.note ? `<span class="note">${esc(x.note)}</span>` : ''}
+              </span>
+              <span class="amt inc">+${L.formatCents(x.cents)}</span>
+            </div>`;
+            return;
+          }
+          const t = e.item;
           const c = CATS.find((x) => x.key === t.category) || { emoji: '❔', name: t.category };
           html += `<div class="tx" data-edit="${t.id}">
             <span class="em">${c.emoji}</span>
@@ -1705,20 +2549,73 @@ input,select,textarea{font:inherit;color:inherit}
     el('homeList').innerHTML = html;
   }
 
+  /** 首页的生活费卡片：列最近几笔，空时给引导 */
+  function renderIncomeCard() {
+    const list = L.incomesOf(state);
+    const box = el('homeIncomeList');
+    if (!box) return;
+    if (!list.length) {
+      box.innerHTML = `<div style="font-size:12.5px;color:var(--ink-3);line-height:1.55">
+        记一笔生活费，App 就能按 <b>发放日</b> 给你划分周期，不用再对着日历月算。</div>`;
+      return;
+    }
+    const recent = list.slice(-3).reverse();
+    let html = recent.map((x) => `<div class="inc-row" data-income-edit="${x.id}">
+        <span class="d">${esc(L.friendlyDate(x.date, todayKey()))}
+          <span class="d2">${x.date.slice(5).replace('-', '/')}</span></span>
+        <span class="v">¥${L.formatCents(x.cents)}</span>
+      </div>`).join('');
+    if (list.length > 3) {
+      html += `<div style="font-size:11.5px;color:var(--ink-3);margin-top:5px">更早的还有 ${list.length - 3} 笔</div>`;
+    }
+    box.innerHTML = html;
+  }
+
   /* ---------------- 统计页 ---------------- */
+  /*
+   * 周期切换：不再用"月份 ±1"，而是**在周期列表里前后移动**。
+   * 因为周期长度不等（例如 9/15~10/11 是 27 天），按月份加减会算错。
+   */
+  function periodList() {
+    return L.periodsOf(state, todayKey());
+  }
+
+  /** 保证 statPeriod 是一个存在的周期键；没选过就用当前周期 */
+  function ensureStatPeriod() {
+    const list = periodList();
+    if (!list.length) { statPeriod = ''; return null; }
+    const found = list.some((p) => p.key === statPeriod);
+    if (!found) {
+      const cur = list.find((p) => p.isCurrent);
+      statPeriod = cur ? cur.key : list[list.length - 1].key;
+    }
+    return list;
+  }
+
   function renderStats() {
     const tk = todayKey();
-    el('monthLabel').textContent = L.monthLabel(statMonth);
-    const isCurrent = statMonth === L.monthKeyOf(tk);
-    el('monthNext').disabled = isCurrent;
+    const list = ensureStatPeriod();
+    if (!list || !statPeriod) {
+      el('monthLabel').textContent = '—';
+      el('statsBody').innerHTML = '';
+      return;
+    }
+    const idx = list.findIndex((p) => p.key === statPeriod);
+    el('monthLabel').textContent = list[idx] ? list[idx].label : '';
+    el('monthPrev').disabled = idx <= 0;
+    el('monthNext').disabled = idx >= list.length - 1;
 
-    const sum = L.monthSummary(state, statMonth, CATS, tk);
+    const sum = L.periodSummary(state, statPeriod, CATS, tk);
+    if (!sum) {
+      el('statsBody').innerHTML = '';
+      return;
+    }
     const pie = L.pieData(sum);
     const body = el('statsBody');
 
     if (sum.count === 0) {
       body.innerHTML = `<div class="card"><div class="empty" style="padding:30px 16px">
-        <div class="big">📉</div><p>${L.monthLabel(statMonth)}还没有记录。</p>
+        <div class="big">📉</div><p>${esc(sum.label)}还没有记录。</p>
       </div></div>`;
       return;
     }
@@ -1777,8 +2674,8 @@ input,select,textarea{font:inherit;color:inherit}
     }).join('');
     const weekAvg = Math.round(series.reduce((a, s) => a + s.cents, 0) / 7);
 
-    /* 近 6 个月趋势 */
-    const months = L.monthlyTotals(state, 6, statMonth);
+    /* 近 6 个周期趋势 */
+    const months = L.periodTotals(state, 6, tk);
     const maxM = Math.max.apply(null, months.map((m) => m.cents).concat([1]));
     const W = 300, H = 100, PAD = 10;
     const stepX = months.length > 1 ? (W - PAD * 2) / (months.length - 1) : 0;
@@ -1794,15 +2691,15 @@ input,select,textarea{font:inherit;color:inherit}
         <polygon points="${area}" fill="var(--accent-soft)"></polygon>
         <polyline points="${poly}" fill="none" stroke="var(--accent)" stroke-width="2"
                   stroke-linejoin="round" stroke-linecap="round"></polyline>
-        ${pts.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.monthKey === statMonth ? 4 : 2.6}"
-            fill="${p.monthKey === statMonth ? 'var(--accent)' : 'var(--card)'}"
+        ${pts.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${p.key === statPeriod ? 4 : 2.6}"
+            fill="${p.key === statPeriod ? 'var(--accent)' : 'var(--card)'}"
             stroke="var(--accent)" stroke-width="2"></circle>`).join('')}
         ${pts.map((p, i) => `<text x="${p.x.toFixed(1)}" y="${H + 14}" text-anchor="${i === 0 ? 'start' : (i === pts.length - 1 ? 'end' : 'middle')}"
             font-size="10" fill="var(--ink-3)">${p.label}</text>`).join('')}
       </svg>`;
 
     /* 人情往来：单独归集，重点盯「借出去的钱」这个漏财口 */
-    const rq = L.renqingStats(state, statMonth);
+    const rq = L.renqingStatsInRange(state, sum.start, sum.end);
     let renqingCard = '';
     if (rq.count > 0) {
       const share = sum.spentCents > 0 ? Math.round(rq.totalCents / sum.spentCents * 100) : 0;
@@ -1820,8 +2717,8 @@ input,select,textarea{font:inherit;color:inherit}
       renqingCard = `
         <div class="card">
           <div class="card-head"><span class="card-title big">🤝 人情往来</span>
-            <span style="font-size:11.5px;color:var(--ink-3)">占本月花费 ${share}%</span></div>
-          <div class="renqing-line"><span class="k">本月人情往来合计</span><span class="v">¥${L.formatCents(rq.totalCents)}（${rq.count} 笔）</span></div>
+            <span style="font-size:11.5px;color:var(--ink-3)">占本周期花费 ${share}%</span></div>
+          <div class="renqing-line"><span class="k">本周期人情往来合计</span><span class="v">¥${L.formatCents(rq.totalCents)}（${rq.count} 笔）</span></div>
           <div class="renqing-line lent"><span class="k">其中借出去的钱</span><span class="v">¥${L.formatCents(rq.lentCents)}（${rq.lentCount} 笔）</span></div>
           <div class="renqing-line"><span class="k">借出去累计（全部时间）</span><span class="v">¥${L.formatCents(rq.lentAllTimeCents)}（${rq.lentAllTimeCount} 笔）</span></div>
           <div style="font-size:12px;color:var(--ink-3);line-height:1.6;margin:9px 0 4px">
@@ -1835,14 +2732,17 @@ input,select,textarea{font:inherit;color:inherit}
     body.innerHTML = `
       <div class="card">
         <div class="card-head">
-          <span class="card-title big">${L.monthLabel(statMonth)}总览</span>
+          <span class="card-title big">${esc(sum.label)} 总览</span>
           <span style="font-size:12px;color:var(--ink-3)">${sum.count} 笔</span>
         </div>
         <div style="display:flex;gap:14px;margin-bottom:14px">
-          <div style="flex:1"><div style="font-size:11.5px;color:var(--ink-3)">本月花费</div>
+          <div style="flex:1"><div style="font-size:11.5px;color:var(--ink-3)">${sum.source === "calendar" ? "本月" : "本周期"}花费</div>
             <div style="font-size:21px;font-weight:700;letter-spacing:-.5px">¥${L.formatCents(sum.spentCents)}</div></div>
           <div style="flex:1"><div style="font-size:11.5px;color:var(--ink-3)">日均</div>
-            <div style="font-size:21px;font-weight:700;letter-spacing:-.5px">¥${L.formatCents(sum.avgPerDayCents)}</div></div>
+            <div style="font-size:21px;font-weight:700;letter-spacing:-.5px">¥${L.formatCents(sum.avgPerDayCents)}</div>
+            <div style="font-size:10.5px;color:var(--ink-3);margin-top:1px;line-height:1.35">
+              基于 ${sum.recordedDays} 天记录<br>已过 ${sum.elapsedDays} 天
+            </div></div>
           <div style="flex:1"><div style="font-size:11.5px;color:var(--ink-3)">最高一天</div>
             <div style="font-size:21px;font-weight:700;letter-spacing:-.5px">¥${L.formatCents(Math.max.apply(null, series.map((s) => s.cents).concat([0])))}</div></div>
         </div>
@@ -1872,7 +2772,7 @@ input,select,textarea{font:inherit;color:inherit}
       </div>
 
       <div class="card">
-        <div class="card-head"><span class="card-title big">近 6 个月趋势</span>
+        <div class="card-head"><span class="card-title big">近 6 个周期趋势</span>
           <span style="font-size:11.5px;color:var(--ink-3)">点上方箭头换月份</span></div>
         ${trendSVG}
       </div>`;
@@ -1880,10 +2780,13 @@ input,select,textarea{font:inherit;color:inherit}
 
   /* ---------------- 预算页 ---------------- */
   function renderBudget() {
-    const mk = thisMonthKey();
-    el('budMonthLabel').textContent = L.monthLabel(mk);
+    const tk = todayKey();
+    const periodKey = currentPeriodKey();
+    const sum = L.periodSummary(state, periodKey, CATS, tk) ||
+                L.periodSummary(state, thisMonthKey() + '-01', CATS, tk);
+    const mk = sum ? sum.key : periodKey;
+    el('budMonthLabel').textContent = sum ? sum.label : '';
 
-    const sum = L.monthSummary(state, mk, CATS, todayKey());
     const total = (state.totalBudgets && state.totalBudgets[mk]) || 0;
 
     const input = el('totalBudgetInput');
@@ -1900,12 +2803,18 @@ input,select,textarea{font:inherit;color:inherit}
         hint.innerHTML = `已花 ¥${L.formatCents(sum.spentCents)}（${spentPct}%），剩 ${sum.remainDays} 天，每天还能花 <b style="color:var(--accent)">¥${L.formatCents(sum.dailyAllowanceCents)}</b>`;
       }
     } else {
-      hint.textContent = '设个总预算，每天就知道还能花多少。';
+      hint.textContent = '生活费之外想再压一个上限，就填这里（不填也不影响）。';
     }
 
+    /*
+     * 分类用量直接从周期汇总里取（sum.rows），不再自己按月份扫一遍 ——
+     * 周期不是日历月，按 monthKeyOf 扫会把跨月的日子算错。
+     */
+    const usedOf = {};
+    (sum ? sum.rows : []).forEach((r) => { usedOf[r.key] = r.usedCents; });
     const bmap = (state.budgets && state.budgets[mk]) || {};
     el('budgetRows').innerHTML = CATS.map((c) => {
-      const used = usedThisMonth(mk, c.key);
+      const used = usedOf[c.key] || 0;
       const limit = bmap[c.key] || 0;
       const pct = limit > 0 ? Math.min(100, used / limit * 100) : 0;
       const over = limit > 0 && used > limit;
@@ -1960,6 +2869,82 @@ input,select,textarea{font:inherit;color:inherit}
     t.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  /* ============================ ③b 生活费弹层 ============================ */
+  /*
+   * 生活费单独一个弹层，不复用「记一笔」：
+   * 那个弹层里有分类格、数字键盘、借出开关、冷静期，全是支出专用的。
+   * 生活费只要「金额 + 到账日期 + 备注」，塞进去反而要藏一堆东西。
+   */
+  let incDraft = null;
+
+  function openIncSheet(opts) {
+    opts = opts || {};
+    incDraft = {
+      id: opts.id || null,
+      amount: opts.amount || '',
+      date: opts.date || todayKey(),
+      note: opts.note || ''
+    };
+    el('incTitle').textContent = opts.id ? '改这笔生活费' : '记生活费';
+    el('incSave').textContent = opts.id ? '保存' : '记下';
+    el('incDelete').style.display = opts.id ? '' : 'none';
+    /*
+     * ⚠️ 这里**不能**再格式化一次。
+     * 调用方传进来的 amount 已经是 `L.formatCentsShort(cents)` 的**字符串**（如 "2000"）。
+     * 如果对它再调一次 formatCentsShort，它会被当成"分"处理 ——
+     * "2000" 分 = ¥20，金额直接少 100 倍（踩过：编辑 2000 元变成 20）。
+     * 所以：字符串原样用，只有传数字时才格式化。
+     */
+    const amt = opts.amount;
+    el('incAmount').value = (typeof amt === 'number')
+      ? L.formatCentsShort(amt)
+      : (amt || '');
+    el('incDate').value = incDraft.date;
+    el('incNote').value = incDraft.note;
+    el('incMask').classList.add('show');
+    el('incSheet').classList.add('show');
+    el('fab').classList.add('hide');
+  }
+
+  function closeIncSheet() {
+    el('incMask').classList.remove('show');
+    el('incSheet').classList.remove('show');
+    el('fab').classList.toggle('hide', activeTab !== 'home');
+    incDraft = null;
+  }
+
+  function saveIncSheet() {
+    if (!incDraft) return;
+    const input = {
+      amount: el('incAmount').value,
+      date: el('incDate').value,
+      note: el('incNote').value
+    };
+    let r;
+    if (incDraft.id) {
+      r = L.updateIncome(state, incDraft.id, input);
+      if (r.error) { toast(r.error, true); return; }
+      closeIncSheet();
+      commit(r.state);
+      toast('已保存');
+    } else {
+      r = L.addIncome(state, input);
+      if (r.error) { toast(r.error, true); return; }
+      const cents = r.income.cents;
+      closeIncSheet();
+      commit(r.state);
+      toast('记下了 ¥' + L.formatCents(cents) + ' 生活费');
+    }
+  }
+
+  function deleteIncSheet() {
+    if (!incDraft || !incDraft.id) return;
+    const id = incDraft.id;
+    closeIncSheet();
+    commit(L.removeIncome(state, id));
+    toast('已删除');
   }
 
   /* ============================ ④ 记账弹层 ============================ */
@@ -2117,12 +3102,15 @@ input,select,textarea{font:inherit;color:inherit}
 
   function bindHome() {
     el('homeHero').addEventListener('click', (e) => {
+      if (e.target.id === 'heroAddIncome') { openIncSheet(); return; }
       if (e.target.id === 'heroSetBudget') {
         document.querySelector('.tab[data-tab="budget"]').click();
       }
     });
     /* 冷静期处理：留着 → 打标记；划掉 → 删掉这笔 */
     el('homeAlerts').addEventListener('click', (e) => {
+      // 漏记生活费提醒里的「补记一笔」
+      if (e.target.id === 'alertAddIncome') { openIncSheet(); return; }
       const keep = e.target.closest('[data-review-keep]');
       const drop = e.target.closest('[data-review-drop]');
       if (keep) {
@@ -2141,6 +3129,20 @@ input,select,textarea{font:inherit;color:inherit}
     });
     el('homeList').addEventListener('click', (e) => {
       if (e.target.id === 'emptyAdd' || e.target.closest('#emptyAdd')) { openSheet(); return; }
+      // 生活费行用 data-income-edit，和支出的 data-edit 分开，避免互相误伤
+      const incRow = e.target.closest('[data-income-edit]');
+      if (incRow) {
+        const x = L.incomesOf(state).find((y) => y.id === incRow.dataset.incomeEdit);
+        if (x) {
+          openIncSheet({
+            id: x.id,
+            amount: L.formatCentsShort(x.cents),
+            date: x.date,
+            note: x.note
+          });
+        }
+        return;
+      }
       const row = e.target.closest('[data-edit]');
       if (row) {
         const t = state.transactions.find((x) => x.id === row.dataset.edit);
@@ -2155,6 +3157,25 @@ input,select,textarea{font:inherit;color:inherit}
           });
         }
       }
+    });
+    /* 生活费卡片：点最近一笔也能改 */
+    el('homeIncomeList').addEventListener('click', (e) => {
+      const row = e.target.closest('[data-income-edit]');
+      if (!row) return;
+      const x = L.incomesOf(state).find((y) => y.id === row.dataset.incomeEdit);
+      if (!x) return;
+      openIncSheet({
+        id: x.id, amount: L.formatCentsShort(x.cents), date: x.date, note: x.note
+      });
+    });
+    el('btnAddIncome').addEventListener('click', () => openIncSheet());
+    el('incCancel').addEventListener('click', closeIncSheet);
+    el('incMask').addEventListener('click', closeIncSheet);
+    el('incSave').addEventListener('click', saveIncSheet);
+    el('incDelete').addEventListener('click', deleteIncSheet);
+    // 金额框里回车 = 直接记下（手机上少见，但键盘测试/桌面预览方便）
+    el('incAmount').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); saveIncSheet(); }
     });
     el('homeQuick').addEventListener('click', (e) => {
       const chip = e.target.closest('[data-quick]');
@@ -2214,7 +3235,13 @@ input,select,textarea{font:inherit;color:inherit}
       if (draft) draft.note = el('noteInput').value;
     });
     // 物理键盘（电脑上也能用）
-    document.addEventListener('keydown', (e) => {      if (!el('sheet').classList.contains('show')) return;
+    document.addEventListener('keydown', (e) => {
+      // 生活费弹层打开时，只处理 Escape（别让它走记账那个键盘逻辑）
+      if (el('incSheet').classList.contains('show')) {
+        if (e.key === 'Escape') closeIncSheet();
+        return;
+      }
+      if (!el('sheet').classList.contains('show')) return;
       if (e.key === 'Escape') { closeSheet(); return; }
       if (e.key === 'Enter') { submitDraft(); return; }
       if (e.key === 'Backspace' && document.activeElement !== el('noteInput') && document.activeElement !== el('dateInput')) {
@@ -2236,19 +3263,28 @@ input,select,textarea{font:inherit;color:inherit}
   }
 
   function bindStats() {
+    /*
+     * 周期切换：在**周期列表里前后移动**，不做"月份 ±1"的日期运算。
+     * 因为周期长度不等（比如 9/15~10/11 是 27 天），按月份加减会跳到不存在的周期。
+     */
     el('monthPrev').addEventListener('click', () => {
-      const p = statMonth.split('-');
-      const d = new Date(+p[0], +p[1] - 2, 1);
-      statMonth = L.toMonthKey(d);
-      renderStats();
+      const list = ensureStatPeriod();
+      if (!list) return;
+      const i = list.findIndex((p) => p.key === statPeriod);
+      if (i > 0) { statPeriod = list[i - 1].key; renderStats(); }
     });
     el('monthNext').addEventListener('click', () => {
-      if (statMonth >= L.monthKeyOf(todayKey())) return;
-      const p = statMonth.split('-');
-      const d = new Date(+p[0], +p[1], 1);
-      statMonth = L.toMonthKey(d);
-      renderStats();
+      const list = ensureStatPeriod();
+      if (!list) return;
+      const i = list.findIndex((p) => p.key === statPeriod);
+      if (i >= 0 && i < list.length - 1) { statPeriod = list[i + 1].key; renderStats(); }
     });
+  }
+
+  /** 当前周期的键（预算都记在它名下） */
+  function currentPeriodKey() {
+    const cur = L.currentPeriod(state, todayKey());
+    return cur ? cur.key : (thisMonthKey() + '-01');
   }
 
   function bindBudget() {
@@ -2256,14 +3292,14 @@ input,select,textarea{font:inherit;color:inherit}
     const commitTotal = () => {
       const raw = totalInput.value.trim();
       if (raw === '') {
-        commit(L.setTotalBudget(state, thisMonthKey(), 0));
+        commit(L.setTotalBudget(state, currentPeriodKey(), 0));
         toast('已清除总预算');
         return;
       }
       const cents = L.parseAmountToCents(raw);
       if (cents === null || cents <= 0) { toast('预算金额不对', true); renderBudget(); return; }
-      commit(L.setTotalBudget(state, thisMonthKey(), cents));
-      toast(`本月总预算 ¥${L.formatCents(cents)}`);
+      commit(L.setTotalBudget(state, currentPeriodKey(), cents));
+      toast(`自控目标 ¥${L.formatCents(cents)}`);
     };
     totalInput.addEventListener('blur', commitTotal);
     totalInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') totalInput.blur(); });
@@ -2275,12 +3311,12 @@ input,select,textarea{font:inherit;color:inherit}
       const raw = input.value.trim();
       const key = input.dataset.cat;
       if (raw === '') {
-        commit(L.setBudget(state, thisMonthKey(), key, 0));
+        commit(L.setBudget(state, currentPeriodKey(), key, 0));
         return;
       }
       const cents = L.parseAmountToCents(raw);
       if (cents === null || cents < 0) { toast('预算金额不对', true); renderBudget(); return; }
-      commit(L.setBudget(state, thisMonthKey(), key, cents));
+      commit(L.setBudget(state, currentPeriodKey(), key, cents));
     }, true);
     rows.addEventListener('keydown', (e) => {
       const input = e.target.closest('input[data-cat]');
@@ -2288,16 +3324,21 @@ input,select,textarea{font:inherit;color:inherit}
     });
 
     el('btnCopyPrev').addEventListener('click', () => {
-      const mk = thisMonthKey();
-      const p = mk.split('-');
-      const prev = L.toMonthKey(new Date(+p[0], +p[1] - 2, 1));
+      /* 复制"上一个周期"的预算到当前周期（不再按日历月减一） */
+      const list = periodList();
+      const curKey = currentPeriodKey();
+      const idx = list.findIndex((p) => p.key === curKey);
+      if (idx <= 0) { toast('还没有上一个周期可复制', true); return; }
+      const prev = list[idx - 1].key;
+      const prevLabel = list[idx - 1].label;
+      const curLabel = list[idx].label;
       const has = (state.budgets[prev] && Object.keys(state.budgets[prev]).length) || state.totalBudgets[prev];
-      if (!has) { toast(`${L.monthLabel(prev)}没有预算可复制`, true); return; }
-      if ((state.budgets[mk] && Object.keys(state.budgets[mk]).length)) {
-        if (!confirm(`${L.monthLabel(mk)}已经有预算了，用${L.monthLabel(prev)}的覆盖它？`)) return;
+      if (!has) { toast(`${prevLabel}没有预算可复制`, true); return; }
+      if ((state.budgets[curKey] && Object.keys(state.budgets[curKey]).length)) {
+        if (!confirm(`${curLabel}已经有预算了，用${prevLabel}的覆盖它？`)) return;
       }
-      commit(L.copyBudgetsFrom(state, prev, mk));
-      toast(`已复制${L.monthLabel(prev)}的预算`);
+      commit(L.copyBudgetsFrom(state, prev, curKey));
+      toast(`已复制${prevLabel}的预算`);
     });
 
     /* 冷静期开关与门槛 */
@@ -2387,7 +3428,7 @@ input,select,textarea{font:inherit;color:inherit}
 
     // 回到今天：若当前不在本月，把统计也拉回本月
     el('btnToday').addEventListener('click', () => {
-      statMonth = thisMonthKey();
+      statPeriod = '';   // 空串 = 回到当前周期
       if (activeTab !== 'home') document.querySelector('.tab[data-tab="home"]').click();
       else render();
       el('scroll').scrollTo({ top: 0, behavior: 'smooth' });
