@@ -526,11 +526,40 @@ details.collapsed[open]>summary{margin-bottom:2px}
   var KINDS = {
     homework: { key: 'homework', name: '作业', emoji: '📘', hasDue: true },
     exercise: { key: 'exercise', name: '课上习题', emoji: '✏️', hasDue: false },
-    memo: { key: 'memo', name: '备忘录', emoji: '📝', hasDue: false, isMemo: true }
+    memo: { key: 'memo', name: '备忘录', emoji: '📝', hasDue: false, isMemo: true },
+    // 错题：有科目/章节/错误原因/星级，图片最多 3 张
+    mistake: { key: 'mistake', name: '错题', emoji: '❌', hasDue: false, isMistake: true }
   };
 
   /** 合法的 kind 值，用于校验与规范化 */
-  var KIND_KEYS = ['homework', 'exercise', 'memo'];
+  var KIND_KEYS = ['homework', 'exercise', 'memo', 'mistake'];
+
+  /**
+   * 错误原因：固定 5 个。
+   * `needNote: true` 表示选这一项必须补充说明 —— 否则"其他"等于没信息。
+   */
+  var MISTAKE_REASONS = [
+    { key: 'no_idea', name: '没有思路', emoji: '🤯', hint: '完全不知道怎么下手' },
+    { key: 'stuck', name: '某一步卡住', emoji: '🧩', hint: '大方向对，中间某步过不去' },
+    { key: 'calc', name: '计算出错', emoji: '🔢', hint: '思路对，算错了' },
+    { key: 'careless', name: '题目没看仔细', emoji: '👀', hint: '审题问题' },
+    { key: 'other', name: '其他', emoji: '💬', hint: '写清是什么原因', needNote: true }
+  ];
+  var REASON_KEYS = MISTAKE_REASONS.map(function (r) { return r.key; });
+
+  /**
+   * 默认科目（大学向，可按需增删）。
+   * 「其他」是保底科目：删科目时，属于它的错题会被挪到这里，所以它不可删。
+   */
+  var SUBJECT_FALLBACK = '其他';
+  var DEFAULT_SUBJECTS = ['高等数学', '线性代数', '概率论与数理统计', '大学物理', '大学英语', '程序设计', SUBJECT_FALLBACK];
+
+  var MAX_CHAPTER = 60;          // 章节标题
+  var MAX_REASON_NOTE = 200;     // 「其他」的补充说明
+  var MAX_SUBJECT = 20;          // 单个科目名长度
+  var MAX_SUBJECTS = 30;         // 科目数量上限
+  var MAX_STARS = 5;
+
 
   var DATA_VERSION = 1;
 
@@ -670,7 +699,32 @@ details.collapsed[open]>summary{margin-bottom:2px}
   /* ----------------------------- 数据规范化 ----------------------------- */
 
   function emptyState() {
-    return { version: DATA_VERSION, items: [] };
+    return {
+      version: DATA_VERSION,
+      items: [],
+      // 科目表：错题按科目分组。用户可以增删，但「其他」永远在
+      subjects: DEFAULT_SUBJECTS.slice()
+    };
+  }
+
+  /**
+   * 清洗科目表：去空、去重、截断长度、限制数量，保证「其他」一定存在且在最后。
+   */
+  function cleanSubjects(raw) {
+    var out = [];
+    var seen = {};
+    var list = Array.isArray(raw) ? raw : [];
+    for (var i = 0; i < list.length; i++) {
+      var s = typeof list[i] === 'string' ? list[i].trim().slice(0, MAX_SUBJECT) : '';
+      if (!s) continue;
+      if (s === SUBJECT_FALLBACK) continue;          // 「其他」最后统一补
+      if (seen[s]) continue;
+      if (out.length >= MAX_SUBJECTS - 1) break;
+      seen[s] = true;
+      out.push(s);
+    }
+    out.push(SUBJECT_FALLBACK);
+    return out;
   }
 
   var uidCounter = 0;
@@ -726,6 +780,12 @@ details.collapsed[open]>summary{margin-bottom:2px}
   function normalizeState(raw) {
     var st = emptyState();
     if (!raw || typeof raw !== 'object') return st;
+
+    // 科目表先清洗，因为后面清洗错题时要用它做校验
+    st.subjects = cleanSubjects(raw.subjects);
+    var hasSubject = {};
+    st.subjects.forEach(function (s) { hasSubject[s] = true; });
+
     var list = Array.isArray(raw.items) ? raw.items : [];
     var seen = {};
     for (var i = 0; i < list.length; i++) {
@@ -734,6 +794,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
       var kind = KIND_KEYS.indexOf(it.kind) > -1 ? it.kind : 'homework';
       var isMemo = kind === 'memo';
+      var isMistake = kind === 'mistake';
       // 备忘录允许写更长的正文
       var noteLimit = isMemo ? MAX_MEMO : MAX_NOTE;
       var title = typeof it.title === 'string' ? it.title.trim().slice(0, MAX_TITLE) : '';
@@ -749,7 +810,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
       if (seen[id]) id = uid();
       seen[id] = true;
 
-      st.items.push({
+      var entry = {
         id: id,
         kind: kind,
         title: title,
@@ -760,7 +821,27 @@ details.collapsed[open]>summary{margin-bottom:2px}
         createdAt: typeof it.createdAt === 'number' && isFinite(it.createdAt) ? it.createdAt : 0,
         updatedAt: typeof it.updatedAt === 'number' && isFinite(it.updatedAt) ? it.updatedAt : 0,
         doneAt: typeof it.doneAt === 'number' && isFinite(it.doneAt) ? it.doneAt : 0
-      });
+      };
+
+      /*
+       * 错题专有字段。历史数据（或导入的旧数据）可能是任何形状，
+       * 这里全部按"不认识就回到安全默认"处理，绝不抛异常：
+       *   · subject 不在科目表里 → 归到「其他」
+       *   · reason 不在 5 个枚举里 → 'other'
+       *   · stars 不在 1~5 → 3（中位数，比 1 星或 5 星更不误导）
+       */
+      if (isMistake) {
+        var subj = typeof it.subject === 'string' ? it.subject.trim().slice(0, MAX_SUBJECT) : '';
+        entry.subject = hasSubject[subj] ? subj : SUBJECT_FALLBACK;
+        entry.chapter = typeof it.chapter === 'string' ? it.chapter.trim().slice(0, MAX_CHAPTER) : '';
+        entry.reason = REASON_KEYS.indexOf(it.reason) > -1 ? it.reason : 'other';
+        entry.reasonNote = typeof it.reasonNote === 'string'
+          ? it.reasonNote.slice(0, MAX_REASON_NOTE) : '';
+        var st5 = Math.round(Number(it.stars));
+        entry.stars = (isFinite(st5) && st5 >= 1 && st5 <= MAX_STARS) ? st5 : 3;
+      }
+
+      st.items.push(entry);
     }
     st.version = DATA_VERSION;
     return st;
@@ -771,6 +852,128 @@ details.collapsed[open]>summary{margin-bottom:2px}
   function itemsOfKind(state, kind) {
     var list = (state && state.items) || [];
     return list.filter(function (x) { return x.kind === kind; });
+  }
+
+  /* ----------------------------- 错题：分组与排序 ----------------------------- */
+
+  /** 错误原因的展示信息（未知 key 回退到「其他」） */
+  function reasonMeta(key) {
+    for (var i = 0; i < MISTAKE_REASONS.length; i++) {
+      if (MISTAKE_REASONS[i].key === key) return MISTAKE_REASONS[i];
+    }
+    return MISTAKE_REASONS[MISTAKE_REASONS.length - 1];
+  }
+
+  /** 当前的科目表（保证是清洗过的，且「其他」在最后） */
+  function subjectList(state) {
+    return cleanSubjects(state && state.subjects);
+  }
+
+  /**
+   * 错题按科目分组。
+   *
+   * 排序规则（用户要"不要全挤在一起"）：
+   *   · 科目组按「该组错题数」降序 —— 错得多的科目排前面
+   *   · 组内按**星级降序**（重要的先看），同星级按创建时间倒序
+   *   · 空科目组不返回（不占地方）
+   *
+   * 返回 [{ subject, count, items: [...] }]
+   */
+  function mistakesBySubject(state, onlySubject) {
+    var list = itemsOfKind(state, 'mistake');
+    var groups = {};
+    for (var i = 0; i < list.length; i++) {
+      var it = list[i];
+      var s = it.subject || SUBJECT_FALLBACK;
+      (groups[s] = groups[s] || []).push(it);
+    }
+    var out = [];
+    Object.keys(groups).forEach(function (s) {
+      if (onlySubject && onlySubject !== 'all' && s !== onlySubject) return;
+      var items = groups[s].slice().sort(function (a, b) {
+        var sa = a.stars || 0, sb = b.stars || 0;
+        if (sa !== sb) return sb - sa;                       // 星级高的在前
+        return (b.createdAt || 0) - (a.createdAt || 0);      // 同星级新的在前
+      });
+      out.push({ subject: s, count: items.length, items: items });
+    });
+    out.sort(function (a, b) {
+      if (a.count !== b.count) return b.count - a.count;     // 错得多的科目在前
+      return a.subject < b.subject ? -1 : (a.subject > b.subject ? 1 : 0);
+    });
+    return out;
+  }
+
+  /** 每个科目的错题数（给顶部科目条用）；按科目表顺序返回 */
+  function subjectCounts(state) {
+    var counts = {};
+    itemsOfKind(state, 'mistake').forEach(function (it) {
+      var s = it.subject || SUBJECT_FALLBACK;
+      counts[s] = (counts[s] || 0) + 1;
+    });
+    return subjectList(state).map(function (s) {
+      return { subject: s, count: counts[s] || 0 };
+    });
+  }
+
+  /* ----------------------------- 科目增删 ----------------------------- */
+
+  /** 新增科目；返回 { state, subjects } 或 { error } */
+  function addSubject(state, name) {
+    var next = normalizeState(state);
+    var s = typeof name === 'string' ? name.trim().slice(0, MAX_SUBJECT) : '';
+    if (!s) return { error: '科目名不能为空' };
+    if (s === SUBJECT_FALLBACK) return { error: '「' + SUBJECT_FALLBACK + '」已经存在' };
+    if (next.subjects.indexOf(s) > -1) return { error: '已经有这个科目了' };
+    if (next.subjects.length >= MAX_SUBJECTS) {
+      return { error: '科目最多 ' + MAX_SUBJECTS + ' 个' };
+    }
+    // 「其他」要保持在最后
+    next.subjects = cleanSubjects(next.subjects.concat([s]));
+    return { state: next, subjects: next.subjects };
+  }
+
+  /**
+   * 删除科目。
+   * ⚠️ 该科目下的错题**不会被删掉**，而是挪到「其他」——
+   *    删科目不该顺手把错题也删了。
+   * 返回 { state, moved }（moved = 被挪走的错题数）
+   */
+  function removeSubject(state, name) {
+    var next = normalizeState(state);
+    var s = typeof name === 'string' ? name.trim() : '';
+    if (!s) return { error: '科目名不能为空' };
+    if (s === SUBJECT_FALLBACK) return { error: '「' + SUBJECT_FALLBACK + '」不能删（它是保底科目）' };
+    if (next.subjects.indexOf(s) === -1) return { error: '没有这个科目' };
+
+    var moved = 0;
+    next.items.forEach(function (it) {
+      if (it.kind === 'mistake' && it.subject === s) {
+        it.subject = SUBJECT_FALLBACK;
+        moved++;
+      }
+    });
+    next.subjects = next.subjects.filter(function (x) { return x !== s; });
+    return { state: next, moved: moved };
+  }
+
+  /** 改名；该科目下的错题跟着改 */
+  function renameSubject(state, from, to) {
+    var next = normalizeState(state);
+    var a = typeof from === 'string' ? from.trim() : '';
+    var b = typeof to === 'string' ? to.trim().slice(0, MAX_SUBJECT) : '';
+    if (!a || !b) return { error: '科目名不能为空' };
+    if (a === b) return { state: next, subjects: next.subjects };
+    if (a === SUBJECT_FALLBACK) return { error: '「' + SUBJECT_FALLBACK + '」不能改名' };
+    if (b === SUBJECT_FALLBACK) return { error: '不能改成「' + SUBJECT_FALLBACK + '」' };
+    if (next.subjects.indexOf(a) === -1) return { error: '没有这个科目' };
+    if (next.subjects.indexOf(b) > -1) return { error: '已经有这个科目了' };
+
+    next.items.forEach(function (it) {
+      if (it.kind === 'mistake' && it.subject === a) it.subject = b;
+    });
+    next.subjects = cleanSubjects(next.subjects.map(function (x) { return x === a ? b : x; }));
+    return { state: next, subjects: next.subjects };
   }
 
   function findItem(state, id) {
@@ -996,6 +1199,32 @@ details.collapsed[open]>summary{margin-bottom:2px}
       due = input.due;
     }
 
+    /*
+     * 错题的校验放在这里（而不是各处调用方）：
+     *   · 科目必须在科目表里，否则归「其他」
+     *   · 选了「其他」原因就**必须写一句补充** —— 否则这条记录等于没记原因
+     */
+    var next = normalizeState(state);
+    var extra = null;
+    if (kind === 'mistake') {
+      var subj = typeof input.subject === 'string' ? input.subject.trim() : '';
+      if (!subj || next.subjects.indexOf(subj) === -1) subj = SUBJECT_FALLBACK;
+      var reason = REASON_KEYS.indexOf(input.reason) > -1 ? input.reason : 'other';
+      var reasonNote = typeof input.reasonNote === 'string'
+        ? input.reasonNote.trim().slice(0, MAX_REASON_NOTE) : '';
+      if (reason === 'other' && !reasonNote) {
+        return { error: '选了「其他」就写一句具体原因' };
+      }
+      var stars = Math.round(Number(input.stars));
+      extra = {
+        subject: subj,
+        chapter: typeof input.chapter === 'string' ? input.chapter.trim().slice(0, MAX_CHAPTER) : '',
+        reason: reason,
+        reasonNote: reasonNote,
+        stars: (isFinite(stars) && stars >= 1 && stars <= MAX_STARS) ? stars : 3
+      };
+    }
+
     var now = Date.now();
     var item = {
       id: uid(),
@@ -1009,7 +1238,11 @@ details.collapsed[open]>summary{margin-bottom:2px}
       updatedAt: now,
       doneAt: 0
     };
-    var next = normalizeState(state);
+    if (extra) {
+      for (var ek in extra) {
+        if (Object.prototype.hasOwnProperty.call(extra, ek)) item[ek] = extra[ek];
+      }
+    }
     next.items.push(item);
     return { state: next, item: item, photoWarning: droppedMessage(cleaned.dropped) };
   }
@@ -1065,6 +1298,41 @@ details.collapsed[open]>summary{margin-bottom:2px}
       updatedAt: Date.now(),
       doneAt: merged.done ? (wasDone && old.doneAt ? old.doneAt : Date.now()) : 0
     };
+
+    /* 错题字段：只改传进来的，没传就保持原值 */
+    if (old.kind === 'mistake') {
+      var it2 = next.items[idx];
+      it2.subject = old.subject;
+      it2.chapter = old.chapter;
+      it2.reason = old.reason;
+      it2.reasonNote = old.reasonNote;
+      it2.stars = old.stars;
+
+      if (patch.subject !== undefined) {
+        var s2 = typeof patch.subject === 'string' ? patch.subject.trim() : '';
+        it2.subject = (s2 && next.subjects.indexOf(s2) > -1) ? s2 : SUBJECT_FALLBACK;
+      }
+      if (patch.chapter !== undefined) {
+        it2.chapter = typeof patch.chapter === 'string'
+          ? patch.chapter.trim().slice(0, MAX_CHAPTER) : '';
+      }
+      if (patch.reason !== undefined) {
+        it2.reason = REASON_KEYS.indexOf(patch.reason) > -1 ? patch.reason : 'other';
+      }
+      if (patch.reasonNote !== undefined) {
+        it2.reasonNote = typeof patch.reasonNote === 'string'
+          ? patch.reasonNote.trim().slice(0, MAX_REASON_NOTE) : '';
+      }
+      if (patch.stars !== undefined) {
+        var st4 = Math.round(Number(patch.stars));
+        it2.stars = (isFinite(st4) && st4 >= 1 && st4 <= MAX_STARS) ? st4 : 3;
+      }
+      // 改完之后再校验一次：不能出现"其他"却没写原因
+      if (it2.reason === 'other' && !it2.reasonNote) {
+        return { error: '选了「其他」就写一句具体原因' };
+      }
+    }
+
     return { state: next, item: next.items[idx], photoWarning: droppedMessage(cleaned.dropped) };
   }
 
@@ -1165,6 +1433,13 @@ details.collapsed[open]>summary{margin-bottom:2px}
     // 数据
     emptyState: emptyState, normalizeState: normalizeState, uid: uid,
     itemsOfKind: itemsOfKind, findItem: findItem, countPhotos: countPhotos,
+    // 错题：原因枚举 + 科目 + 分组
+    MISTAKE_REASONS: MISTAKE_REASONS, REASON_KEYS: REASON_KEYS,
+    DEFAULT_SUBJECTS: DEFAULT_SUBJECTS, SUBJECT_FALLBACK: SUBJECT_FALLBACK,
+    MAX_STARS: MAX_STARS, MAX_SUBJECTS: MAX_SUBJECTS,
+    reasonMeta: reasonMeta, subjectList: subjectList,
+    mistakesBySubject: mistakesBySubject, subjectCounts: subjectCounts,
+    addSubject: addSubject, removeSubject: removeSubject, renameSubject: renameSubject,
     estimateBytes: estimateBytes, formatBytes: formatBytes, photoStats: photoStats,
     // 变更
     addItem: addItem, updateItem: updateItem, toggleDone: toggleDone,
@@ -1347,7 +1622,27 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
   const todayKey = () => L.toDateKey(new Date());
 
-  /* ---------- 持久化：localStorage 不可用时降级为内存，保证不白屏 ---------- */
+  /* ==========================================================================
+     持久化：IndexedDB 优先 → localStorage 兜底 → 纯内存
+     ======================================================================== */
+  /*
+   * 为什么要换 IndexedDB：
+   *   localStorage 每个网站只有约 5MB（实测 5.0M 字符）。
+   *   错题本一张题图约 80K 字符，5MB 只够存几十道 —— 一个学期根本不够。
+   *   IndexedDB 的额度按磁盘比例给（实测额度 10GB），等于无限。
+   *
+   * 为什么把图片**单独存**，而不是整份 state 一起丢进 IndexedDB：
+   *   整份序列化在 100 道错题（约 23MB）时要 ~450ms，每次保存都卡一下。
+   *   拆开之后：元数据只有几十 KB（瞬间），图片只在新增时写一次。
+   *
+   * 内存里的数据形状**完全不变**（照片还是带 data 的字符串），
+   * 所以渲染、逻辑层、所有测试都不需要改。
+   */
+  const DB_NAME = 'homework-box';
+  const DB_VERSION = 1;
+  const STORE_META = 'meta';       // { k: 'state', v: '<json>' }
+  const STORE_PHOTOS = 'photos';   // { id, data }
+
   let storageOK = true;
   try {
     localStorage.setItem('__probe', '1');
@@ -1357,31 +1652,227 @@ details.collapsed[open]>summary{margin-bottom:2px}
   let state = L.emptyState();
   let lastSaveError = '';
 
-  function load() {
-    if (!storageOK) return;
-    try {
-      const raw = localStorage.getItem(STORE_KEY);
-      state = raw ? L.normalizeState(JSON.parse(raw)) : L.emptyState();
-    } catch (e) {
-      state = L.emptyState();       // 存档损坏也不能让 App 打不开
-      console.warn('存档读取失败，已重置：', e);
-    }
+  /** 'idb' | 'localstorage' | 'memory' */
+  let storageMode = 'memory';
+  /** 已经写进 IndexedDB 的照片 id，用来判断"哪些是新照片" */
+  let photoIds = new Set();
+  /** 从旧 localStorage 迁移上来的数据，成功后要把旧键删掉 */
+  let pendingLegacyMigration = false;
+
+  let dbPromise = null;
+  function openDB() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve) => {
+      let req;
+      try { req = indexedDB.open(DB_NAME, DB_VERSION); }
+      catch (e) { resolve(null); return; }
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE_META)) {
+          db.createObjectStore(STORE_META, { keyPath: 'k' });
+        }
+        if (!db.objectStoreNames.contains(STORE_PHOTOS)) {
+          db.createObjectStore(STORE_PHOTOS, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+      // 卡住也不能让 App 永远起不来
+      setTimeout(() => resolve(null), 4000);
+    });
+    return dbPromise;
   }
 
-  function save() {
-    if (!storageOK) return true;
+  function os(db, store, mode) { return db.transaction(store, mode).objectStore(store); }
+  function pGet(store, key) {
+    return new Promise((res) => {
+      const r = store.get(key);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => res(undefined);
+    });
+  }
+  function pGetAll(store) {
+    return new Promise((res) => {
+      const r = store.getAll();
+      r.onsuccess = () => res(r.result || []);
+      r.onerror = () => res([]);
+    });
+  }
+  function pPut(store, val) {
+    return new Promise((res, rej) => {
+      const r = store.put(val);
+      r.onsuccess = () => res(true);
+      r.onerror = () => rej(r.error || new Error('写入失败'));
+    });
+  }
+  function pDelete(store, key) {
+    return new Promise((res) => {
+      const r = store.delete(key);
+      r.onsuccess = () => res(true);
+      r.onerror = () => res(false);
+    });
+  }
+
+  /** 把照片 data 挂回 items（meta 里只存 id） */
+  function attachPhotos(raw, photos) {
+    const map = {};
+    (photos || []).forEach((p) => { if (p && p.id) map[p.id] = p.data; });
+    const items = (raw && Array.isArray(raw.items)) ? raw.items : [];
+    items.forEach((it) => {
+      if (!it || !Array.isArray(it.photos)) return;
+      it.photos = it.photos.map((p) => {
+        if (!p || typeof p !== 'object') return p;
+        const data = p.data || map[p.id];
+        return data ? Object.assign({}, p, { data }) : p;
+      }).filter((p) => p && p.data);
+    });
+  }
+
+  async function load() {
+    /* ① IndexedDB */
+    const db = await openDB();
+    if (db) {
+      try {
+        const meta = await pGet(os(db, STORE_META, 'readonly'), 'state');
+        const photos = await pGetAll(os(db, STORE_PHOTOS, 'readonly'));
+        if (meta && typeof meta.v === 'string') {
+          const raw = JSON.parse(meta.v);
+          attachPhotos(raw, photos);
+          state = L.normalizeState(raw);
+          photoIds = new Set(photos.map((p) => p && p.id).filter(Boolean));
+          storageMode = 'idb';
+          return;
+        }
+      } catch (e) {
+        console.warn('IndexedDB 读取失败，改用 localStorage：', e);
+      }
+    }
+
+    /* ② 旧 localStorage（含从 localStorage 时代迁移上来的老数据） */
+    if (storageOK) {
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        state = raw ? L.normalizeState(JSON.parse(raw)) : L.emptyState();
+        storageMode = db ? 'idb' : 'localstorage';
+        /*
+         * ⚠️ 有旧数据 + 有 IndexedDB → **立刻迁移**，不要等"下次保存"。
+         * 否则用户只是打开看看、没做任何修改，数据就一直留在 localStorage 里，
+         * 一旦浏览器清掉 localStorage 就白丢了（明明 IndexedDB 可用）。
+         */
+        if (raw && db) {
+          pendingLegacyMigration = true;
+          flushSave();
+        }
+        return;
+      } catch (e) {
+        state = L.emptyState();       // 存档损坏也不能让 App 打不开
+        console.warn('存档读取失败，已重置：', e);
+      }
+    }
+
+    /* ③ 纯内存（和以前一样：不白屏，但关掉就丢） */
+    state = L.emptyState();
+    storageMode = 'memory';
+  }
+
+  /** 序列化元数据：把照片的 data 换成省略（replacer 比深拷贝省内存） */
+  function metaJson() {
+    return JSON.stringify(state, (k, v) => {
+      if (k === 'data' && typeof v === 'string' && v.slice(0, 11) === 'data:image/') {
+        return undefined;
+      }
+      return v;
+    });
+  }
+
+  function saveLocal() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       lastSaveError = '';
       return true;
     } catch (e) {
-      // 照片占满配额是这里最常见的原因，给出可操作的建议
       lastSaveError = /quota|exceed/i.test(String(e && e.name) + String(e && e.message))
         ? '手机存储满了：删掉一些旧照片，或导出备份后清空'
         : '保存失败，手机存储可能不可用';
       toast(lastSaveError, true);
       return false;
     }
+  }
+
+  let saveTimer = null;
+  let saving = false;
+
+  /**
+   * 保存。返回 true 表示"已安排写入"。
+   * ⚠️ IndexedDB 是异步的，这里不能在返回时就知道成功与否；
+   *    真正的失败会走 lastSaveError + toast。
+   *    localStorage / 内存模式仍然同步返回真实结果。
+   */
+  function save() {
+    if (storageMode === 'memory') return true;
+    if (storageMode === 'localstorage') return saveLocal();
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { flushSave(); }, 300);
+    return true;
+  }
+
+  /** 立即落盘（切后台 / 关页面前调用） */
+  async function flushSave() {
+    if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+    if (storageMode !== 'idb' || saving) return;
+    saving = true;
+    try {
+      const db = await openDB();
+      if (!db) { saving = false; return; }
+
+      // ① 元数据（小）
+      await pPut(os(db, STORE_META, 'readwrite'), { k: 'state', v: metaJson() });
+
+      // ② 新照片 + 清理孤儿照片
+      const live = new Set();
+      for (const it of state.items) {
+        for (const p of (it.photos || [])) {
+          if (!p || !p.id || !p.data) continue;
+          live.add(p.id);
+          if (!photoIds.has(p.id)) {
+            await pPut(os(db, STORE_PHOTOS, 'readwrite'), { id: p.id, data: p.data });
+            photoIds.add(p.id);
+          }
+        }
+      }
+      for (const id of Array.from(photoIds)) {
+        if (!live.has(id)) {
+          await pDelete(os(db, STORE_PHOTOS, 'readwrite'), id);
+          photoIds.delete(id);
+        }
+      }
+
+      lastSaveError = '';
+
+      // ③ 旧数据迁移成功 → 删掉 localStorage 里的旧副本，腾出那 5MB
+      if (pendingLegacyMigration) {
+        try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+        pendingLegacyMigration = false;
+      }
+    } catch (e) {
+      lastSaveError = '保存失败：' + (e && e.message ? e.message : e);
+      toast(lastSaveError, true);
+    } finally {
+      saving = false;
+    }
+  }
+
+  // 切后台 / 关页面时立刻落盘，避免刚记的内容还在防抖窗口里
+  /* ⚠️ 用 typeof 守卫：真实浏览器一定有这两个 API，
+     但某些嵌入式 WebView 和测试桩没有 —— 少了它整段脚本会抛错，页面直接白屏。 */
+  if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) flushSave();
+    });
+  }
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pagehide', () => { flushSave(); });
   }
 
   /**
@@ -2399,10 +2890,45 @@ details.collapsed[open]>summary{margin-bottom:2px}
   }
 
   /* ============================ 启动 ============================ */
+  /*
+   * boot 有两种路径：
+   *   · 有 IndexedDB → 异步（先 await load() 再渲染，避免先画空再跳）
+   *   · 没有 IndexedDB（老浏览器 / 测试桩）→ **同步**走 localStorage
+   *
+   * 为什么要保留同步路径：
+   *   1) 老浏览器降级时行为和以前完全一致
+   *   2) 测试桩里没有 indexedDB，同步路径让"启动即可断言"这条约定继续成立
+   *      （否则每个测试都要改成 await，改动面太大且容易漏）
+   */
   function boot() {
-    load();
-    bind();
-    render();
+    if (typeof indexedDB === 'undefined') {
+      loadSync();
+      bind();
+      render();
+      return null;
+    }
+    return (async function () {
+      await load();
+      bind();
+      render();
+    })();
+  }
+
+  /** 同步版 load：只用 localStorage（没有 IndexedDB 时的降级路径） */
+  function loadSync() {
+    if (storageOK) {
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        state = raw ? L.normalizeState(JSON.parse(raw)) : L.emptyState();
+        storageMode = 'localstorage';
+        return;
+      } catch (e) {
+        state = L.emptyState();
+        console.warn('存档读取失败，已重置：', e);
+      }
+    }
+    state = L.emptyState();
+    storageMode = 'memory';
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
