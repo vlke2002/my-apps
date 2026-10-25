@@ -449,7 +449,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
   <div class="segwrap">
     <div class="seg" id="seg">
       <button data-kind="homework" class="on"><span class="e">📘</span>作业<span class="n" id="cntHomework">0</span></button>
-      <button data-kind="exercise"><span class="e">✏️</span>课堂习题<span class="n" id="cntExercise">0</span></button>
+      <button data-kind="exercise"><span class="e">✏️</span>习题<span class="n" id="cntExercise">0</span></button>
       <button data-kind="memo"><span class="e">📝</span>备忘<span class="n" id="cntMemo">0</span></button>
       <button data-kind="mistake"><span class="e">❌</span>错题<span class="n" id="cntMistake">0</span></button>
     </div>
@@ -485,7 +485,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
     <div class="kindrow" id="kindRow">
       <button class="kindbtn on" data-kind="homework">📘 作业</button>
-      <button class="kindbtn" data-kind="exercise">✏️ 课堂习题</button>
+      <button class="kindbtn" data-kind="exercise">✏️ 习题</button>
       <button class="kindbtn" data-kind="memo">📝 备忘</button>
       <button class="kindbtn" data-kind="mistake">❌ 错题</button>
     </div>
@@ -608,7 +608,7 @@ details.collapsed[open]>summary{margin-bottom:2px}
 
   var KINDS = {
     homework: { key: 'homework', name: '作业', emoji: '📘', hasDue: true },
-    exercise: { key: 'exercise', name: '课上习题', emoji: '✏️', hasDue: false },
+    exercise: { key: 'exercise', name: '习题', emoji: '✏️', hasDue: false },
     memo: { key: 'memo', name: '备忘录', emoji: '📝', hasDue: false, isMemo: true },
     // 错题：有科目/章节/错误原因/星级，图片最多 3 张
     mistake: { key: 'mistake', name: '错题', emoji: '❌', hasDue: false, isMistake: true }
@@ -796,7 +796,9 @@ details.collapsed[open]>summary{margin-bottom:2px}
   function cleanSubjects(raw) {
     var out = [];
     var seen = {};
-    var list = Array.isArray(raw) ? raw : [];
+    // 老数据没有 subjects 字段（或空数组）就用默认科目。
+    // 之前这里退化成只有「其他」，用户看到的就是"科目只有其他"。
+    var list = (Array.isArray(raw) && raw.length) ? raw : DEFAULT_SUBJECTS.slice();
     for (var i = 0; i < list.length; i++) {
       var s = typeof list[i] === 'string' ? list[i].trim().slice(0, MAX_SUBJECT) : '';
       if (!s) continue;
@@ -826,6 +828,8 @@ details.collapsed[open]>summary{margin-bottom:2px}
   function cleanPhotosDetailed(raw) {
     var out = [];
     var dropped = 0;
+    // 老数据没有 subjects 字段（或空数组）就用默认科目。
+    // 之前这里退化成只有「其他」，用户看到的就是"科目只有其他"。
     var list = Array.isArray(raw) ? raw : [];
     for (var i = 0; i < list.length; i++) {
       var p = list[i];
@@ -3069,6 +3073,16 @@ details.collapsed[open]>summary{margin-bottom:2px}
     el('btnSave').addEventListener('click', saveDraft);
     el('sheetDelete').addEventListener('click', deleteDraft);
     el('btnDone').addEventListener('click', toggleDraftDone);
+
+    /* 科目条在 #scroll 外面，必须单独绑事件。
+       之前只绑了 scroll，所以点「科目」和科目 chip 完全没反应。 */
+    el('subjWrap').addEventListener('click', (e) => {
+      const chip = e.target.closest('[data-subj]');
+      if (!chip) return;
+      if (chip.dataset.subj === '__manage__') { openSubjectManager(); return; }
+      mistakeFilter = chip.dataset.subj;
+      render();
+    });
 
     /* ---------- 错题字段：科目 / 章节 / 原因 / 星级 ---------- */
     el('mSubject').addEventListener('change', () => { if (draft) draft.subject = el('mSubject').value; });
