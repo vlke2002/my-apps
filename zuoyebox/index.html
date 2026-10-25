@@ -2531,10 +2531,15 @@ details.collapsed[open]>summary{margin-bottom:2px}
     const hw = all.filter((x) => x.kind === 'homework').length;
     const ex = all.filter((x) => x.kind === 'exercise').length;
     const mm = all.filter((x) => x.kind === 'memo').length;
-    // localStorage 一般给 5MB；到 80% 就提醒
+    /*
+     * 存储口径要跟着存储方式走：
+     *   · IndexedDB：额度按磁盘比例（实测 GB 级），5MB 那套已经不适用
+     *   · localStorage：仍然只有约 5MB，到 80% 要提醒
+     */
+    const isIdb = storageMode === 'idb';
     const limit = 5 * 1024 * 1024;
-    const pct = Math.min(100, Math.round(bytes / limit * 100));
-    const nearFull = pct >= 80;
+    const pct = isIdb ? 0 : Math.min(100, Math.round(bytes / limit * 100));
+    const nearFull = !isIdb && pct >= 80;
 
     el('dataBody').innerHTML = `
       <div class="field" style="margin-bottom:14px">
@@ -2543,12 +2548,14 @@ details.collapsed[open]>summary{margin-bottom:2px}
           占用空间约 <b>${L.formatBytes(bytes)}</b>
         </div>
         <div style="height:7px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-top:8px">
-          <i style="display:block;height:100%;width:${pct}%;border-radius:99px;background:${nearFull ? 'var(--danger)' : 'var(--accent)'}"></i>
+          <i id="usageBar" style="display:block;height:100%;width:${pct}%;border-radius:99px;background:${nearFull ? 'var(--danger)' : 'var(--accent)'}"></i>
         </div>
-        <div style="font-size:11.5px;color:${nearFull ? 'var(--danger)' : 'var(--ink-3)'};margin-top:6px">
-          ${nearFull
-            ? '⚠️ 快满了（浏览器一般只给 5MB）。删掉一些旧照片，或先导出备份再清空。'
-            : '浏览器一般给 5MB 空间，照片已经自动压缩过。'}
+        <div id="usageHint" style="font-size:11.5px;color:${nearFull ? 'var(--danger)' : 'var(--ink-3)'};margin-top:6px">
+          ${isIdb
+            ? '存在 IndexedDB：额度按磁盘比例（通常几个 GB），照片不用手动清理。'
+            : (nearFull
+              ? '⚠️ 快满了（浏览器一般只给 5MB）。删掉一些旧照片，或先导出备份再清空。'
+              : '浏览器一般给 5MB 空间，照片已经自动压缩过。')}
         </div>
       </div>
 
@@ -2576,6 +2583,20 @@ details.collapsed[open]>summary{margin-bottom:2px}
       </div>`;
     el('mask2').classList.add('show');
     el('sheet2').classList.add('show');
+
+    // IndexedDB 模式下用真实额度算占用（异步，拿到后更新）
+    if (isIdb && navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then((est) => {
+        const bar = el('usageBar');
+        const hint = el('usageHint');
+        if (!bar || !hint || !est || !est.quota) return;
+        const used = est.usage || 0;
+        const realPct = Math.max(0.5, Math.min(100, Math.round(used / est.quota * 1000) / 10));
+        bar.style.width = realPct + '%';
+        hint.textContent = '已用 ' + L.formatBytes(used) + ' / 额度 ' + L.formatBytes(est.quota) +
+          '（' + realPct + '%），照片不用手动清理。';
+      }).catch(() => {});
+    }
   }
 
   function closeData() {
