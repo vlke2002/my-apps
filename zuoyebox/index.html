@@ -2130,6 +2130,19 @@ details.collapsed[open]>summary{margin-bottom:2px}
     });
 
     renderList(sum, tk);
+
+    /*
+     * ⚠️ 悬浮 + 按钮的可见性必须由 render 统一管。
+     * 踩过的坑：showLoading() 会把它藏起来（加载时不该能点），
+     * 但之前**没有任何地方负责把它显示回来** ——
+     * 于是加载完 FAB 一直隐藏，用户只能靠空状态里的「记第一样」按钮添加；
+     * 一旦有了数据、空状态消失，就彻底没有添加入口了。
+     *
+     * 规则：弹层开着就藏（避免挡住弹层），否则显示。
+     */
+    const sheetEl = el('sheet');
+    const sheetOpen = !!(sheetEl && sheetEl.classList.contains('show'));
+    el('fab').classList.toggle('hide', sheetOpen);
   }
 
   /* ---------------- 错题：按科目分组渲染 ---------------- */
