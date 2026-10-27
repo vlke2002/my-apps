@@ -355,7 +355,12 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
         </div>
         <div id="studyReviewBox"></div>
         <div id="studyTodayList"></div>
-        <input type="file" id="studyPhoto" accept="image/*" capture="environment" style="display:none">
+        <!-- 两个入口：
+             · 带 capture → 直接开相机
+             · 不带 capture → 系统弹出"相机 / 相册 / 文件"随便选
+             只给一个带 capture 的话，安卓上就只剩拍照，选不了相册里存好的图。 -->
+        <input type="file" id="studyPhotoCam" accept="image/*" capture="environment" style="display:none">
+        <input type="file" id="studyPhotoGal" accept="image/*" style="display:none">
       </section>
 
       <!-- 录入：收进折叠区。学习打卡才是主功能，这些不抢视线 -->
@@ -5523,10 +5528,10 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
       renderCkPhoto();
       renderCkStatus();
 
-      /* 选照片 */
-      var input = $('studyPhoto');
+      /* 选照片：拍照和相册两个 input 共用一段处理 */
       ok.onclick = saveCheckin;
-      input.onchange = function () {
+      var onPick = function (ev) {
+        var input = ev.target;
         var f = input.files && input.files[0];
         if (!f) return;
         compressStudyPhoto(f).then(function (data) {
@@ -5535,8 +5540,10 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
         }).catch(function (e) {
           toast('这张图存不了：' + (e && e.message ? e.message : e));
         });
-        input.value = '';
+        input.value = '';        // 清空，这样连续选同一张也会触发 change
       };
+      $('studyPhotoCam').onchange = onPick;
+      $('studyPhotoGal').onchange = onPick;
       subSel.onchange = function () { ckDraft.subject = subSel.value; };
     });
   }
@@ -5557,16 +5564,23 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
       img.src = ckDraft.photo;
       box.appendChild(img);
       var re = el('button', 'btn', '重拍');
-      re.onclick = function () { $('studyPhoto').click(); };
+      re.onclick = function () { $('studyPhotoCam').click(); };
+      var re2 = el('button', 'btn', '🖼️ 换一张');
+      re2.onclick = function () { $('studyPhotoGal').click(); };
       var rm = el('button', 'btn', '删掉');
       rm.onclick = function () { ckDraft.photo = null; renderCkPhoto(); };
       var row = el('div', 'btns');
-      row.appendChild(re); row.appendChild(rm);
+      row.appendChild(re); row.appendChild(re2); row.appendChild(rm);
       box.appendChild(row);
     } else {
-      var b = el('button', 'btn p', '📷 拍照 / 选图');
-      b.onclick = function () { $('studyPhoto').click(); };
-      box.appendChild(b);
+      var b1 = el('button', 'btn p', '📷 拍照');
+      b1.onclick = function () { $('studyPhotoCam').click(); };
+      var b2 = el('button', 'btn', '🖼️ 从相册选');
+      b2.onclick = function () { $('studyPhotoGal').click(); };
+      var row2 = el('div', 'btns');
+      row2.appendChild(b1);
+      row2.appendChild(b2);
+      box.appendChild(row2);
     }
   }
 
