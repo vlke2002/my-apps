@@ -256,13 +256,31 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
   display:grid;place-items:center}
 .ck-item,.ck-review{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
 .ck-item:first-child,.ck-review:first-child{border-top:0}
-.ck-thumb{flex:0 0 52px;width:52px;height:52px;object-fit:cover;border-radius:9px}
+.ck-thumb{flex:0 0 52px;width:52px;height:52px;object-fit:cover;border-radius:9px;cursor:pointer}
+.ck-n{flex:0 0 auto;align-self:center;font-size:11px;color:#fff;background:rgba(0,0,0,.55);
+  border-radius:99px;padding:2px 7px;margin-left:-30px;margin-top:28px;cursor:pointer}
+/* 全屏看图 */
+.pv{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.94);
+  overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+.pv img{display:block;width:100%;height:auto;margin:0 0 10px;border-radius:8px;background:#111}
+.pv-tip{position:fixed;left:0;right:0;bottom:16px;text-align:center;color:#fff;font-size:12px;
+  opacity:.75;pointer-events:none}
 .ck-mid{flex:1;min-width:0}
 .ck-t{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ck-s{font-size:11.5px;color:var(--ink3);margin-top:2px}
 .ck-review{flex-wrap:wrap}
 .ck-review .btns{width:100%;margin-top:6px}
 .ck-review-head{font-size:12.5px;font-weight:700;color:#c2410c;margin:10px 0 4px}
+/* 学习记录浏览 */
+.br-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.br-head h3{margin:0;font-size:16px}
+.br-row{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);
+  cursor:pointer}
+.br-left{flex:1;min-width:0}
+.br-arrow{color:var(--ink3);font-size:18px}
+.br-item{padding:12px 0;border-bottom:1px solid var(--line)}
+.br-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px}
+.br-grid img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;background:#f0f2f5}
 
 .rep-head{font-size:14px;margin-bottom:6px}
 .rep-head .rr{font-size:11px;color:var(--ink3);font-weight:400}
@@ -357,6 +375,7 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
         <h2>📚 学习打卡 <span class="cnt" id="studyTodayCount"></span></h2>
         <div class="btns">
           <button class="btn p grow" id="btnCheckin">📷 拍照打卡</button>
+          <button class="btn" id="btnStudyBrowse">📂 记录</button>
           <button class="btn" id="btnManageSubject">科目</button>
         </div>
         <div id="studyReviewBox"></div>
@@ -3893,9 +3912,17 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
       ]).then(function (r2) {
         var rec = r2[0], photos = r2[1] || [];
         if (!rec || typeof rec.v !== 'string') return null;
+        /*
+         * ⚠️ 顺序不能反：**必须先挂图，再 normalize**。
+         *
+         * 元数据里的照片只剩 { id }（data 被拆到 photos 表了）。
+         * 如果先用 L.deserialize（内部会 normalizeState → cleanStudyPhotos），
+         * 那些"没有 data 的照片"会被当成坏数据**直接丢掉**，
+         * 之后 attachPhotos 就没有对象可挂了 —— 表现就是"重开后图片全没了，只剩文字"。
+         */
+        // 照片就在 meta 里，直接反序列化即可
         var st = L.deserialize(rec.v);
         if (!st) return null;
-        attachPhotos(st, photos);
         photoIds = {};
         photos.forEach(function (x) { if (x && x.id) photoIds[x.id] = 1; });
         return st;
@@ -3912,9 +3939,16 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     idbSaving = true;
     return openDB().then(function (db) {
       if (!db) { idbSaving = false; return; }
-      var info = collectPhotos(payload);
-      var fresh = info.list.filter(function (x) { return !photoIds[x.id]; });
-      return pPut(os(db, ST_META, 'readwrite'), { k: 'state', v: metaJson(payload) })
+      /*
+       * ⚠️ 照片**不再拆分**，和文字一起存进 meta。
+       *
+       * 曾经拆过（meta 只留 id，图片进 photos 表），结果连着两次让用户的照片
+       * 在重开 App 后消失 —— 这类"存进去却读不回来"的 bug 排查成本极高，
+       * 而代价（meta 变大、保存慢几十毫秒）远小于丢数据的代价。
+       *
+       * 现在：文字能存下来，图片就一定跟着存下来。
+       */
+      return pPut(os(db, ST_META, 'readwrite'), { k: 'state', v: L.serialize(payload) })
         .then(function () {
           if (!fresh.length) return null;
           // 一次事务批量写，避免"一张图一个事务"慢成一片
@@ -3927,12 +3961,17 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
             tx2.onabort = function () { res(false); };
           }).then(function (ok) {
             if (ok) fresh.forEach(function (x) { photoIds[x.id] = 1; });
-            // 清理已经不存在的图片
-            var orphans = Object.keys(photoIds).filter(function (id) { return !info.live[id]; });
-            if (!orphans.length) return null;
-            var tx3 = db.transaction(ST_PHOTOS, 'readwrite');
-            var ost3 = tx3.objectStore(ST_PHOTOS);
-            orphans.forEach(function (id) { try { ost3.delete(id); } catch (e) {} delete photoIds[id]; });
+            /*
+             * ⚠️ 这里**故意不做**"删除孤儿照片"的清理。
+             *
+             * 曾经做过，结果踩了个坑：读取时因为顺序错误把照片弄丢了，
+             * 紧接着一次普通保存就把 photos 表里的真图当成"孤儿"**全删了** ——
+             * 用户的打卡照片就这么没了，而且毫无提示。
+             *
+             * 教训：清理逻辑一旦判断错，代价是不可恢复的数据丢失；
+             * 而不清理的代价只是占点空间（IndexedDB 额度 GB 级，够用很多年）。
+             * 所以宁可留着，也不自动删。
+             */
             return null;
           });
         }).then(function () { idbSaving = false; });
@@ -3948,20 +3987,7 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
   function migrateToIdb(st) {
     return openDB().then(function (db) {
       if (!db) return false;
-      var info = collectPhotos(st);
-      return pPut(os(db, ST_META, 'readwrite'), { k: 'state', v: metaJson(st) }).then(function () {
-        if (!info.list.length) return true;
-        return new Promise(function (res) {
-          var tx = db.transaction(ST_PHOTOS, 'readwrite');
-          var ost = tx.objectStore(ST_PHOTOS);
-          info.list.forEach(function (x) { try { ost.put(x); } catch (e) {} });
-          tx.oncomplete = function () { res(true); };
-          tx.onerror = function () { res(false); };
-        }).then(function () {
-          info.list.forEach(function (x) { photoIds[x.id] = 1; });
-          return true;
-        });
-      }).then(function (ok) {
+      return pPut(os(db, ST_META, 'readwrite'), { k: 'state', v: L.serialize(st) }).then(function (ok) {
         try { localStorage.setItem(IDB_FLAG, '1'); localStorage.removeItem(L.STORE_KEY); } catch (e) {}
         return ok;
       });
@@ -5686,14 +5712,37 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     }
   }
 
+  /** 全屏看图：点缩略图进去，点任意处退出 */
+  function openPhotoViewer(srcs) {
+    if (!srcs || !srcs.length) return;
+    var ov = document.createElement('div');
+    ov.className = 'pv';
+    srcs.forEach(function (src) {
+      var img = document.createElement('img');
+      img.src = (src && src.data) ? src.data : src;
+      ov.appendChild(img);
+    });
+    if (srcs.length > 1) {
+      ov.appendChild(el('div', 'pv-tip', '共 ' + srcs.length + ' 张 · 点任意处退出'));
+    }
+    ov.onclick = function () { ov.remove(); };
+    document.body.appendChild(ov);
+  }
+
   function studyRow(row) {
     var m = L.studyStatusMeta(row.item.status);
     var box = el('div', 'ck-item');
-    if (row.item.photos && row.item.photos[0]) {
+    if (row.item.photos && row.item.photos.length) {
       var img = document.createElement('img');
       img.src = row.item.photos[0].data;
       img.className = 'ck-thumb';
+      img.onclick = function (e) { e.stopPropagation(); openPhotoViewer(row.item.photos); };
       box.appendChild(img);
+      if (row.item.photos.length > 1) {
+        var badge = el('span', 'ck-n', '+' + (row.item.photos.length - 1));
+        badge.onclick = function () { openPhotoViewer(row.item.photos); };
+        box.appendChild(badge);
+      }
     }
     var mid = el('div', 'ck-mid');
     mid.appendChild(el('div', 'ck-t', row.item.what || '（没写内容）'));
@@ -5780,6 +5829,134 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     });
   }
 
+  /* ---------------- 学习记录浏览：科目 → 天 → 内容 ---------------- */
+  var browsePanel = null;
+  var browseSubject = null;
+  var browseDate = null;
+
+  function openStudyBrowser() {
+    browseSubject = null;
+    browseDate = null;
+    browsePanel = null;
+    openSheet(function (panel) {
+      browsePanel = panel;
+      renderBrowse();
+    });
+  }
+
+  function renderBrowse() {
+    var panel = browsePanel;
+    if (!panel) return;
+    panel.innerHTML = '';
+
+    var head = el('div', 'br-head');
+    if (browseDate || browseSubject) {
+      var back = el('button', 'btn', '‹ 返回');
+      back.onclick = function () {
+        if (browseDate) { browseDate = null; }
+        else { browseSubject = null; }
+        renderBrowse();
+      };
+      head.appendChild(back);
+    }
+    head.appendChild(el('h3', null,
+      browseDate ? browseDate : (browseSubject || '学习记录')));
+    panel.appendChild(head);
+
+    var all = L.allStudyItems(state);
+    if (!all.length) {
+      panel.appendChild(el('p', 'hint', '还没有打卡记录。'));
+      var c0 = el('button', 'btn', '关闭');
+      c0.onclick = closeSheet;
+      panel.appendChild(c0);
+      return;
+    }
+
+    /* 第三层：某天某科目的内容 */
+    if (browseSubject && browseDate) {
+      var rows = all.filter(function (x) { return x.item.subject === browseSubject && x.date === browseDate; });
+      if (!rows.length) panel.appendChild(el('p', 'hint', '这天没有记录。'));
+      rows.forEach(function (row) {
+        var m = L.studyStatusMeta(row.item.status);
+        var box = el('div', 'br-item');
+        if (row.item.photos && row.item.photos.length) {
+          var grid = el('div', 'br-grid');
+          row.item.photos.forEach(function (ph) {
+            var im = document.createElement('img');
+            im.src = ph.data;
+            im.onclick = function () { openPhotoViewer(row.item.photos); };
+            grid.appendChild(im);
+          });
+          box.appendChild(grid);
+        }
+        box.appendChild(el('div', 'ck-t', row.item.what || '（没写内容）'));
+        box.appendChild(el('div', 'ck-s', m.emoji + ' ' + m.name + ' · ' + row.item.subject));
+        if (row.item.gap) box.appendChild(el('div', 'ck-s', '卡在：' + row.item.gap));
+        if (row.item.reviews && row.item.reviews.length) {
+          box.appendChild(el('div', 'ck-s', '复习过 ' + row.item.reviews.length + ' 次'));
+        }
+        panel.appendChild(box);
+      });
+      var cb = el('button', 'btn', '关闭');
+      cb.onclick = closeSheet;
+      panel.appendChild(cb);
+      return;
+    }
+
+    /* 第二层：某科目的每一天 */
+    if (browseSubject) {
+      var byDay = {};
+      all.forEach(function (x) {
+        if (x.item.subject !== browseSubject) return;
+        if (!byDay[x.date]) byDay[x.date] = [];
+        byDay[x.date].push(x);
+      });
+      var dates = Object.keys(byDay).sort().reverse();
+      panel.appendChild(el('p', 'hint', dates.length + ' 天有记录'));
+      dates.forEach(function (d) {
+        var row = el('div', 'br-row');
+        var left = el('div', 'br-left');
+        left.appendChild(el('div', 'ck-t', d));
+        var unkn = byDay[d].filter(function (x) { return x.item.status === 'unknown'; }).length;
+        left.appendChild(el('div', 'ck-s', byDay[d].length + ' 条' + (unkn ? ' · 🔴 ' + unkn + ' 还不会' : '')));
+        row.appendChild(left);
+        row.appendChild(el('span', 'br-arrow', '›'));
+        row.onclick = function () { browseDate = d; renderBrowse(); };
+        panel.appendChild(row);
+      });
+      var c2 = el('button', 'btn', '关闭');
+      c2.onclick = closeSheet;
+      panel.appendChild(c2);
+      return;
+    }
+
+    /* 第一层：科目 */
+    var bySub = {};
+    all.forEach(function (x) {
+      var k = x.item.subject || L.SUBJECT_FALLBACK;
+      if (!bySub[k]) bySub[k] = { n: 0, last: '', unkn: 0 };
+      bySub[k].n++;
+      if (x.date > bySub[k].last) bySub[k].last = x.date;
+      if (x.item.status === 'unknown') bySub[k].unkn++;
+    });
+    var subs = Object.keys(bySub).sort(function (a, b) { return bySub[b].n - bySub[a].n; });
+    panel.appendChild(el('p', 'hint', '共 ' + all.length + ' 条记录 · ' + subs.length + ' 个科目'));
+    subs.forEach(function (k) {
+      var row = el('div', 'br-row');
+      var left = el('div', 'br-left');
+      left.appendChild(el('div', 'ck-t', k));
+      left.appendChild(el('div', 'ck-s', bySub[k].n + ' 条 · 最近 ' + bySub[k].last.slice(5) +
+        (bySub[k].unkn ? ' · 🔴 ' + bySub[k].unkn : '')));
+      row.appendChild(left);
+      row.appendChild(el('span', 'br-arrow', '›'));
+      row.onclick = function () { browseSubject = k; renderBrowse(); };
+      panel.appendChild(row);
+    });
+    var c1 = el('button', 'btn', '关闭');
+    c1.onclick = closeSheet;
+    panel.appendChild(c1);
+  }
+
   /* ==========================================================================
      渲染总入口
      ======================================================================== */
@@ -5838,6 +6015,7 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
   $('btnReview').onclick = runReview;
   if ($('btnCheckin')) $('btnCheckin').onclick = function () { openCheckinSheet(); };
   if ($('btnManageSubject')) $('btnManageSubject').onclick = openSubjectManager;
+  if ($('btnStudyBrowse')) $('btnStudyBrowse').onclick = openStudyBrowser;
   $('btnWeekReport').onclick = runWeekReport;
   $('btnMonthReport').onclick = runMonthReport;
   $('btnExportWeek').onclick = exportWeek;
@@ -6129,11 +6307,24 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     loadingBox.textContent = '正在读取数据…';
     var host = $('timeline') ? $('timeline').parentNode : document.body;
     if (host) host.appendChild(loadingBox);
+    /*
+     * 占位必须**无论如何**都移除。
+     * 之前只在成功分支里移除，读取一旦抛异常，页面就永远停在"正在读取数据…"，
+     * 看上去就是"关掉一次后再也打不开了"。
+     */
+    var clearLoading = function () {
+      if (loadingBox && loadingBox.parentNode) loadingBox.parentNode.removeChild(loadingBox);
+    };
     loadFromIdb().then(function (st) {
       state = st || L.emptyState();
-      if (loadingBox && loadingBox.parentNode) loadingBox.parentNode.removeChild(loadingBox);
+    }).catch(function () {
+      state = L.emptyState();
+    }).then(function () {
+      clearLoading();
       renderForm();
       renderAll();
+      // 兜底：万一上面又抛了，也别让占位留在页面上
+      setTimeout(clearLoading, 0);
     });
   }
 

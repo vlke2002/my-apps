@@ -6,7 +6,7 @@
 'use strict';
 
 var APP = 'gerenjuzhen';
-var VERSION = '3d873b7d94f3';
+var VERSION = '3e7726a6ee6f';
 var SHELL = [
   "./",
   "./index.html",
