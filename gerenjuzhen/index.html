@@ -225,6 +225,39 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
 .pair-row .rr{font-size:11px;color:var(--ink3)}
 
 /* ---------- 报告卡片（M6）---------- */
+/* ---------- 折叠区（把七维收起来，别抢学习打卡的视线）---------- */
+details.fold > summary{
+  cursor:pointer;list-style:none;
+  font-size:14px;font-weight:700;color:var(--ink2);
+  padding:2px 0;display:flex;align-items:center;gap:6px;
+}
+details.fold > summary::-webkit-details-marker{display:none}
+details.fold > summary::after{content:'展开';margin-left:auto;font-size:11.5px;
+  font-weight:400;color:var(--ink3)}
+details.fold[open] > summary::after{content:'收起'}
+details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+
+/* ---------- 学习打卡 ---------- */
+.ck-row{display:flex;align-items:center;gap:10px;margin:9px 0}
+.ck-row label{flex:0 0 108px;font-size:12.5px;color:var(--ink3)}
+.ck-row select,.ck-row input{flex:1;min-height:34px;border:1px solid var(--line);border-radius:9px;
+  padding:7px 10px;font-size:14px;background:#fff;color:var(--ink)}
+.ck-status{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.ck-st{border:1px solid var(--line);background:#f7f8fa;color:var(--ink2);border-radius:99px;
+  padding:7px 12px;font-size:13px;font-weight:600;min-height:34px}
+.ck-st.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
+.ck-photo{margin:6px 0 10px}
+.ck-photo img{width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#f0f2f5}
+.ck-item,.ck-review{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
+.ck-item:first-child,.ck-review:first-child{border-top:0}
+.ck-thumb{flex:0 0 52px;width:52px;height:52px;object-fit:cover;border-radius:9px}
+.ck-mid{flex:1;min-width:0}
+.ck-t{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ck-s{font-size:11.5px;color:var(--ink3);margin-top:2px}
+.ck-review{flex-wrap:wrap}
+.ck-review .btns{width:100%;margin-top:6px}
+.ck-review-head{font-size:12.5px;font-weight:700;color:#c2410c;margin:10px 0 4px}
+
 .rep-head{font-size:14px;margin-bottom:6px}
 .rep-head .rr{font-size:11px;color:var(--ink3);font-weight:400}
 #reportBox code{background:#f0f2f5;padding:1px 5px;border-radius:5px;font-size:12px}
@@ -313,9 +346,21 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
   <!-- ============ 视图：今天 ============ -->
   <div id="view-today" class="cols">
     <div>
-      <!-- 录入 -->
-      <section class="card">
-        <h2>✍️ 记一条</h2>
+      <!-- 学习打卡：因为最常用，所以放最上面 -->
+      <section class="card" id="studyCard">
+        <h2>📚 学习打卡 <span class="cnt" id="studyTodayCount"></span></h2>
+        <div class="btns">
+          <button class="btn p grow" id="btnCheckin">📷 拍照打卡</button>
+          <button class="btn" id="btnManageSubject">科目</button>
+        </div>
+        <div id="studyReviewBox"></div>
+        <div id="studyTodayList"></div>
+        <input type="file" id="studyPhoto" accept="image/*" capture="environment" style="display:none">
+      </section>
+
+      <!-- 录入：收进折叠区。学习打卡才是主功能，这些不抢视线 -->
+      <details class="card fold" id="foldQuick">
+        <summary>✍️ 记点别的（一句话，AI 帮分类）</summary>
         <textarea id="quick" placeholder="随口写一句，比如：今天睡到9点，下午有点困，晚上散步，没花钱"></textarea>
         <p class="hint" id="quickHint">随手记一句，AI 会帮你分好类。不联网也能用「直接保存」。</p>
         <div class="btns">
@@ -323,7 +368,7 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
           <button class="btn" id="btnSaveRaw">直接保存</button>
           <button class="btn" id="btnClear">清空</button>
         </div>
-      </section>
+      </details>
 
       <!-- 时间线 -->
       <section class="card">
@@ -345,15 +390,15 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
         <div id="reviewBox"></div>
       </section>
 
-      <!-- 手填表单 -->
-      <section class="card">
-        <h2>手填（不用 AI 也行）</h2>
+      <!-- 手填表单：也收起来 -->
+      <details class="card fold" id="foldForm">
+        <summary>📝 手填七维（不用 AI 也能记）</summary>
         <div id="form"></div>
         <div class="btns">
           <button class="btn p grow" id="btnAddEntry">保存这条记录</button>
           <button class="btn" id="btnResetForm">重置</button>
         </div>
-      </section>
+      </details>
     </div>
   </div>
 
@@ -493,6 +538,240 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
   /**
    * 字段性质表。`__self` 表示「整个维度是清单型」（维度值本身就是数组）。
    */
+  /* ===================== 学习打卡 =====================
+   * 四种状态。打卡时**只让用户选前三种**，"已掌握"只能通过复习升上去 ——
+   * 否则每次打卡都要在四个选项里犹豫，违背"10 秒记完"。
+   * ==================================================== */
+  var STUDY_STATUS = [
+    { key: 'new', name: '今天学的', emoji: '🆕' },
+    { key: 'unknown', name: '还不会', emoji: '🔴' },
+    { key: 'ok', name: '差不多', emoji: '🟡' },
+    { key: 'mastered', name: '已掌握', emoji: '✅' }
+  ];
+  var STUDY_PICK = ['new', 'unknown', 'ok'];
+
+  /**
+   * 每种状态隔多久复习（天）：
+   *   unknown → 1 天（截图里的方法：想不起来的第二天翻书）
+   *   ok      → 3 天（你定的）
+   *   mastered→ 7 天（抽查一次）
+   *   new     → 0（不催）
+   */
+  var STATUS_GAP_DAYS = { unknown: 1, ok: 3, mastered: 7, new: 0 };
+
+  var SUBJECT_FALLBACK = '其他';
+  var DEFAULT_SUBJECTS = ['模拟电子技术', '数字电子技术', '电路', '信号与系统',
+    '单片机', '大学物理', '高等数学', '线性代数', '概率论', '大学英语', SUBJECT_FALLBACK];
+
+  var MAX_STUDY_PHOTOS = 3;
+  var MAX_SUBJECT = 20;
+  var MAX_SUBJECTS = 30;
+  var MAX_STUDY_WHAT = 120;
+  var MAX_STUDY_GAP = 200;
+  var MAX_REVIEWS = 60;
+
+  /** 科目表：去空/去重/限长，「其他」永远在最后 */
+  function cleanSubjects(raw) {
+    var src = (Array.isArray(raw) && raw.length) ? raw : DEFAULT_SUBJECTS.slice();
+    var out = [], seen = {};
+    for (var i = 0; i < src.length; i++) {
+      var v = typeof src[i] === 'string' ? src[i].trim().slice(0, MAX_SUBJECT) : '';
+      if (!v || v === SUBJECT_FALLBACK || seen[v]) continue;
+      if (out.length >= MAX_SUBJECTS - 1) break;
+      seen[v] = true;
+      out.push(v);
+    }
+    out.push(SUBJECT_FALLBACK);
+    return out;
+  }
+
+  function cleanStudyPhotos(raw) {
+    var out = [];
+    var list = Array.isArray(raw) ? raw : [];
+    for (var i = 0; i < list.length; i++) {
+      var ph = list[i];
+      if (!ph || typeof ph !== 'object' || Array.isArray(ph)) continue;
+      var data = typeof ph.data === 'string' ? ph.data : '';
+      if (data.indexOf('data:image/') !== 0) continue;   // 只收内嵌图片
+      if (out.length >= MAX_STUDY_PHOTOS) break;
+      out.push({
+        id: (typeof ph.id === 'string' && ph.id) ? ph.id : ('sp' + Date.now().toString(36) + i),
+        data: data
+      });
+    }
+    return out;
+  }
+
+  function cleanReviews(raw) {
+    var out = [];
+    var list = Array.isArray(raw) ? raw : [];
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      var at = (r && typeof r === 'object') ? r.at : r;
+      if (typeof at !== 'number' || !isFinite(at) || at <= 0) continue;
+      out.push({ at: Math.round(at) });
+      if (out.length >= MAX_REVIEWS) break;
+    }
+    return out;
+  }
+
+  function cleanStudyItem(x) {
+    if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+    var subject = typeof x.subject === 'string' ? x.subject.trim().slice(0, MAX_SUBJECT) : '';
+    var what = typeof x.what === 'string' ? x.what.trim().slice(0, MAX_STUDY_WHAT) : '';
+    if (!subject && !what) return null;
+    var status = 'new';
+    for (var i = 0; i < STUDY_STATUS.length; i++) {
+      if (STUDY_STATUS[i].key === x.status) { status = x.status; break; }
+    }
+    var minutes = (typeof x.minutes === 'number' && isFinite(x.minutes) && x.minutes > 0)
+      ? Math.round(x.minutes) : null;
+    return {
+      subject: subject || SUBJECT_FALLBACK,
+      what: what,
+      status: status,
+      gap: typeof x.gap === 'string' ? x.gap.trim().slice(0, MAX_STUDY_GAP) : '',
+      minutes: minutes,
+      photos: cleanStudyPhotos(x.photos),
+      reviews: cleanReviews(x.reviews)
+    };
+  }
+
+  function cleanStudyList(raw) {
+    var out = [];
+    var list = Array.isArray(raw) ? raw : [];
+    for (var i = 0; i < list.length; i++) {
+      var it = cleanStudyItem(list[i]);
+      if (it) out.push(it);
+    }
+    return out;
+  }
+
+  function studyStatusMeta(key) {
+    for (var i = 0; i < STUDY_STATUS.length; i++) {
+      if (STUDY_STATUS[i].key === key) return STUDY_STATUS[i];
+    }
+    return STUDY_STATUS[0];
+  }
+
+  /** 某个 state 的科目表（惰性读取：不依赖 normalizeState 是否写过） */
+  function subjectList(state) { return cleanSubjects(state && state.subjects); }
+
+  /** 所有学习条目摊平，并带上所属日期（复习调度要用它当锚点） */
+  function allStudyItems(state) {
+    var out = [];
+    var days = (state && state.days) || {};
+    Object.keys(days).forEach(function (dk) {
+      var day = days[dk];
+      var entries = (day && Array.isArray(day.entries)) ? day.entries : [];
+      entries.forEach(function (e, ei) {
+        var list = Array.isArray(e.study) ? e.study : [];
+        list.forEach(function (item, ii) {
+          out.push({ date: dk, entryId: e.id, entryIndex: ei, itemIndex: ii, item: item });
+        });
+      });
+    });
+    out.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (a.itemIndex || 0) - (b.itemIndex || 0);
+    });
+    return out;
+  }
+
+  /** 这条该不该复习了；该复习返回 { dueDate, overdueDays, gapDays } */
+  function studyReviewDue(row, todayKey) {
+    if (!row || !row.item) return null;
+    var gap = STATUS_GAP_DAYS[row.item.status];
+    if (!gap) return null;
+    var base = row.date;
+    var rs = row.item.reviews || [];
+    if (rs.length) {
+      var d = toDateKey(new Date(rs[rs.length - 1].at));
+      if (d && d > base) base = d;
+    }
+    var n = daysBetween(base, todayKey);
+    if (n === null) return null;
+    var left = gap - n;
+    if (left > 0) return null;
+    return { dueDate: base, overdueDays: -left, gapDays: gap };
+  }
+
+  /**
+   * 该复习的条目 = 补漏清单。
+   * ⭐ 这就是那张截图里的方法：昨天标「还不会」的，今天一打开就顶上来。
+   */
+  function dueStudy(state, todayKey) {
+    var tk = todayKey || toDateKey(new Date());
+    var out = [];
+    allStudyItems(state).forEach(function (r) {
+      var due = studyReviewDue(r, tk);
+      if (due) { r.due = due; out.push(r); }
+    });
+    out.sort(function (a, b) {
+      if (b.due.overdueDays !== a.due.overdueDays) return b.due.overdueDays - a.due.overdueDays;
+      if (a.item.status !== b.item.status) return a.item.status === 'unknown' ? -1 : 1;
+      return a.date < b.date ? 1 : -1;
+    });
+    return out;
+  }
+
+  /** 标记复习过；newStatus 可选（复习时升级状态） */
+  function markReviewed(state, row, newStatus, now) {
+    if (!row || !row.entryId) return { error: '找不到这条记录' };
+    var next = normalizeState(state);
+    var day = next.days[row.date];
+    if (!day) return { error: '那天的记录不见了' };
+    var entry = null;
+    for (var i = 0; i < day.entries.length; i++) {
+      if (day.entries[i].id === row.entryId) { entry = day.entries[i]; break; }
+    }
+    if (!entry || !Array.isArray(entry.study)) return { error: '找不到这条记录' };
+    var item = entry.study[row.itemIndex];
+    if (!item) return { error: '找不到这条记录' };
+    var ts = (typeof now === 'number' && isFinite(now)) ? now : Date.now();
+    item.reviews = cleanReviews((item.reviews || []).concat([{ at: ts }]));
+    if (newStatus) {
+      for (var j = 0; j < STUDY_STATUS.length; j++) {
+        if (STUDY_STATUS[j].key === newStatus) { item.status = newStatus; break; }
+      }
+    }
+    return { state: next };
+  }
+
+  /** 科目增删（删科目时把该科目的学习记录归到「其他」，不删数据） */
+  function addSubject(state, name) {
+    var next = normalizeState(state);
+    var v = typeof name === 'string' ? name.trim().slice(0, MAX_SUBJECT) : '';
+    if (!v) return { error: '科目名不能为空' };
+    if (v === SUBJECT_FALLBACK) return { error: '「其他」已经存在' };
+    var cur = subjectList(next);
+    if (cur.indexOf(v) > -1) return { error: '已经有这个科目了' };
+    if (cur.length >= MAX_SUBJECTS) return { error: '科目最多 ' + MAX_SUBJECTS + ' 个' };
+    next.subjects = cleanSubjects(cur.concat([v]));
+    return { state: next, subjects: next.subjects };
+  }
+
+  function removeSubject(state, name) {
+    var next = normalizeState(state);
+    var v = typeof name === 'string' ? name.trim() : '';
+    if (!v) return { error: '科目名不能为空' };
+    if (v === SUBJECT_FALLBACK) return { error: '「其他」不能删（保底科目）' };
+    var cur = subjectList(next);
+    if (cur.indexOf(v) === -1) return { error: '没有这个科目' };
+    var moved = 0;
+    allStudyItems(next).forEach(function (row) {
+      if (row.item.subject !== v) return;
+      var day = next.days[row.date];
+      var e = day && day.entries.filter(function (x) { return x.id === row.entryId; })[0];
+      if (e && e.study && e.study[row.itemIndex]) {
+        e.study[row.itemIndex].subject = SUBJECT_FALLBACK;
+        moved++;
+      }
+    });
+    next.subjects = cur.filter(function (x) { return x !== v; });
+    return { state: next, moved: moved };
+  }
+
   var FIELD_KIND = {
     /*
      * ⚠️ 身体里**没有** exercise 字段。
@@ -678,7 +957,11 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
       version: 1,
       settings: defaultSettings(),
       days: {},
-      reports: {}
+      reports: {},
+      /* 学习打卡的科目表。normalizeState **不覆盖**它；
+         读取一律走 subjectList(state)（惰性清洗），
+         这样老数据即使没有这个字段也会拿到默认科目。 */
+      subjects: DEFAULT_SUBJECTS.slice()
     };
   }
 
@@ -740,6 +1023,14 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
        *   · 其余维度 → 只保留登记过的字段
        */
       if (FIELD_KIND[k] && FIELD_KIND[k].__self) {
+        // 学习条目要逐条清洗（状态/科目/照片/复习记录都得校验）
+        if (k === 'study') {
+          var cleaned = cleanStudyList(v);
+          if (!cleaned.length) continue;      // 全被清掉 → 这个维度算没有
+          out[k] = cleaned;
+          hasDim = true;
+          continue;
+        }
         out[k] = v;
         hasDim = true;
         continue;
@@ -831,6 +1122,9 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
   function normalizeState(s) {
     var out = emptyState();
     if (!isObj(s)) return out;
+    /* 科目表要保住。不清洗的话，用户增删的科目每次 normalize 都会丢光，
+       表现就是"加了科目没反应 / 重复加也不报错" —— 这是自检时抓到的真 bug。 */
+    out.subjects = cleanSubjects(s.subjects);
 
     if (isObj(s.settings)) {
       var st = s.settings;
@@ -1924,6 +2218,14 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
     BACKUP_AT_KEY: BACKUP_AT_KEY,
     DIMS: DIMS,
     GROUPS: GROUPS,
+    // 学习打卡
+    STUDY_STATUS: STUDY_STATUS, STUDY_PICK: STUDY_PICK,
+    STATUS_GAP_DAYS: STATUS_GAP_DAYS, DEFAULT_SUBJECTS: DEFAULT_SUBJECTS,
+    SUBJECT_FALLBACK: SUBJECT_FALLBACK, MAX_STUDY_PHOTOS: MAX_STUDY_PHOTOS,
+    studyStatusMeta: studyStatusMeta, subjectList: subjectList,
+    cleanStudyList: cleanStudyList, allStudyItems: allStudyItems,
+    studyReviewDue: studyReviewDue, dueStudy: dueStudy,
+    markReviewed: markReviewed, addSubject: addSubject, removeSubject: removeSubject,
     FIELD_KIND: FIELD_KIND,
     kindOf: kindOf,
     dimOf: dimOf,
@@ -3450,6 +3752,211 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
     } catch (e) { return false; }
   }
 
+  /* ---------- IndexedDB：给"以后的图片和大量数据"留通道 ----------
+     localStorage 每个网站只有约 5MB。等学习打卡加了照片，5MB 只够几十张。
+     IndexedDB 的额度按磁盘比例给（实测 GB 级），所以先把这个通道铺好。
+     ⚠️ 现在还没有照片字段，所以这里只搬"整份 state"；照片拆分在第 2 步做。
+  ------------------------------------------------------------------------- */
+  var DB_NAME = 'personal-plan';
+  var DB_VER = 1;
+  var ST_META = 'meta';
+  var ST_PHOTOS = 'photos';
+  var IDB_FLAG = L.STORE_KEY + ':idb';
+  var storageMode = 'localstorage';        // 'idb' | 'localstorage' | 'memory'
+  var dbPromise = null;
+  var idbTimer = null;
+  var idbSaving = false;
+  var pendingState = null;
+
+  function openDB() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise(function (resolve) {
+      var req;
+      try { req = indexedDB.open(DB_NAME, DB_VER); }
+      catch (e) { resolve(null); return; }
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(ST_META)) db.createObjectStore(ST_META, { keyPath: 'k' });
+        if (!db.objectStoreNames.contains(ST_PHOTOS)) db.createObjectStore(ST_PHOTOS, { keyPath: 'id' });
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { resolve(null); };
+      req.onblocked = function () { resolve(null); };
+      setTimeout(function () { resolve(null); }, 4000);   // 卡住也不能让 App 起不来
+    });
+    return dbPromise;
+  }
+
+  function os(db, store, mode) { return db.transaction(store, mode).objectStore(store); }
+
+  function pGet(store, key) {
+    return new Promise(function (res) {
+      var r = store.get(key);
+      r.onsuccess = function () { res(r.result); };
+      r.onerror = function () { res(undefined); };
+    });
+  }
+
+  function pGetAll(store) {
+    return new Promise(function (res) {
+      var r = store.getAll();
+      r.onsuccess = function () { res(r.result || []); };
+      r.onerror = function () { res([]); };
+    });
+  }
+
+  function pPut(store, val) {
+    return new Promise(function (res, rej) {
+      var r = store.put(val);
+      r.onsuccess = function () { res(true); };
+      r.onerror = function () { rej(r.error || new Error('写入失败')); };
+    });
+  }
+
+  /* ---------- 照片拆分 ----------
+   * 为什么拆：整份 state 序列化时，图片字符串会被整个复制一遍。
+   * 一张打卡照约 80K 字符，100 张就是 8MB —— 每次保存都要 ~200ms，会明显卡。
+   * 拆开之后：meta 只有几十 KB（瞬间），图片只在新增时写一次。
+   * ---------------------------------------------------------------------- */
+  var photoIds = {};        // 已经写进 photos 表的 id
+
+  function isImg(s) { return typeof s === 'string' && s.slice(0, 11) === 'data:image/'; }
+
+  /** 元数据 JSON：把图片 data 全部省掉（replacer 比深拷贝省内存） */
+  function metaJson(st) {
+    var json = L.serialize(st);
+    var obj = JSON.parse(json);
+    var walk = function (node) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      Object.keys(node).forEach(function (k) {
+        var v = node[k];
+        if (k === 'data' && isImg(v)) { delete node[k]; return; }
+        walk(v);
+      });
+    };
+    walk(obj);
+    return JSON.stringify(obj);
+  }
+
+  /** 收集 state 里所有图片（{ id, data }），顺便建立"还活着"的 id 集合 */
+  function collectPhotos(st) {
+    var list = [];
+    var live = {};
+    var walk = function (node) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node && isImg(node.data)) {
+        var id = (typeof node.id === 'string' && node.id) ? node.id : '';
+        if (id) { live[id] = 1; list.push({ id: id, data: node.data }); }
+      }
+      Object.keys(node).forEach(function (k) { walk(node[k]); });
+    };
+    walk(st);
+    return { list: list, live: live };
+  }
+
+  /** 把 photos 表里的图片按 id 挂回 state */
+  function attachPhotos(st, records) {
+    var map = {};
+    (records || []).forEach(function (r) { if (r && r.id) map[r.id] = r.data; });
+    var walk = function (node) {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node && typeof node.id === 'string' && map[node.id] && !node.data) {
+        node.data = map[node.id];
+      }
+      Object.keys(node).forEach(function (k) { walk(node[k]); });
+    };
+    walk(st);
+    return st;
+  }
+
+  /** 从 IndexedDB 读整份存档；读不到返回 null */
+  function loadFromIdb() {
+    return openDB().then(function (db) {
+      if (!db) return null;
+      return Promise.all([
+        pGet(os(db, ST_META, 'readonly'), 'state'),
+        pGetAll(os(db, ST_PHOTOS, 'readonly'))
+      ]).then(function (r2) {
+        var rec = r2[0], photos = r2[1] || [];
+        if (!rec || typeof rec.v !== 'string') return null;
+        var st = L.deserialize(rec.v);
+        if (!st) return null;
+        attachPhotos(st, photos);
+        photoIds = {};
+        photos.forEach(function (x) { if (x && x.id) photoIds[x.id] = 1; });
+        return st;
+      });
+    }).catch(function () { return null; });
+  }
+
+  /** 立即写盘（防抖结束后 / 切后台时调用） */
+  function flushIdb() {
+    if (idbTimer) { clearTimeout(idbTimer); idbTimer = null; }
+    if (storageMode !== 'idb' || idbSaving || !pendingState) return Promise.resolve();
+    var payload = pendingState;
+    pendingState = null;
+    idbSaving = true;
+    return openDB().then(function (db) {
+      if (!db) { idbSaving = false; return; }
+      var info = collectPhotos(payload);
+      var fresh = info.list.filter(function (x) { return !photoIds[x.id]; });
+      return pPut(os(db, ST_META, 'readwrite'), { k: 'state', v: metaJson(payload) })
+        .then(function () {
+          if (!fresh.length) return null;
+          // 一次事务批量写，避免"一张图一个事务"慢成一片
+          return new Promise(function (res) {
+            var tx2 = db.transaction(ST_PHOTOS, 'readwrite');
+            var ost = tx2.objectStore(ST_PHOTOS);
+            fresh.forEach(function (x) { try { ost.put(x); } catch (e) {} });
+            tx2.oncomplete = function () { res(true); };
+            tx2.onerror = function () { res(false); };
+            tx2.onabort = function () { res(false); };
+          }).then(function (ok) {
+            if (ok) fresh.forEach(function (x) { photoIds[x.id] = 1; });
+            // 清理已经不存在的图片
+            var orphans = Object.keys(photoIds).filter(function (id) { return !info.live[id]; });
+            if (!orphans.length) return null;
+            var tx3 = db.transaction(ST_PHOTOS, 'readwrite');
+            var ost3 = tx3.objectStore(ST_PHOTOS);
+            orphans.forEach(function (id) { try { ost3.delete(id); } catch (e) {} delete photoIds[id]; });
+            return null;
+          });
+        }).then(function () { idbSaving = false; });
+    }).catch(function () { idbSaving = false; });
+  }
+
+  function scheduleIdb() {
+    if (idbTimer) clearTimeout(idbTimer);
+    idbTimer = setTimeout(function () { flushIdb(); }, 300);
+  }
+
+  /** 把 localStorage 里的老数据搬到 IndexedDB（成功后删旧键） */
+  function migrateToIdb(st) {
+    return openDB().then(function (db) {
+      if (!db) return false;
+      var info = collectPhotos(st);
+      return pPut(os(db, ST_META, 'readwrite'), { k: 'state', v: metaJson(st) }).then(function () {
+        if (!info.list.length) return true;
+        return new Promise(function (res) {
+          var tx = db.transaction(ST_PHOTOS, 'readwrite');
+          var ost = tx.objectStore(ST_PHOTOS);
+          info.list.forEach(function (x) { try { ost.put(x); } catch (e) {} });
+          tx.oncomplete = function () { res(true); };
+          tx.onerror = function () { res(false); };
+        }).then(function () {
+          info.list.forEach(function (x) { photoIds[x.id] = 1; });
+          return true;
+        });
+      }).then(function (ok) {
+        try { localStorage.setItem(IDB_FLAG, '1'); localStorage.removeItem(L.STORE_KEY); } catch (e) {}
+        return ok;
+      });
+    }).catch(function () { return false; });
+  }
+
   function loadState() {
     try {
       var raw = localStorage.getItem(L.STORE_KEY);
@@ -3469,6 +3976,16 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
   }
 
   function saveState(s) {
+    /*
+     * IndexedDB 是异步的，没法像 localStorage 那样当场返回"成功/失败"。
+     * 这里选择**乐观返回 true**，真正的失败在 flushIdb 里 toast 提示。
+     * 理由：IDB 几乎不会失败（额度 GB 级），而为它把整个 App 改成 async 代价太大。
+     */
+    if (storageMode === 'idb') {
+      pendingState = s;
+      scheduleIdb();
+      return true;
+    }
     if (s.settings && s.settings.apiKeySessionOnly) {
       // 会话模式：key 不落盘
       var copy = JSON.parse(JSON.stringify(s));
@@ -4448,6 +4965,7 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
       b.onclick = function () { dashRange = Number(b.getAttribute('data-range')); renderDash(); };
     });
 
+    renderStudy();
     renderHeat();
     renderChartPickers();
     drawChart();
@@ -4903,6 +5421,317 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
   }
 
   /* ==========================================================================
+     学习打卡
+     ======================================================================== */
+
+  /** 图片压缩：长边 1200 / 质量 0.65（题面和小字都清楚，单张约 80K 字符） */
+  function compressStudyPhoto(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('文件读取失败')); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('图片无法识别')); };
+        img.onload = function () {
+          try {
+            var w = img.naturalWidth || img.width;
+            var h = img.naturalHeight || img.height;
+            if (!w || !h) return reject(new Error('图片尺寸异常'));
+            var MAXEDGE = 1200, Q = 0.65;
+            var scale = Math.min(1, MAXEDGE / Math.max(w, h));
+            var cw = Math.max(1, Math.round(w * scale));
+            var ch = Math.max(1, Math.round(h * scale));
+            var cv = document.createElement('canvas');
+            cv.width = cw; cv.height = ch;
+            var ctx = cv.getContext('2d');
+            ctx.fillStyle = '#ffffff';           // PNG 透明转 JPEG 会变黑，先铺白
+            ctx.fillRect(0, 0, cw, ch);
+            ctx.drawImage(img, 0, 0, cw, ch);
+            var out = cv.toDataURL('image/jpeg', Q);
+            if (out.length > 400000) out = cv.toDataURL('image/jpeg', 0.5);
+            resolve(out);
+          } catch (e) { reject(e); }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /** 打卡草稿 */
+  var ckDraft = null;
+
+  function openCheckinSheet(prefill) {
+    ckDraft = {
+      subject: (prefill && prefill.subject) || (L.subjectList(state)[0] || L.SUBJECT_FALLBACK),
+      status: 'new',
+      what: '',
+      gap: '',
+      photo: null
+    };
+    openSheet(function (panel) {
+      panel.appendChild(el('h3', null, '学习打卡'));
+
+      /* 照片 */
+      var phBox = el('div', 'ck-photo');
+      phBox.id = 'ckPhotoBox';
+      panel.appendChild(phBox);
+
+      /* 科目 */
+      var subSel = document.createElement('select');
+      subSel.id = 'ckSubject';
+      var subs = L.subjectList(state);
+      subs.forEach(function (x) {
+        var o = document.createElement('option');
+        o.value = x;
+        o.textContent = x;
+        if (x === ckDraft.subject) o.selected = true;
+        subSel.appendChild(o);
+      });
+      panel.appendChild(labelRow('科目', subSel));
+
+      /* 状态：只给三选一（已掌握只能复习时升上去） */
+      var stBox = el('div', 'ck-status');
+      stBox.id = 'ckStatus';
+      panel.appendChild(labelRow('现在什么程度', stBox));
+
+      /* 学了什么 */
+      var whatIn = document.createElement('input');
+      whatIn.type = 'text';
+      whatIn.id = 'ckWhat';
+      whatIn.maxLength = 120;
+      whatIn.placeholder = '比如：差分放大电路';
+      panel.appendChild(labelRow('学了什么（选填）', whatIn));
+
+      /* 卡在哪 */
+      var gapIn = document.createElement('input');
+      gapIn.type = 'text';
+      gapIn.id = 'ckGap';
+      gapIn.maxLength = 200;
+      gapIn.placeholder = '哪里还没懂（选填）';
+      panel.appendChild(labelRow('卡在哪（选填）', gapIn));
+
+      var btns = el('div', 'btns');
+      var ok = el('button', 'btn p grow', '记下');
+      ok.id = 'ckSave';
+      var cancel = el('button', 'btn', '取消');
+      cancel.onclick = closeSheet;
+      btns.appendChild(ok);
+      btns.appendChild(cancel);
+      panel.appendChild(btns);
+
+      renderCkPhoto();
+      renderCkStatus();
+
+      /* 选照片 */
+      var input = $('studyPhoto');
+      ok.onclick = saveCheckin;
+      input.onchange = function () {
+        var f = input.files && input.files[0];
+        if (!f) return;
+        compressStudyPhoto(f).then(function (data) {
+          ckDraft.photo = data;
+          renderCkPhoto();
+        }).catch(function (e) {
+          toast('这张图存不了：' + (e && e.message ? e.message : e));
+        });
+        input.value = '';
+      };
+      subSel.onchange = function () { ckDraft.subject = subSel.value; };
+    });
+  }
+
+  function labelRow(text, node) {
+    var wrap = el('div', 'ck-row');
+    wrap.appendChild(el('label', null, text));
+    wrap.appendChild(node);
+    return wrap;
+  }
+
+  function renderCkPhoto() {
+    var box = $('ckPhotoBox');
+    if (!box) return;
+    box.innerHTML = '';
+    if (ckDraft.photo) {
+      var img = document.createElement('img');
+      img.src = ckDraft.photo;
+      box.appendChild(img);
+      var re = el('button', 'btn', '重拍');
+      re.onclick = function () { $('studyPhoto').click(); };
+      var rm = el('button', 'btn', '删掉');
+      rm.onclick = function () { ckDraft.photo = null; renderCkPhoto(); };
+      var row = el('div', 'btns');
+      row.appendChild(re); row.appendChild(rm);
+      box.appendChild(row);
+    } else {
+      var b = el('button', 'btn p', '📷 拍照 / 选图');
+      b.onclick = function () { $('studyPhoto').click(); };
+      box.appendChild(b);
+    }
+  }
+
+  function renderCkStatus() {
+    var box = $('ckStatus');
+    if (!box) return;
+    box.innerHTML = '';
+    L.STUDY_PICK.forEach(function (k) {
+      var m = L.studyStatusMeta(k);
+      var b = el('button', 'ck-st' + (ckDraft.status === k ? ' on' : ''), m.emoji + ' ' + m.name);
+      b.onclick = function () { ckDraft.status = k; renderCkStatus(); };
+      box.appendChild(b);
+    });
+  }
+
+  function saveCheckin() {
+    if (!ckDraft) return;
+    var what = $('ckWhat') ? $('ckWhat').value.trim() : '';
+    var gap = $('ckGap') ? $('ckGap').value.trim() : '';
+    if (!ckDraft.photo && !what) { toast('拍张照，或者写一句学了什么'); return; }
+    var item = {
+      subject: ckDraft.subject,
+      what: what,
+      status: ckDraft.status,
+      gap: gap,
+      photos: ckDraft.photo ? [{ id: 'sp' + Date.now().toString(36), data: ckDraft.photo }] : []
+    };
+    var r = L.addEntry(state, curDate, { study: [item] }, Date.now());
+    if (r.error) { toast(r.error); return; }
+    state = r.state;
+    if (!saveState(state)) { toast('存不进去'); return; }
+    closeSheet();
+    renderAll();
+    toast('已打卡');
+  }
+
+  /** 渲染：补漏清单 + 今天的学习 */
+  function renderStudy() {
+    var tk = curDate;
+    var all = L.allStudyItems(state);
+    var today = all.filter(function (x) { return x.date === tk; });
+    var cnt = $('studyTodayCount');
+    if (cnt) cnt.textContent = today.length ? today.length + ' 条' : '';
+
+    /* 今天的学习 */
+    var listBox = $('studyTodayList');
+    if (listBox) {
+      listBox.innerHTML = '';
+      if (!today.length) {
+        listBox.appendChild(el('p', 'hint', '今天还没打卡。'));
+      } else {
+        today.forEach(function (row) { listBox.appendChild(studyRow(row)); });
+      }
+    }
+
+    /* 补漏清单：只显示"今天及以前该复习的"，且不含今天的 */
+    var reviewBox = $('studyReviewBox');
+    if (reviewBox) {
+      reviewBox.innerHTML = '';
+      var due = L.dueStudy(state, tk).filter(function (x) { return x.date < tk; });
+      if (due.length) {
+        var head = el('div', 'ck-review-head', '🔴 该复习了（' + due.length + '）');
+        reviewBox.appendChild(head);
+        due.slice(0, 8).forEach(function (row) { reviewBox.appendChild(reviewRow(row)); });
+        var tip = el('p', 'hint', '想不起来的，第二天翻书 —— 这就是最有效的复习。');
+        reviewBox.appendChild(tip);
+      }
+    }
+  }
+
+  function studyRow(row) {
+    var m = L.studyStatusMeta(row.item.status);
+    var box = el('div', 'ck-item');
+    if (row.item.photos && row.item.photos[0]) {
+      var img = document.createElement('img');
+      img.src = row.item.photos[0].data;
+      img.className = 'ck-thumb';
+      box.appendChild(img);
+    }
+    var mid = el('div', 'ck-mid');
+    mid.appendChild(el('div', 'ck-t', row.item.what || '（没写内容）'));
+    var meta = el('div', 'ck-s', m.emoji + ' ' + m.name + ' · ' + row.item.subject);
+    mid.appendChild(meta);
+    box.appendChild(mid);
+    return box;
+  }
+
+  function reviewRow(row) {
+    var m = L.studyStatusMeta(row.item.status);
+    var box = el('div', 'ck-review');
+    var mid = el('div', 'ck-mid');
+    mid.appendChild(el('div', 'ck-t', row.item.what || '（没写内容）'));
+    mid.appendChild(el('div', 'ck-s', m.emoji + ' ' + m.name + ' · ' + row.item.subject +
+      ' · ' + row.date.slice(5).replace('-', '/')));
+    box.appendChild(mid);
+    var acts = el('div', 'btns');
+    var up = el('button', 'btn p', '这次想起来了');
+    up.onclick = function () { doReview(row, 'ok'); };
+    var down = el('button', 'btn', '还是不会');
+    down.onclick = function () { doReview(row, 'unknown'); };
+    acts.appendChild(up);
+    acts.appendChild(down);
+    box.appendChild(acts);
+    return box;
+  }
+
+  function doReview(row, newStatus) {
+    var r = L.markReviewed(state, row, newStatus, Date.now());
+    if (r.error) { toast(r.error); return; }
+    state = r.state;
+    if (!saveState(state)) { toast('存不进去'); return; }
+    renderAll();
+    toast(newStatus === 'ok' ? '记下了，3 天后再看' : '明天再提醒你');
+  }
+
+  function openSubjectManager() {
+    openSheet(function (panel) {
+      panel.appendChild(el('h3', null, '科目管理'));
+      panel.appendChild(el('p', 'hint', '删科目不会删记录 —— 那个科目的学习记录会归到「其他」。'));
+
+      var listBox = el('div');
+      L.subjectList(state).forEach(function (x) {
+        var row = el('div', 'ck-row');
+        row.appendChild(el('span', null, x));
+        if (x !== L.SUBJECT_FALLBACK) {
+          var del = el('button', 'btn', '删除');
+          del.onclick = function () {
+            var rr = L.removeSubject(state, x);
+            if (rr.error) { toast(rr.error); return; }
+            state = rr.state;
+            saveState(state);
+            renderAll();
+            closeSheet();
+            toast(rr.moved ? '已删除，' + rr.moved + ' 条归到「其他」' : '已删除');
+          };
+          row.appendChild(del);
+        }
+        listBox.appendChild(row);
+      });
+      panel.appendChild(listBox);
+
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.id = 'newSubject';
+      inp.maxLength = 20;
+      inp.placeholder = '新科目名';
+      panel.appendChild(labelRow('加一个', inp));
+      var addBtn = el('button', 'btn p', '添加');
+      addBtn.onclick = function () {
+        var rr = L.addSubject(state, inp.value);
+        if (rr.error) { toast(rr.error); return; }
+        state = rr.state;
+        saveState(state);
+        renderAll();
+        closeSheet();
+        toast('已添加');
+      };
+      panel.appendChild(addBtn);
+      var c = el('button', 'btn', '关闭');
+      c.onclick = closeSheet;
+      panel.appendChild(c);
+    });
+  }
+
+  /* ==========================================================================
      渲染总入口
      ======================================================================== */
   function renderAll() {
@@ -4958,6 +5787,8 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
     runAIParse(txt);
   };
   $('btnReview').onclick = runReview;
+  if ($('btnCheckin')) $('btnCheckin').onclick = function () { openCheckinSheet(); };
+  if ($('btnManageSubject')) $('btnManageSubject').onclick = openSubjectManager;
   $('btnWeekReport').onclick = runWeekReport;
   $('btnMonthReport').onclick = runMonthReport;
   $('btnExportWeek').onclick = exportWeek;
@@ -5214,10 +6045,58 @@ nav button[aria-current="true"]{color:var(--brand);font-weight:600}
      启动
      ======================================================================== */
   storageOK = storageProbe();
-  state = loadState();
-  renderForm();
-  renderAll();
-  if (!storageOK) { /* banner 在 renderBanners 里会显示 */ }
+
+  /*
+   * 启动分两条路，取决于"上次是不是已经在用 IndexedDB"：
+   *
+   *   · 首次/还没迁移 → **同步**从 localStorage 读并立刻渲染（和以前完全一样，
+   *     不给用户任何等待感），然后在后台把数据搬进 IndexedDB、写好标记。
+   *
+   *   · 已经迁移过（有标记）→ 必须**异步**读 IndexedDB 再渲染。
+   *     这时先画一个"正在读取"的占位，读完再渲染。
+   *     绝不能先拿空数据渲染 —— 那样会出现"先空一下再跳出内容"的闪烁，
+   *     更糟的是这期间任何写入都会把空状态存回去。
+   */
+  var hasIdb = (typeof indexedDB !== 'undefined');
+  var useIdb = false;
+  try { useIdb = hasIdb && localStorage.getItem(IDB_FLAG) === '1'; } catch (e) { useIdb = false; }
+
+  if (!useIdb) {
+    state = loadState();
+    renderForm();
+    renderAll();
+    if (hasIdb) {
+      // 后台迁移（不阻塞界面）
+      migrateToIdb(state).then(function (ok) {
+        if (ok) { storageMode = 'idb'; }
+      });
+    }
+    if (!storageOK) { /* banner 在 renderBanners 里会显示 */ }
+  } else {
+    storageMode = 'idb';
+    var loadingBox = document.createElement('div');
+    loadingBox.id = 'bootLoading';
+    loadingBox.style.cssText = 'padding:48px 20px;text-align:center;color:#9397ad;font-size:14px';
+    loadingBox.textContent = '正在读取数据…';
+    var host = $('timeline') ? $('timeline').parentNode : document.body;
+    if (host) host.appendChild(loadingBox);
+    loadFromIdb().then(function (st) {
+      state = st || L.emptyState();
+      if (loadingBox && loadingBox.parentNode) loadingBox.parentNode.removeChild(loadingBox);
+      renderForm();
+      renderAll();
+    });
+  }
+
+  // 切后台/关页面时立刻落盘，别让内容卡在 300ms 防抖里
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) flushIdb();
+    });
+  }
+  if (typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('pagehide', function () { flushIdb(); });
+  }
 })();
 </script>
 <!-- PWA 增强层：注册离线缓存、处理「安装到桌面」与系统提醒。
