@@ -248,6 +248,12 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
 .ck-st.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand)}
 .ck-photo{margin:6px 0 10px}
 .ck-photo img{width:100%;max-height:220px;object-fit:contain;border-radius:10px;background:#f0f2f5}
+.ck-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.ck-cell{position:relative;padding-top:100%;border-radius:10px;overflow:hidden;background:#f0f2f5}
+.ck-cell img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ck-del{position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;
+  background:rgba(0,0,0,.55);color:#fff;font-size:15px;line-height:1;border:0;
+  display:grid;place-items:center}
 .ck-item,.ck-review{display:flex;gap:10px;padding:9px 0;border-top:1px solid var(--line)}
 .ck-item:first-child,.ck-review:first-child{border-top:0}
 .ck-thumb{flex:0 0 52px;width:52px;height:52px;object-fit:cover;border-radius:9px}
@@ -359,8 +365,8 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
              · 带 capture → 直接开相机
              · 不带 capture → 系统弹出"相机 / 相册 / 文件"随便选
              只给一个带 capture 的话，安卓上就只剩拍照，选不了相册里存好的图。 -->
-        <input type="file" id="studyPhotoCam" accept="image/*" capture="environment" style="display:none">
-        <input type="file" id="studyPhotoGal" accept="image/*" style="display:none">
+        <input type="file" id="studyPhotoCam" accept="image/*" capture="environment" multiple style="display:none">
+        <input type="file" id="studyPhotoGal" accept="image/*" multiple style="display:none">
       </section>
 
       <!-- 录入：收进折叠区。学习打卡才是主功能，这些不抢视线 -->
@@ -5472,7 +5478,7 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
       status: 'new',
       what: '',
       gap: '',
-      photo: null
+      photos: []          // 最多 3 张（逻辑层 MAX_STUDY_PHOTOS）
     };
     openSheet(function (panel) {
       panel.appendChild(el('h3', null, '学习打卡'));
@@ -5530,17 +5536,33 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
 
       /* 选照片：拍照和相册两个 input 共用一段处理 */
       ok.onclick = saveCheckin;
+      /*
+       * 一次可以选多张（input 有 multiple）。
+       * 压缩是**串行**做的：并行时多张大图同时进 canvas，手机上容易吃爆内存。
+       */
       var onPick = function (ev) {
         var input = ev.target;
-        var f = input.files && input.files[0];
-        if (!f) return;
-        compressStudyPhoto(f).then(function (data) {
-          ckDraft.photo = data;
-          renderCkPhoto();
-        }).catch(function (e) {
-          toast('这张图存不了：' + (e && e.message ? e.message : e));
-        });
+        var files = Array.prototype.slice.call(input.files || []);
         input.value = '';        // 清空，这样连续选同一张也会触发 change
+        if (!files.length) return;
+        var room = MAX_CK_PHOTOS - ckDraft.photos.length;
+        if (room <= 0) { toast('最多 ' + MAX_CK_PHOTOS + ' 张'); return; }
+        var use = files.slice(0, room);
+        if (files.length > room) toast('最多 ' + MAX_CK_PHOTOS + ' 张，只取前 ' + room + ' 张');
+        var i = 0;
+        var step = function () {
+          if (i >= use.length) { renderCkPhoto(); return; }
+          var f = use[i++];
+          compressStudyPhoto(f).then(function (data) {
+            ckDraft.photos.push(data);
+            renderCkPhoto();
+            step();
+          }).catch(function (e) {
+            toast('有张图存不了：' + (e && e.message ? e.message : e));
+            step();
+          });
+        };
+        step();
       };
       $('studyPhotoCam').onchange = onPick;
       $('studyPhotoGal').onchange = onPick;
@@ -5555,32 +5577,43 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     return wrap;
   }
 
+  var MAX_CK_PHOTOS = 3;
+
   function renderCkPhoto() {
     var box = $('ckPhotoBox');
     if (!box) return;
     box.innerHTML = '';
-    if (ckDraft.photo) {
-      var img = document.createElement('img');
-      img.src = ckDraft.photo;
-      box.appendChild(img);
-      var re = el('button', 'btn', '重拍');
-      re.onclick = function () { $('studyPhotoCam').click(); };
-      var re2 = el('button', 'btn', '🖼️ 换一张');
-      re2.onclick = function () { $('studyPhotoGal').click(); };
-      var rm = el('button', 'btn', '删掉');
-      rm.onclick = function () { ckDraft.photo = null; renderCkPhoto(); };
+
+    if (ckDraft.photos.length) {
+      var grid = el('div', 'ck-grid');
+      ckDraft.photos.forEach(function (src, i) {
+        var cell = el('div', 'ck-cell');
+        var img = document.createElement('img');
+        img.src = src;
+        cell.appendChild(img);
+        var del = el('button', 'ck-del', '×');
+        del.onclick = function () {
+          ckDraft.photos.splice(i, 1);
+          renderCkPhoto();
+        };
+        cell.appendChild(del);
+        grid.appendChild(cell);
+      });
+      box.appendChild(grid);
+      box.appendChild(el('p', 'hint', '已选 ' + ckDraft.photos.length + ' / ' + MAX_CK_PHOTOS + ' 张'));
+    }
+
+    if (ckDraft.photos.length < MAX_CK_PHOTOS) {
       var row = el('div', 'btns');
-      row.appendChild(re); row.appendChild(re2); row.appendChild(rm);
+      var b1 = el('button', 'btn p', ckDraft.photos.length ? '📷 再拍' : '📷 拍照');
+      b1.onclick = function () { $('studyPhotoCam').click(); };
+      var b2 = el('button', 'btn', ckDraft.photos.length ? '🖼️ 再选' : '🖼️ 从相册选');
+      b2.onclick = function () { $('studyPhotoGal').click(); };
+      row.appendChild(b1);
+      row.appendChild(b2);
       box.appendChild(row);
     } else {
-      var b1 = el('button', 'btn p', '📷 拍照');
-      b1.onclick = function () { $('studyPhotoCam').click(); };
-      var b2 = el('button', 'btn', '🖼️ 从相册选');
-      b2.onclick = function () { $('studyPhotoGal').click(); };
-      var row2 = el('div', 'btns');
-      row2.appendChild(b1);
-      row2.appendChild(b2);
-      box.appendChild(row2);
+      box.appendChild(el('p', 'hint', '最多 ' + MAX_CK_PHOTOS + ' 张，够了。'));
     }
   }
 
@@ -5600,13 +5633,15 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     if (!ckDraft) return;
     var what = $('ckWhat') ? $('ckWhat').value.trim() : '';
     var gap = $('ckGap') ? $('ckGap').value.trim() : '';
-    if (!ckDraft.photo && !what) { toast('拍张照，或者写一句学了什么'); return; }
+    if (!ckDraft.photos.length && !what) { toast('拍张照，或者写一句学了什么'); return; }
     var item = {
       subject: ckDraft.subject,
       what: what,
       status: ckDraft.status,
       gap: gap,
-      photos: ckDraft.photo ? [{ id: 'sp' + Date.now().toString(36), data: ckDraft.photo }] : []
+      photos: ckDraft.photos.map(function (src, i) {
+        return { id: 'sp' + Date.now().toString(36) + i, data: src };
+      })
     };
     var r = L.addEntry(state, curDate, { study: [item] }, Date.now());
     if (r.error) { toast(r.error); return; }
