@@ -271,6 +271,15 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
 .ck-review{flex-wrap:wrap}
 .ck-review .btns{width:100%;margin-top:6px}
 .ck-review-head{font-size:12.5px;font-weight:700;color:#c2410c;margin:10px 0 4px}
+/* 想法 */
+.idea-day{display:flex;align-items:center;gap:8px;margin:-2px 0 10px}
+.idea-day .d{font-size:13px;font-weight:700;color:var(--ink2)}
+.idea-day .n{font-size:11.5px;color:var(--ink3)}
+.idea-item{padding:11px 0;border-top:1px solid var(--line)}
+.idea-item:first-of-type{border-top:0;padding-top:0}
+.idea-t{font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.idea-item .mini{margin-top:8px}
+
 /* 学习记录浏览 */
 .br-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .br-head h3{margin:0;font-size:16px}
@@ -432,6 +441,20 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     </div>
   </div>
 
+  <!-- ============ 视图：想法 ============ -->
+  <div id="view-ideas" style="display:none">
+    <section class="card">
+      <h2>💡 想法 <span class="cnt" id="ideaCount"></span></h2>
+      <div class="btns">
+        <button class="btn p grow" id="btnNewIdea">＋ 记个想法</button>
+      </div>
+      <p class="hint">按天铺开，不用点进某一天。可以配照片。</p>
+    </section>
+    <div id="ideaList"></div>
+    <input type="file" id="ideaPhotoCam" accept="image/*" capture="environment" multiple style="display:none">
+    <input type="file" id="ideaPhotoGal" accept="image/*" multiple style="display:none">
+  </div>
+
   <!-- ============ 视图：仪表盘（M5）============ -->
   <div id="view-dash" style="display:none">
     <section class="card">
@@ -490,6 +513,7 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
   <div class="in">
     <button data-view="today" aria-current="true"><span class="ic">📝</span>今天</button>
     <button data-view="dash"><span class="ic">📊</span>仪表盘</button>
+    <button data-view="ideas"><span class="ic">💡</span>想法</button>
     <button data-view="history"><span class="ic">📅</span>历史</button>
     <button data-view="settings"><span class="ic">⚙️</span>设置</button>
   </div>
@@ -802,6 +826,108 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     return { state: next, moved: moved };
   }
 
+  /* ===================== 想法 =====================
+   * 想法以前是塞在 plan.ideas 里的纯字符串，没有照片、也没法按天浏览。
+   * 现在单独存成 state.ideas（可带照片）；老的 plan.ideas 仍然会被一起列出来（只读），
+   * 这样以前记的想法不会消失在界面上。
+   * ============================================== */
+  var MAX_IDEA_TEXT = 500;
+  var MAX_IDEA_PHOTOS = 3;
+
+  function isDateKeyStr(v) {
+    return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  }
+
+  function cleanIdea(x) {
+    if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+    var text = typeof x.text === 'string' ? x.text.trim().slice(0, MAX_IDEA_TEXT) : '';
+    var photos = cleanStudyPhotos(x.photos).slice(0, MAX_IDEA_PHOTOS);
+    if (!text && !photos.length) return null;
+    var date = isDateKeyStr(x.date) ? x.date : '';
+    if (!date) return null;
+    var at = (typeof x.at === 'number' && isFinite(x.at) && x.at > 0) ? Math.round(x.at) : Date.now();
+    var id = (typeof x.id === 'string' && x.id) ? x.id : ('id' + at + Math.random().toString(36).slice(2, 6));
+    return { id: id, date: date, at: at, text: text, photos: photos };
+  }
+
+  function cleanIdeas(raw) {
+    var out = [];
+    var list = Array.isArray(raw) ? raw : [];
+    for (var i = 0; i < list.length; i++) {
+      var it = cleanIdea(list[i]);
+      if (it) out.push(it);
+    }
+    return out;
+  }
+
+  /**
+   * 所有想法（新的 state.ideas + 老的 plan.ideas 字符串），按日期倒序。
+   * 老想法标记 legacy:true（只读，不能加照片）。
+   */
+  function allIdeas(state) {
+    var out = [];
+    var fresh = (state && Array.isArray(state.ideas)) ? state.ideas : [];
+    fresh.forEach(function (x) { out.push({ id: x.id, date: x.date, at: x.at, text: x.text, photos: x.photos, legacy: false }); });
+
+    var days = (state && state.days) || {};
+    Object.keys(days).forEach(function (dk) {
+      var entries = (days[dk] && Array.isArray(days[dk].entries)) ? days[dk].entries : [];
+      entries.forEach(function (e, ei) {
+        var plan = e && e.plan;
+        if (!plan || !plan.ideas) return;
+        var arr = Array.isArray(plan.ideas) ? plan.ideas : [plan.ideas];
+        arr.forEach(function (txt, ii) {
+          if (typeof txt !== 'string' || !txt.trim()) return;
+          out.push({
+            id: 'lg' + dk + ei + '_' + ii, date: dk, at: 0,
+            text: txt.trim(), photos: [], legacy: true
+          });
+        });
+      });
+    });
+
+    out.sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+      return (b.at || 0) - (a.at || 0);
+    });
+    return out;
+  }
+
+  /** 按天分组：[{ date, items:[...] }]，日期倒序 */
+  function ideasByDay(state) {
+    var all = allIdeas(state);
+    var groups = [];
+    var map = {};
+    all.forEach(function (x) {
+      if (!map[x.date]) { map[x.date] = { date: x.date, items: [] }; groups.push(map[x.date]); }
+      map[x.date].items.push(x);
+    });
+    return groups;
+  }
+
+  function addIdea(state, date, data, now) {
+    var next = normalizeState(state);
+    if (!isDateKeyStr(date)) return { error: '日期不对' };
+    var it = cleanIdea({
+      id: 'id' + (now || Date.now()) + Math.random().toString(36).slice(2, 6),
+      date: date,
+      at: (typeof now === 'number' && isFinite(now)) ? now : Date.now(),
+      text: data && data.text,
+      photos: data && data.photos
+    });
+    if (!it) return { error: '写点什么，或者加张照片' };
+    next.ideas = cleanIdeas((next.ideas || []).concat([it]));
+    return { state: next, idea: it };
+  }
+
+  function removeIdea(state, id) {
+    var next = normalizeState(state);
+    var before = (next.ideas || []).length;
+    next.ideas = (next.ideas || []).filter(function (x) { return x.id !== id; });
+    if (next.ideas.length === before) return { error: '找不到这个想法' };
+    return { state: next };
+  }
+
   var FIELD_KIND = {
     /*
      * ⚠️ 身体里**没有** exercise 字段。
@@ -991,7 +1117,9 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
       /* 学习打卡的科目表。normalizeState **不覆盖**它；
          读取一律走 subjectList(state)（惰性清洗），
          这样老数据即使没有这个字段也会拿到默认科目。 */
-      subjects: DEFAULT_SUBJECTS.slice()
+      subjects: DEFAULT_SUBJECTS.slice(),
+      // 想法（可带照片），和 plan.ideas 并存
+      ideas: []
     };
   }
 
@@ -1155,6 +1283,7 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     /* 科目表要保住。不清洗的话，用户增删的科目每次 normalize 都会丢光，
        表现就是"加了科目没反应 / 重复加也不报错" —— 这是自检时抓到的真 bug。 */
     out.subjects = cleanSubjects(s.subjects);
+    out.ideas = cleanIdeas(s.ideas);
 
     if (isObj(s.settings)) {
       var st = s.settings;
@@ -2248,6 +2377,10 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     BACKUP_AT_KEY: BACKUP_AT_KEY,
     DIMS: DIMS,
     GROUPS: GROUPS,
+    // 想法
+    MAX_IDEA_TEXT: MAX_IDEA_TEXT, MAX_IDEA_PHOTOS: MAX_IDEA_PHOTOS,
+    cleanIdeas: cleanIdeas, allIdeas: allIdeas, ideasByDay: ideasByDay,
+    addIdea: addIdea, removeIdea: removeIdea,
     // 学习打卡
     STUDY_STATUS: STUDY_STATUS, STUDY_PICK: STUDY_PICK,
     STATUS_GAP_DAYS: STATUS_GAP_DAYS, DEFAULT_SUBJECTS: DEFAULT_SUBJECTS,
@@ -4971,10 +5104,12 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
   function switchView(v) {
     $('view-today').style.display = (v === 'today') ? '' : 'none';
     $('view-dash').style.display = (v === 'dash') ? '' : 'none';
+    $('view-ideas').style.display = (v === 'ideas') ? '' : 'none';
     document.querySelectorAll('nav button').forEach(function (x) {
       x.setAttribute('aria-current', String(x.getAttribute('data-view') === v));
     });
     if (v === 'dash') renderDash();
+    if (v === 'ideas') renderIdeas();
   }
 
   function renderDash() {
@@ -5829,6 +5964,160 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
     });
   }
 
+  /* ---------------- 想法 ---------------- */
+  var ideaDraft = null;
+
+  function renderIdeas() {
+    var listBox = $('ideaList');
+    if (!listBox) return;
+    listBox.innerHTML = '';
+    var groups = L.ideasByDay(state);
+    var total = groups.reduce(function (a, g) { return a + g.items.length; }, 0);
+    if ($('ideaCount')) $('ideaCount').textContent = total ? total + ' 条' : '';
+
+    if (!total) {
+      listBox.appendChild(el('div', 'card', '还没有想法。点上面「＋ 记个想法」。'));
+      return;
+    }
+
+    groups.forEach(function (g) {
+      var sec = el('section', 'card');
+      var h = el('div', 'idea-day');
+      h.appendChild(el('span', 'd', g.date));
+      h.appendChild(el('span', 'n', g.items.length + ' 条'));
+      sec.appendChild(h);
+
+      g.items.forEach(function (it) {
+        var box = el('div', 'idea-item');
+        if (it.text) box.appendChild(el('div', 'idea-t', it.text));
+        if (it.photos && it.photos.length) {
+          var grid = el('div', 'br-grid');
+          it.photos.forEach(function (ph, i) {
+            var im = document.createElement('img');
+            im.src = ph.data;
+            im.onclick = function () { openPhotoViewer(it.photos, i); };
+            grid.appendChild(im);
+          });
+          box.appendChild(grid);
+        }
+        if (it.legacy) {
+          box.appendChild(el('div', 'ck-s', '（旧记录 · 当时存在「手填七维」里）'));
+        } else {
+          var del = el('button', 'mini', '删除');
+          del.onclick = function () {
+            if (!confirm('删掉这个想法？')) return;
+            var r = L.removeIdea(state, it.id);
+            if (r.error) { toast(r.error); return; }
+            state = r.state;
+            saveState(state);
+            renderIdeas();
+            toast('已删除');
+          };
+          box.appendChild(del);
+        }
+        sec.appendChild(box);
+      });
+      listBox.appendChild(sec);
+    });
+  }
+
+  function openIdeaSheet(prefillDate) {
+    ideaDraft = { text: '', photos: [], date: prefillDate || curDate };
+    openSheet(function (panel) {
+      panel.appendChild(el('h3', null, '记个想法（' + ideaDraft.date + '）'));
+
+      var ta = document.createElement('textarea');
+      ta.id = 'ideaText';
+      ta.maxLength = L.MAX_IDEA_TEXT;
+      ta.placeholder = '想到什么就写下来…（也可以只放照片）';
+      ta.style.minHeight = '110px';
+      panel.appendChild(ta);
+
+      var phBox = el('div', 'ck-photo');
+      phBox.id = 'ideaPhotoBox';
+      panel.appendChild(phBox);
+
+      var btns = el('div', 'btns');
+      var ok = el('button', 'btn p grow', '存下');
+      var cancel = el('button', 'btn', '取消');
+      cancel.onclick = closeSheet;
+      btns.appendChild(ok);
+      btns.appendChild(cancel);
+      panel.appendChild(btns);
+
+      renderIdeaPhotos();
+
+      var onPick = function (ev) {
+        var input = ev.target;
+        var files = Array.prototype.slice.call(input.files || []);
+        input.value = '';
+        if (!files.length) return;
+        var room = L.MAX_IDEA_PHOTOS - ideaDraft.photos.length;
+        if (room <= 0) { toast('最多 ' + L.MAX_IDEA_PHOTOS + ' 张'); return; }
+        var use = files.slice(0, room);
+        if (files.length > room) toast('最多 ' + L.MAX_IDEA_PHOTOS + ' 张，只取前 ' + room + ' 张');
+        var i = 0;
+        var step = function () {
+          if (i >= use.length) { renderIdeaPhotos(); return; }
+          compressStudyPhoto(use[i++]).then(function (data) {
+            ideaDraft.photos.push(data);
+            renderIdeaPhotos();
+            step();
+          }).catch(function (e) {
+            toast('有张图存不了：' + (e && e.message ? e.message : e));
+            step();
+          });
+        };
+        step();
+      };
+      $('ideaPhotoCam').onchange = onPick;
+      $('ideaPhotoGal').onchange = onPick;
+
+      ok.onclick = function () {
+        var txt = $('ideaText') ? $('ideaText').value : '';
+        var r = L.addIdea(state, ideaDraft.date, { text: txt, photos: ideaDraft.photos }, Date.now());
+        if (r.error) { toast(r.error); return; }
+        state = r.state;
+        if (!saveState(state)) { toast('存不进去'); return; }
+        closeSheet();
+        if ($('view-ideas').style.display === 'none') switchView('ideas');
+        renderIdeas();
+        toast('想法已存');
+      };
+    });
+  }
+
+  function renderIdeaPhotos() {
+    var box = $('ideaPhotoBox');
+    if (!box) return;
+    box.innerHTML = '';
+    if (ideaDraft.photos.length) {
+      var grid = el('div', 'ck-grid');
+      ideaDraft.photos.forEach(function (src, i) {
+        var cell = el('div', 'ck-cell');
+        var im = document.createElement('img');
+        im.src = src;
+        cell.appendChild(im);
+        var del = el('button', 'ck-del', '×');
+        del.onclick = function () { ideaDraft.photos.splice(i, 1); renderIdeaPhotos(); };
+        cell.appendChild(del);
+        grid.appendChild(cell);
+      });
+      box.appendChild(grid);
+      box.appendChild(el('p', 'hint', '已选 ' + ideaDraft.photos.length + ' / ' + L.MAX_IDEA_PHOTOS + ' 张'));
+    }
+    if (ideaDraft.photos.length < L.MAX_IDEA_PHOTOS) {
+      var row = el('div', 'btns');
+      var b1 = el('button', 'btn', '📷 拍照');
+      b1.onclick = function () { $('ideaPhotoCam').click(); };
+      var b2 = el('button', 'btn', '🖼️ 从相册选');
+      b2.onclick = function () { $('ideaPhotoGal').click(); };
+      row.appendChild(b1);
+      row.appendChild(b2);
+      box.appendChild(row);
+    }
+  }
+
   /* ---------------- 学习记录浏览：科目 → 天 → 内容 ---------------- */
   var browsePanel = null;
   var browseSubject = null;
@@ -6016,6 +6305,7 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
   if ($('btnCheckin')) $('btnCheckin').onclick = function () { openCheckinSheet(); };
   if ($('btnManageSubject')) $('btnManageSubject').onclick = openSubjectManager;
   if ($('btnStudyBrowse')) $('btnStudyBrowse').onclick = openStudyBrowser;
+  if ($('btnNewIdea')) $('btnNewIdea').onclick = function () { openIdeaSheet(curDate); };
   $('btnWeekReport').onclick = runWeekReport;
   $('btnMonthReport').onclick = runMonthReport;
   $('btnExportWeek').onclick = exportWeek;
