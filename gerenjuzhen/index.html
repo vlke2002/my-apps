@@ -841,7 +841,17 @@ details.fold[open] > summary{margin-bottom:10px;padding-bottom:8px;border-bottom
   function cleanIdea(x) {
     if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
     var text = typeof x.text === 'string' ? x.text.trim().slice(0, MAX_IDEA_TEXT) : '';
-    var photos = cleanStudyPhotos(x.photos).slice(0, MAX_IDEA_PHOTOS);
+    /*
+     * ⚠️ 照片两种形状都要认：
+     *   · 界面里草稿存的是**纯字符串**（dataURL）
+     *   · 落盘后是 { id, data } 对象
+     * 之前只认后者，于是界面刚选的图在保存这一步被当成坏数据全丢了 ——
+     * 表现就是"存了照片，点开只有文字"。
+     */
+    var rawPh = (Array.isArray(x.photos) ? x.photos : []).map(function (ph) {
+      return (typeof ph === 'string') ? { data: ph } : ph;
+    });
+    var photos = cleanStudyPhotos(rawPh).slice(0, MAX_IDEA_PHOTOS);
     if (!text && !photos.length) return null;
     var date = isDateKeyStr(x.date) ? x.date : '';
     if (!date) return null;
