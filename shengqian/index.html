@@ -181,6 +181,25 @@ input,select,textarea{font:inherit;color:inherit}
 .gv-del{margin-top:12px;width:100%;padding:10px;border:0;background:none;
   color:#dc2626;font-size:13px;font-weight:600}
 
+/* 目标管理列表 */
+.gvm-list{margin:2px 0 10px;max-height:38vh;overflow-y:auto}
+.gvm-row{display:flex;align-items:center;gap:10px;padding:11px 4px;
+  border-bottom:1px solid #eef0f2;cursor:pointer}
+.gvm-row.on{background:#eef0fe;border-radius:9px;border-bottom-color:transparent}
+.gvm-name{flex:1;min-width:0;font-size:14px;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gvm-amt{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.gvm-del{font-size:12.5px;color:#dc2626;font-weight:600;padding:5px 9px;border-radius:8px}
+.gvm-del:active{background:#fdecec}
+.gvm-empty{font-size:13px;color:#8a919e;padding:14px 0;text-align:center}
+.gvm-total{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 4px 12px;border-top:2px solid #eef0f2;font-size:13.5px;color:#666}
+.gvm-total b{font-size:17px;color:#4f46e5}
+.gvm-form{margin-top:4px}
+.gvm-form label{display:block;font-size:12.5px;color:#666;margin:10px 0 4px}
+.gvm-form input{width:100%;box-sizing:border-box;padding:10px 12px;font-size:15px;
+  border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111;margin-bottom:2px}
+
 .hero-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.22);overflow:hidden}
 .hero-bar>i{display:block;height:100%;border-radius:99px;background:#fff;transition:width .45s cubic-bezier(.2,.8,.2,1)}
 .hero-bar>i.warn{background:#ffd166}
@@ -977,7 +996,7 @@ input,select,textarea{font:inherit;color:inherit}
       incomes: [],
       budgets: {},          // { '2025-06': { food: 80000, fun: 20000 } }  单位：分
       totalBudgets: {},     // { '2025-06': 200000 }                     单位：分
-      goal: null,           // 存钱目标 { name, targetCents, startKey, endKey, createdAt }
+      goals: [],            // 存钱目标（可多个）[{ id, name, targetCents, startKey, endKey, createdAt }]
       settings: {
         carryOver: false,
         coolOff: true,                    // 冷静期开关
@@ -993,7 +1012,12 @@ input,select,textarea{font:inherit;color:inherit}
   function normalizeState(raw) {
     var st = emptyState();
     if (!raw || typeof raw !== 'object') return st;
-    st.goal = cleanGoal(raw.goal);
+    // 目标：多目标数组；老版本只存了单个 goal，这里顺手迁移过来
+    st.goals = cleanGoals(raw.goals);
+    if (!st.goals.length) {
+      var oldOne = cleanGoal(raw.goal);
+      if (oldOne) st.goals = [oldOne];
+    }
 
     var list = Array.isArray(raw.transactions) ? raw.transactions : [];
     var seen = {};
@@ -1139,12 +1163,15 @@ input,select,textarea{font:inherit;color:inherit}
  * ================================================== */
 var MAX_GOAL_NAME = 30;
 
+var MAX_GOALS = 20;
+
 function cleanGoal(raw) {
   if (!raw || typeof raw !== 'object') return null;
   var name = typeof raw.name === 'string' ? raw.name.trim().slice(0, MAX_GOAL_NAME) : '';
   var target = Math.round(Number(raw.targetCents));
   if (!isFinite(target) || target <= 0 || target > 100000000000) return null;
   return {
+    id: (typeof raw.id === 'string' && raw.id) ? raw.id : ('g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
     name: name || '存钱目标',
     targetCents: target,
     startKey: fromDateKey(raw.startKey) ? raw.startKey : null,
@@ -1153,19 +1180,50 @@ function cleanGoal(raw) {
   };
 }
 
-/** 设/改目标。amount 可以是 '3200' 这种字符串，也可以是分值 */
-function setGoal(state, input, now) {
-  var next = normalizeState(state);
-  var cents = null;
+function cleanGoals(raw) {
+  var out = [];
+  var list = Array.isArray(raw) ? raw : [];
+  var seen = {};
+  for (var i = 0; i < list.length; i++) {
+    var g = cleanGoal(list[i]);
+    if (!g || seen[g.id]) continue;
+    seen[g.id] = 1;
+    out.push(g);
+    if (out.length >= MAX_GOALS) break;
+  }
+  return out;
+}
+
+/** 把所有目标金额加起来 —— 卡片上只显示这个汇总，不堆一排卡片 */
+function goalsSummary(state) {
+  var list = (state && Array.isArray(state.goals)) ? state.goals : [];
+  var total = 0;
+  for (var i = 0; i < list.length; i++) total += list[i].targetCents;
+  return { count: list.length, totalCents: total };
+}
+
+/** 把输入里的金额解析成分；失败返回 null */
+function goalCentsFrom(input) {
   if (input && input.targetCents !== undefined && input.targetCents !== null && input.targetCents !== '') {
     var n = Math.round(Number(input.targetCents));
-    cents = isFinite(n) ? n : null;
-  } else if (input && input.amount) {
-    cents = parseAmountToCents(input.amount);
+    return isFinite(n) ? n : null;
   }
+  if (input && input.amount !== undefined && input.amount !== null && input.amount !== '') {
+    return parseAmountToCents(input.amount);
+  }
+  return null;
+}
+
+/** 新增一个目标 */
+function addGoal(state, input, now) {
+  var next = normalizeState(state);
+  var cents = goalCentsFrom(input);
   if (cents === null || cents === undefined) return { error: '金额格式不对' };
   if (cents <= 0) return { error: '目标金额要大于 0' };
+  var list = (next.goals || []).slice();
+  if (list.length >= MAX_GOALS) return { error: '最多 ' + MAX_GOALS + ' 个目标' };
   var g = cleanGoal({
+    id: 'g' + ((typeof now === 'number' && isFinite(now)) ? now : Date.now()).toString(36) + Math.random().toString(36).slice(2, 5),
     name: input && input.name,
     targetCents: cents,
     startKey: (input && input.startKey) || null,
@@ -1173,13 +1231,45 @@ function setGoal(state, input, now) {
     createdAt: (typeof now === 'number' && isFinite(now)) ? now : Date.now()
   });
   if (!g) return { error: '目标金额要大于 0' };
-  next.goal = g;
+  next.goals = cleanGoals(list.concat([g]));
   return { state: next, goal: g };
 }
 
+/** 改某个目标（按 id） */
+function updateGoal(state, id, input, now) {
+  var next = normalizeState(state);
+  var list = (next.goals || []).slice();
+  var idx = -1;
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) { idx = i; break; }
+  if (idx < 0) return { error: '找不到这个目标' };
+  var cents = goalCentsFrom(input);
+  if (cents === null || cents === undefined) return { error: '金额格式不对' };
+  if (cents <= 0) return { error: '目标金额要大于 0' };
+  list[idx] = cleanGoal({
+    id: id,
+    name: (input && input.name !== undefined) ? input.name : list[idx].name,
+    targetCents: cents,
+    startKey: (input && input.startKey !== undefined) ? input.startKey : list[idx].startKey,
+    endKey: (input && input.endKey !== undefined) ? input.endKey : list[idx].endKey,
+    createdAt: list[idx].createdAt
+  });
+  next.goals = cleanGoals(list);
+  return { state: next, goal: list[idx] };
+}
+
+function removeGoal(state, id) {
+  var next = normalizeState(state);
+  var before = (next.goals || []).length;
+  next.goals = (next.goals || []).filter(function (g) { return g.id !== id; });
+  if (next.goals.length === before) return { error: '找不到这个目标' };
+  return { state: next };
+}
+
+/* 兼容旧调用（只有一个目标时用） */
+function setGoal(state, input, now) { return addGoal(state, input, now); }
 function clearGoal(state) {
   var next = normalizeState(state);
-  next.goal = null;
+  next.goals = [];
   return { state: next };
 }
 
@@ -2338,9 +2428,11 @@ function sumCents(list) {
     // 金额
     parseAmountToCents: parseAmountToCents, formatCents: formatCents,
     // 存钱目标
-    cleanGoal: cleanGoal, setGoal: setGoal, clearGoal: clearGoal,
+    cleanGoal: cleanGoal, cleanGoals: cleanGoals,
+    addGoal: addGoal, updateGoal: updateGoal, removeGoal: removeGoal,
+    goalsSummary: goalsSummary, setGoal: setGoal, clearGoal: clearGoal,
     savedBetween: savedBetween, goalProgress: goalProgress,
-    MAX_GOAL_NAME: MAX_GOAL_NAME,
+    MAX_GOAL_NAME: MAX_GOAL_NAME, MAX_GOALS: MAX_GOALS,
     formatCentsShort: formatCentsShort, formatMoney: formatMoney,
     formatMoneyGrouped: formatMoneyGrouped,
     // 数据
@@ -2463,85 +2555,142 @@ function sumCents(list) {
    * 之前自动按（收入 − 支出）算进度，用户反馈不需要 —— 反而让卡片又变高、又容易被误读。
    * 现在就是一句「我要存够 ¥X」，干净、一眼看懂。
    */
+  /*
+   * 存钱目标：卡片上**只显示汇总**（几个目标 + 总金额），
+   * 不做成一排卡片，也不显示进度 —— 明细点开浮层再看。
+   */
   function renderGoalCard() {
-    const raw = state && state.goal;
-    if (!raw) {
+    const sum = L.goalsSummary(state);
+    if (!sum.count) {
       return `<div class="card goal goal-empty">
         <div class="goal-top">
           <span class="goal-title">🎯 存钱目标</span>
           <button class="goal-btn" id="goalBtn">设定</button>
         </div>
-        <div class="goal-tip">定一个具体想买的东西。有个明确的数字，比"省着点花"有用。</div>
+        <div class="goal-tip">定几个具体想买的东西，卡片上会显示一共要存多少。</div>
       </div>`;
     }
-    const targetTxt = '¥' + L.formatCents(raw.targetCents);
-    const endTxt = raw.endKey ? ('想在 ' + raw.endKey.slice(5).replace('-', '/') + ' 前存到') : '';
     return `<div class="card goal goal-mini">
       <div class="goal-mini-row">
-        <span class="goal-mini-name">🎯 ${esc(raw.name)}</span>
-        <span class="goal-mini-num">${targetTxt}</span>
-        <button class="goal-btn" id="goalBtn">改</button>
-      </div>
-      <div class="goal-mini-foot">
-        <span>目标金额${endTxt ? ' · ' + endTxt : ''}</span>
+        <span class="goal-mini-name">🎯 存钱目标 · ${sum.count} 个</span>
+        <span class="goal-mini-num">¥${L.formatCents(sum.totalCents)}</span>
+        <button class="goal-btn" id="goalBtn">管理</button>
       </div>
     </div>`;
   }
 
+  /* ---------------- 目标管理浮层 ---------------- */
+  var goalEditId = null;
+
   function openGoalEditor() {
-    const cur = state.goal;
-    const ov = document.createElement('div');
+    goalEditId = null;
+    var ov = document.createElement('div');
     ov.className = 'goalv';
+    ov.id = 'goalOverlay';
+    document.body.appendChild(ov);
+    renderGoalManager();
+
+    ov.onclick = function (e) { if (e.target === ov) closeGoalEditor(); };
+  }
+
+  function closeGoalEditor() {
+    var ov = document.getElementById('goalOverlay');
+    if (ov) ov.remove();
+  }
+
+  function renderGoalManager() {
+    var ov = document.getElementById('goalOverlay');
+    if (!ov) return;
+    const list = (state.goals || []).slice();
+    const sum = L.goalsSummary(state);
+    const editing = goalEditId ? list.filter(function (g) { return g.id === goalEditId; })[0] : null;
+
+    var rows = '';
+    if (list.length) {
+      rows = list.map(function (g) {
+        return `<div class="gvm-row${g.id === goalEditId ? ' on' : ''}" data-gid="${g.id}">
+          <span class="gvm-name">${esc(g.name)}</span>
+          <span class="gvm-amt">¥${L.formatCents(g.targetCents)}</span>
+          <button class="gvm-del" data-del="${g.id}">删</button>
+        </div>`;
+      }).join('');
+    } else {
+      rows = '<div class="gvm-empty">还没有目标</div>';
+    }
+
     ov.innerHTML = `
       <div class="goalv-card">
         <h3>🎯 存钱目标</h3>
-        <label>想买什么</label>
-        <input type="text" id="gvName" maxlength="30" placeholder="比如：买台示波器" value="${cur ? esc(cur.name) : ''}">
-        <label>要多少钱</label>
-        <input type="number" id="gvAmount" inputmode="decimal" placeholder="5000"
-               value="${cur ? (cur.targetCents / 100) : ''}">
-        <label>打算什么时候存到（选填）</label>
-        <input type="date" id="gvEnd" value="${cur && cur.endKey ? cur.endKey : ''}">
-        <label>从哪天开始算（选填，不填就用最早一笔生活费）</label>
-        <input type="date" id="gvStart" value="${cur && cur.startKey ? cur.startKey : ''}">
-        <div class="goalv-btns">
-          <button class="gv-ok" id="gvSave">保存</button>
-          <button class="gv-cancel" id="gvCancel">取消</button>
+        <div class="gvm-list">${rows}</div>
+        ${list.length ? `<div class="gvm-total"><span>合计</span><b>¥${L.formatCents(sum.totalCents)}</b></div>` : ''}
+        <div class="gvm-form">
+          <label>${editing ? '改这个目标' : '加一个目标'}</label>
+          <input type="text" id="gvName" maxlength="30" placeholder="想买什么，比如：示波器"
+                 value="${editing ? esc(editing.name) : ''}">
+          <input type="number" id="gvAmount" inputmode="decimal" placeholder="要多少钱"
+                 value="${editing ? (editing.targetCents / 100) : ''}">
+          <label>打算什么时候存到（选填）</label>
+          <input type="date" id="gvEnd" value="${editing && editing.endKey ? editing.endKey : ''}">
         </div>
-        ${cur ? '<button class="gv-del" id="gvDel">删除这个目标</button>' : ''}
+        <div class="goalv-btns">
+          <button class="gv-ok" id="gvSave">${editing ? '保存修改' : '添加'}</button>
+          <button class="gv-cancel" id="gvCancel">关闭</button>
+        </div>
       </div>`;
-    document.body.appendChild(ov);
-    const close = () => ov.remove();
-    ov.onclick = (e) => { if (e.target === ov) close(); };
-    document.getElementById('gvCancel').onclick = close;
-    document.getElementById('gvSave').onclick = () => {
-      const r = L.setGoal(state, {
+
+    document.getElementById('gvCancel').onclick = closeGoalEditor;
+
+    document.getElementById('gvSave').onclick = function () {
+      var input = {
         name: document.getElementById('gvName').value,
         amount: document.getElementById('gvAmount').value,
-        startKey: document.getElementById('gvStart').value || null,
         endKey: document.getElementById('gvEnd').value || null
-      }, Date.now());
-      if (r.error) { alert(r.error); return; }
-      state = r.state;
+      };
       /*
-       * ⚠️ 不能写 if (!save()) return ——
-       * 省钱 App 的 save() **没有返回值**（undefined），于是这里永远判成"失败"，
-       * 直接 return，弹层不关、界面不刷新。用户看到的就是"点保存后卡死在弹层上"。
+       * ⚠️ 不要用 save() 的返回值做判断 —— 这个 App 的 save() 没有返回值（undefined），
+       * 曾经写成 if (!save()) return 导致"点保存后卡在弹层上"。
        */
-      save();
-      close();
-      render();
-      toast('目标已设好');
+      if (goalEditId) {
+        var r = L.updateGoal(state, goalEditId, input, Date.now());
+        if (r.error) { alert(r.error); return; }
+        state = r.state;
+        save();
+        goalEditId = null;
+        renderGoalManager();
+        render();
+        toast('已保存');
+      } else {
+        var r2 = L.addGoal(state, input, Date.now());
+        if (r2.error) { alert(r2.error); return; }
+        state = r2.state;
+        save();
+        renderGoalManager();
+        render();
+        toast('已添加');
+      }
     };
-    const del = document.getElementById('gvDel');
-    if (del) del.onclick = () => {
-      if (!confirm('删掉这个目标？')) return;
-      state = L.clearGoal(state).state;
-      save();
-      close();
-      render();
-      toast('目标已删除');
-    };
+
+    // 行内操作：删 / 选中编辑
+    Array.prototype.forEach.call(ov.querySelectorAll('[data-del]'), function (b) {
+      b.onclick = function (e) {
+        e.stopPropagation();
+        var id = b.getAttribute('data-del');
+        var r = L.removeGoal(state, id);
+        if (r.error) { alert(r.error); return; }
+        state = r.state;
+        save();
+        if (goalEditId === id) goalEditId = null;
+        renderGoalManager();
+        render();
+        toast('已删除');
+      };
+    });
+    Array.prototype.forEach.call(ov.querySelectorAll('[data-gid]'), function (rowEl) {
+      rowEl.onclick = function () {
+        goalEditId = rowEl.getAttribute('data-gid');
+        renderGoalManager();
+      };
+    });
   }
 
   function renderHome(tk) {
