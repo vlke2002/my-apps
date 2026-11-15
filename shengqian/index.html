@@ -2458,71 +2458,32 @@ function sumCents(list) {
 
   /* ---------------- 账单页 ---------------- */
   /* ---------------- 存钱目标 ---------------- */
-  var goalOpen = false;    // 目标卡是否展开（默认收起，省高度）
-
+  /*
+   * 存钱目标卡：**只显示目标金额**，不算"已存了多少"。
+   * 之前自动按（收入 − 支出）算进度，用户反馈不需要 —— 反而让卡片又变高、又容易被误读。
+   * 现在就是一句「我要存够 ¥X」，干净、一眼看懂。
+   */
   function renderGoalCard() {
-    const g = L.goalProgress(state, todayKey());
-    if (!g) {
+    const raw = state && state.goal;
+    if (!raw) {
       return `<div class="card goal goal-empty">
         <div class="goal-top">
           <span class="goal-title">🎯 存钱目标</span>
           <button class="goal-btn" id="goalBtn">设定</button>
         </div>
-        <div class="goal-tip">定一个具体想买的东西。看着进度涨，比"忍着不花"有动力得多。</div>
+        <div class="goal-tip">定一个具体想买的东西。有个明确的数字，比"省着点花"有用。</div>
       </div>`;
     }
-    const pct = Math.max(0, Math.min(100, g.pct));
-    let cheer;
-    if (g.done) cheer = '🎉 目标达成！可以犒劳自己一下了';
-    else if (pct >= 80) cheer = '🔥 就差一点点，稳住别松手';
-    else if (pct >= 50) cheer = '💪 已经过半，节奏很好';
-    else if (pct >= 20) cheer = '📈 慢慢在涨，继续保持';
-    else cheer = '🌱 刚开始而已，先存下第一笔';
-
-    const negative = g.savedCents < 0;
-    const savedTxt = '¥' + L.formatCents(Math.max(0, g.savedCents));
-    const targetTxt = '¥' + L.formatCents(g.targetCents);
-
-    /* 收起态：一行搞定，只留最关键的数字和进度条 */
-    if (!goalOpen) {
-      return `<div class="card goal goal-mini${g.done ? ' done' : ''}">
-        <div class="goal-mini-row" id="goalExpand">
-          <span class="goal-mini-name">🎯 ${esc(g.goal.name)}</span>
-          <span class="goal-mini-num">${savedTxt}<i>/ ${targetTxt}</i></span>
-          <span class="goal-mini-pct">${pct}%</span>
-        </div>
-        <div class="goal-bar"><i style="width:${pct}%"></i></div>
-        <div class="goal-mini-foot">
-          <span>${g.done ? '🎉 已达成' : (negative ? '⚠️ 花超了' : '还差 ¥' + L.formatCents(g.remainCents))}${g.perDayCents ? ' · 每天存 ¥' + L.formatCents(g.perDayCents) : ''}</span>
-          <button class="goal-btn" id="goalBtn">改</button>
-        </div>
-      </div>`;
-    }
-
-    return `<div class="card goal${g.done ? ' done' : ''}">
-      <div class="goal-top">
-        <span class="goal-title" id="goalCollapse">🎯 ${esc(g.goal.name)}</span>
+    const targetTxt = '¥' + L.formatCents(raw.targetCents);
+    const endTxt = raw.endKey ? ('想在 ' + raw.endKey.slice(5).replace('-', '/') + ' 前存到') : '';
+    return `<div class="card goal goal-mini">
+      <div class="goal-mini-row">
+        <span class="goal-mini-name">🎯 ${esc(raw.name)}</span>
+        <span class="goal-mini-num">${targetTxt}</span>
         <button class="goal-btn" id="goalBtn">改</button>
       </div>
-      <div class="goal-nums">
-        <span class="goal-saved">${savedTxt}</span>
-        <span class="goal-of">/ ${targetTxt}</span>
-        <span class="goal-pct">${pct}%</span>
-      </div>
-      <div class="goal-bar"><i style="width:${pct}%"></i></div>
-      <div class="goal-cheer">${cheer}</div>
-      <div class="goal-meta">
-        ${g.done
-          ? '已经存够了'
-          : `还差 <b>¥${L.formatCents(g.remainCents)}</b>` +
-            (g.perDayCents !== null && g.perDayCents > 0
-              ? ` · 剩 ${g.daysLeft} 天，每天存 <b>¥${L.formatCents(g.perDayCents)}</b> 就够`
-              : '')}
-      </div>
-      <div class="goal-src">
-        ${negative
-          ? '⚠️ 这段时间花超了，先把这个洞补上'
-          : (g.fromKey ? '从 ' + g.fromKey.slice(5).replace('-', '/') + ' 起累计（收入 − 支出）' : '按全部记录累计')}
+      <div class="goal-mini-foot">
+        <span>目标金额${endTxt ? ' · ' + endTxt : ''}</span>
       </div>
     </div>`;
   }
@@ -2562,7 +2523,12 @@ function sumCents(list) {
       }, Date.now());
       if (r.error) { alert(r.error); return; }
       state = r.state;
-      if (!save()) return;
+      /*
+       * ⚠️ 不能写 if (!save()) return ——
+       * 省钱 App 的 save() **没有返回值**（undefined），于是这里永远判成"失败"，
+       * 直接 return，弹层不关、界面不刷新。用户看到的就是"点保存后卡死在弹层上"。
+       */
+      save();
       close();
       render();
       toast('目标已设好');
@@ -2571,7 +2537,7 @@ function sumCents(list) {
     if (del) del.onclick = () => {
       if (!confirm('删掉这个目标？')) return;
       state = L.clearGoal(state).state;
-      if (!save()) return;
+      save();
       close();
       render();
       toast('目标已删除');
@@ -2659,10 +2625,7 @@ function sumCents(list) {
     el('homeHero').innerHTML = renderGoalCard() + hero;
     var gb = document.getElementById('goalBtn');
     if (gb) gb.onclick = function (e) { e.stopPropagation(); openGoalEditor(); };
-    var ge = document.getElementById('goalExpand');
-    if (ge) ge.onclick = function () { goalOpen = true; render(); };
-    var gc = document.getElementById('goalCollapse');
-    if (gc) gc.onclick = function () { goalOpen = false; render(); };
+    // 现在卡片只有一个「改」按钮，不再有展开/收起
     // 生活费卡片（放在 hero 之后、明细之前）
     renderIncomeCard();
 
