@@ -103,6 +103,84 @@ input,select,textarea{font:inherit;color:inherit}
 .hero-amount.over{color:#ffe0e0}
 .hero-sub{font-size:12.5px;color:rgba(255,255,255,.82);margin-bottom:14px}
 .hero-sub b{font-weight:600;color:#fff}
+/* ---------- 存钱目标 ---------- */
+.card.goal{
+  background:linear-gradient(150deg,#6366f1,#4338ca 70%);
+  color:#fff;border:0;
+  box-shadow:0 10px 26px rgba(67,56,202,.28);
+  position:relative;overflow:hidden;
+}
+.card.goal.done{background:linear-gradient(150deg,#16a34a,#15803d 70%);
+  box-shadow:0 10px 26px rgba(21,128,61,.3)}
+.card.goal::after{
+  content:'';position:absolute;right:-40px;top:-40px;width:140px;height:140px;
+  border-radius:50%;background:rgba(255,255,255,.12);pointer-events:none;
+}
+.card.goal.goal-empty{
+  background:linear-gradient(150deg,#4f46e5,#4338ca);
+  box-shadow:0 8px 20px rgba(67,56,202,.22);
+}
+/* 收起态：只占一行 + 进度条 + 一行脚注 */
+.card.goal.goal-mini{padding:12px 14px}
+.goal-mini-row{display:flex;align-items:baseline;gap:8px}
+.goal-mini-name{font-size:13.5px;font-weight:700;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.goal-mini-num{font-size:15px;font-weight:800}
+.goal-mini-num i{font-style:normal;font-size:11px;opacity:.72;margin-left:3px}
+.goal-mini-pct{font-size:13px;font-weight:700;opacity:.95}
+.goal-mini .goal-bar{height:7px;margin-top:8px}
+.goal-mini-foot{display:flex;align-items:center;gap:8px;margin-top:7px;
+  font-size:11.5px;opacity:.9}
+.goal-mini-foot span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card.goal.goal-mini .goal-btn{padding:4px 11px;font-size:12px}
+
+/* 折叠卡片（生活费 / 常记的几笔） */
+.card.fold{padding:11px 14px}
+.card.fold > summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none}
+.card.fold > summary::-webkit-details-marker{display:none}
+.card.fold > summary::after{content:'▾';color:var(--ink-3);font-size:12px;transition:.2s}
+.card.fold[open] > summary::after{transform:rotate(180deg)}
+.card.fold[open] > summary{margin-bottom:9px}
+.card.fold .fold-sub{font-size:11.5px;color:var(--ink-3);flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:right}
+.card.fold .fold-act{font-size:12.5px;color:var(--accent);font-weight:600;padding:2px 4px}
+
+.goal-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.goal-title{font-size:14px;font-weight:700;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.goal-btn{background:rgba(255,255,255,.22);color:#fff;border:0;
+  border-radius:99px;padding:6px 14px;font-size:12.5px;font-weight:600}
+.goal-tip{font-size:12.5px;line-height:1.6;opacity:.92}
+.goal-nums{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;margin:4px 0 10px}
+.goal-saved{font-size:30px;font-weight:800;letter-spacing:-.5px}
+.goal-of{font-size:13px;opacity:.8}
+.goal-pct{margin-left:auto;font-size:13px;font-weight:700;opacity:.95}
+.goal-bar{height:10px;border-radius:99px;background:rgba(255,255,255,.28);overflow:hidden}
+.goal-bar i{display:block;height:100%;border-radius:99px;
+  background:linear-gradient(90deg,#fde68a,#fbbf24);transition:width .4s}
+.goal.done .goal-bar i{background:#fff}
+.goal-cheer{font-size:13px;font-weight:600;margin-top:10px}
+.goal-meta{font-size:12.5px;opacity:.92;margin-top:6px;line-height:1.6}
+.goal-meta b{font-weight:800}
+.goal-src{font-size:11px;opacity:.7;margin-top:6px}
+
+/* 目标编辑浮层 */
+.goalv{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);
+  display:flex;align-items:center;justify-content:center;padding:18px}
+.goalv-card{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:380px;
+  max-height:90vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.goalv-card h3{margin:0 0 12px;font-size:17px}
+.goalv-card label{display:block;font-size:12.5px;color:#666;margin:10px 0 4px}
+.goalv-card input{width:100%;box-sizing:border-box;padding:10px 12px;font-size:15px;
+  border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111}
+.goalv-btns{display:flex;gap:10px;margin-top:16px}
+.gv-ok{flex:1;padding:12px;border:0;border-radius:11px;background:#4f46e5;color:#fff;
+  font-size:15px;font-weight:700}
+.gv-cancel{flex:1;padding:12px;border:1px solid #e5e7eb;border-radius:11px;background:#f7f8fa;
+  color:#444;font-size:15px}
+.gv-del{margin-top:12px;width:100%;padding:10px;border:0;background:none;
+  color:#dc2626;font-size:13px;font-weight:600}
+
 .hero-bar{height:8px;border-radius:99px;background:rgba(255,255,255,.22);overflow:hidden}
 .hero-bar>i{display:block;height:100%;border-radius:99px;background:#fff;transition:width .45s cubic-bezier(.2,.8,.2,1)}
 .hero-bar>i.warn{background:#ffd166}
@@ -495,20 +573,21 @@ input,select,textarea{font:inherit;color:inherit}
       <div id="homeHero"></div>
       <div id="homeAlerts"></div>
       <!-- 生活费（收入）：它的日期决定"周期"从哪天开始，所以单独一块、不混进记账弹层 -->
-      <div class="card tight" id="homeIncomeCard">
-        <div class="card-head" style="margin-bottom:9px">
+      <details class="card tight fold" id="homeIncomeCard">
+        <summary>
           <span class="card-title">💰 生活费</span>
-          <button id="btnAddIncome" style="font-size:12.5px;color:var(--accent);font-weight:600">＋ 记一笔</button>
-        </div>
+          <span class="fold-sub" id="incomeSum"></span>
+          <button id="btnAddIncome" class="fold-act">＋ 记一笔</button>
+        </summary>
         <div id="homeIncomeList"></div>
-      </div>
-      <div class="card tight" id="homeQuickCard">
-        <div class="card-head" style="margin-bottom:9px">
+      </details>
+      <details class="card tight fold" id="homeQuickCard">
+        <summary>
           <span class="card-title">常记的几笔</span>
-          <span style="font-size:11.5px;color:var(--ink-3)">点一下直接填金额</span>
-        </div>
+          <span class="fold-sub">点一下直接填金额</span>
+        </summary>
         <div class="quick-row" id="homeQuick"></div>
-      </div>
+      </details>
       <div id="homeList"></div>
     </section>
 
@@ -898,6 +977,7 @@ input,select,textarea{font:inherit;color:inherit}
       incomes: [],
       budgets: {},          // { '2025-06': { food: 80000, fun: 20000 } }  单位：分
       totalBudgets: {},     // { '2025-06': 200000 }                     单位：分
+      goal: null,           // 存钱目标 { name, targetCents, startKey, endKey, createdAt }
       settings: {
         carryOver: false,
         coolOff: true,                    // 冷静期开关
@@ -913,6 +993,7 @@ input,select,textarea{font:inherit;color:inherit}
   function normalizeState(raw) {
     var st = emptyState();
     if (!raw || typeof raw !== 'object') return st;
+    st.goal = cleanGoal(raw.goal);
 
     var list = Array.isArray(raw.transactions) ? raw.transactions : [];
     var seen = {};
@@ -1051,7 +1132,112 @@ input,select,textarea{font:inherit;color:inherit}
     });
   }
 
-  function sumCents(list) {
+  /* ===================== 存钱目标 =====================
+ * 「已存」怎么算：**累计结余 = 收到的钱 − 花掉的钱**（从目标起点开始算）。
+ * 不要求用户手动记"我存了 500"——那多一步，懒人就会跳过。
+ * 存钱目标真正的动力来自"看着进度涨"，所以进度必须自动动起来。
+ * ================================================== */
+var MAX_GOAL_NAME = 30;
+
+function cleanGoal(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  var name = typeof raw.name === 'string' ? raw.name.trim().slice(0, MAX_GOAL_NAME) : '';
+  var target = Math.round(Number(raw.targetCents));
+  if (!isFinite(target) || target <= 0 || target > 100000000000) return null;
+  return {
+    name: name || '存钱目标',
+    targetCents: target,
+    startKey: fromDateKey(raw.startKey) ? raw.startKey : null,
+    endKey: fromDateKey(raw.endKey) ? raw.endKey : null,
+    createdAt: (typeof raw.createdAt === 'number' && isFinite(raw.createdAt)) ? raw.createdAt : Date.now()
+  };
+}
+
+/** 设/改目标。amount 可以是 '3200' 这种字符串，也可以是分值 */
+function setGoal(state, input, now) {
+  var next = normalizeState(state);
+  var cents = null;
+  if (input && input.targetCents !== undefined && input.targetCents !== null && input.targetCents !== '') {
+    var n = Math.round(Number(input.targetCents));
+    cents = isFinite(n) ? n : null;
+  } else if (input && input.amount) {
+    cents = parseAmountToCents(input.amount);
+  }
+  if (cents === null || cents === undefined) return { error: '金额格式不对' };
+  if (cents <= 0) return { error: '目标金额要大于 0' };
+  var g = cleanGoal({
+    name: input && input.name,
+    targetCents: cents,
+    startKey: (input && input.startKey) || null,
+    endKey: (input && input.endKey) || null,
+    createdAt: (typeof now === 'number' && isFinite(now)) ? now : Date.now()
+  });
+  if (!g) return { error: '目标金额要大于 0' };
+  next.goal = g;
+  return { state: next, goal: g };
+}
+
+function clearGoal(state) {
+  var next = normalizeState(state);
+  next.goal = null;
+  return { state: next };
+}
+
+/** 某段日期内的 收入 − 支出 */
+function savedBetween(state, fromKey, toKey) {
+  var from = fromKey || '0000-01-01';
+  var to = toKey || '9999-12-31';
+  var income = 0, spent = 0;
+  var incs = (state && state.incomes) || [];
+  for (var i = 0; i < incs.length; i++) {
+    if (incs[i].date >= from && incs[i].date <= to) income += incs[i].cents;
+  }
+  var txs = (state && state.transactions) || [];
+  for (var j = 0; j < txs.length; j++) {
+    if (txs[j].date >= from && txs[j].date <= to) spent += txs[j].cents;
+  }
+  return { incomeCents: income, spentCents: spent, savedCents: income - spent };
+}
+
+/**
+ * 目标进度。没有目标返回 null。
+ * startKey 没设时，自动用**最早一笔生活费**的日期当起点（不然会把史前数据也算进来）。
+ */
+function goalProgress(state, todayKey) {
+  var g = state && state.goal;
+  if (!g) return null;
+  var tk = todayKey || toDateKey(new Date());
+  var from = g.startKey;
+  if (!from) {
+    var incs = (state.incomes || []).slice();
+    if (incs.length) {
+      incs.sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      from = incs[0].date;
+    }
+  }
+  var s2 = savedBetween(state, from, tk);
+  var saved = s2.savedCents;
+  var target = g.targetCents;
+  var pctRaw = target > 0 ? (saved / target * 100) : 0;
+  var remain = target - saved;
+  var daysLeft = null;
+  if (g.endKey) {
+    var n = daysBetweenKeys(tk, g.endKey);
+    if (typeof n === 'number') daysLeft = n;
+  }
+  var perDay = (daysLeft !== null && daysLeft > 0 && remain > 0)
+    ? Math.ceil(remain / daysLeft) : null;
+  return {
+    goal: g, fromKey: from || null,
+    incomeCents: s2.incomeCents, spentCents: s2.spentCents, savedCents: saved,
+    targetCents: target, remainCents: remain,
+    pct: Math.max(0, Math.min(999, Math.round(pctRaw))),
+    daysLeft: daysLeft, perDayCents: perDay,
+    done: saved >= target
+  };
+}
+
+function sumCents(list) {
     var s = 0;
     for (var i = 0; i < list.length; i++) s += list[i].cents;
     return s;
@@ -2151,6 +2337,10 @@ input,select,textarea{font:inherit;color:inherit}
     daysInMonth: daysInMonth, monthLabel: monthLabel, friendlyDate: friendlyDate,
     // 金额
     parseAmountToCents: parseAmountToCents, formatCents: formatCents,
+    // 存钱目标
+    cleanGoal: cleanGoal, setGoal: setGoal, clearGoal: clearGoal,
+    savedBetween: savedBetween, goalProgress: goalProgress,
+    MAX_GOAL_NAME: MAX_GOAL_NAME,
     formatCentsShort: formatCentsShort, formatMoney: formatMoney,
     formatMoneyGrouped: formatMoneyGrouped,
     // 数据
@@ -2267,6 +2457,127 @@ input,select,textarea{font:inherit;color:inherit}
   }
 
   /* ---------------- 账单页 ---------------- */
+  /* ---------------- 存钱目标 ---------------- */
+  var goalOpen = false;    // 目标卡是否展开（默认收起，省高度）
+
+  function renderGoalCard() {
+    const g = L.goalProgress(state, todayKey());
+    if (!g) {
+      return `<div class="card goal goal-empty">
+        <div class="goal-top">
+          <span class="goal-title">🎯 存钱目标</span>
+          <button class="goal-btn" id="goalBtn">设定</button>
+        </div>
+        <div class="goal-tip">定一个具体想买的东西。看着进度涨，比"忍着不花"有动力得多。</div>
+      </div>`;
+    }
+    const pct = Math.max(0, Math.min(100, g.pct));
+    let cheer;
+    if (g.done) cheer = '🎉 目标达成！可以犒劳自己一下了';
+    else if (pct >= 80) cheer = '🔥 就差一点点，稳住别松手';
+    else if (pct >= 50) cheer = '💪 已经过半，节奏很好';
+    else if (pct >= 20) cheer = '📈 慢慢在涨，继续保持';
+    else cheer = '🌱 刚开始而已，先存下第一笔';
+
+    const negative = g.savedCents < 0;
+    const savedTxt = '¥' + L.formatCents(Math.max(0, g.savedCents));
+    const targetTxt = '¥' + L.formatCents(g.targetCents);
+
+    /* 收起态：一行搞定，只留最关键的数字和进度条 */
+    if (!goalOpen) {
+      return `<div class="card goal goal-mini${g.done ? ' done' : ''}">
+        <div class="goal-mini-row" id="goalExpand">
+          <span class="goal-mini-name">🎯 ${esc(g.goal.name)}</span>
+          <span class="goal-mini-num">${savedTxt}<i>/ ${targetTxt}</i></span>
+          <span class="goal-mini-pct">${pct}%</span>
+        </div>
+        <div class="goal-bar"><i style="width:${pct}%"></i></div>
+        <div class="goal-mini-foot">
+          <span>${g.done ? '🎉 已达成' : (negative ? '⚠️ 花超了' : '还差 ¥' + L.formatCents(g.remainCents))}${g.perDayCents ? ' · 每天存 ¥' + L.formatCents(g.perDayCents) : ''}</span>
+          <button class="goal-btn" id="goalBtn">改</button>
+        </div>
+      </div>`;
+    }
+
+    return `<div class="card goal${g.done ? ' done' : ''}">
+      <div class="goal-top">
+        <span class="goal-title" id="goalCollapse">🎯 ${esc(g.goal.name)}</span>
+        <button class="goal-btn" id="goalBtn">改</button>
+      </div>
+      <div class="goal-nums">
+        <span class="goal-saved">${savedTxt}</span>
+        <span class="goal-of">/ ${targetTxt}</span>
+        <span class="goal-pct">${pct}%</span>
+      </div>
+      <div class="goal-bar"><i style="width:${pct}%"></i></div>
+      <div class="goal-cheer">${cheer}</div>
+      <div class="goal-meta">
+        ${g.done
+          ? '已经存够了'
+          : `还差 <b>¥${L.formatCents(g.remainCents)}</b>` +
+            (g.perDayCents !== null && g.perDayCents > 0
+              ? ` · 剩 ${g.daysLeft} 天，每天存 <b>¥${L.formatCents(g.perDayCents)}</b> 就够`
+              : '')}
+      </div>
+      <div class="goal-src">
+        ${negative
+          ? '⚠️ 这段时间花超了，先把这个洞补上'
+          : (g.fromKey ? '从 ' + g.fromKey.slice(5).replace('-', '/') + ' 起累计（收入 − 支出）' : '按全部记录累计')}
+      </div>
+    </div>`;
+  }
+
+  function openGoalEditor() {
+    const cur = state.goal;
+    const ov = document.createElement('div');
+    ov.className = 'goalv';
+    ov.innerHTML = `
+      <div class="goalv-card">
+        <h3>🎯 存钱目标</h3>
+        <label>想买什么</label>
+        <input type="text" id="gvName" maxlength="30" placeholder="比如：买台示波器" value="${cur ? esc(cur.name) : ''}">
+        <label>要多少钱</label>
+        <input type="number" id="gvAmount" inputmode="decimal" placeholder="5000"
+               value="${cur ? (cur.targetCents / 100) : ''}">
+        <label>打算什么时候存到（选填）</label>
+        <input type="date" id="gvEnd" value="${cur && cur.endKey ? cur.endKey : ''}">
+        <label>从哪天开始算（选填，不填就用最早一笔生活费）</label>
+        <input type="date" id="gvStart" value="${cur && cur.startKey ? cur.startKey : ''}">
+        <div class="goalv-btns">
+          <button class="gv-ok" id="gvSave">保存</button>
+          <button class="gv-cancel" id="gvCancel">取消</button>
+        </div>
+        ${cur ? '<button class="gv-del" id="gvDel">删除这个目标</button>' : ''}
+      </div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.onclick = (e) => { if (e.target === ov) close(); };
+    document.getElementById('gvCancel').onclick = close;
+    document.getElementById('gvSave').onclick = () => {
+      const r = L.setGoal(state, {
+        name: document.getElementById('gvName').value,
+        amount: document.getElementById('gvAmount').value,
+        startKey: document.getElementById('gvStart').value || null,
+        endKey: document.getElementById('gvEnd').value || null
+      }, Date.now());
+      if (r.error) { alert(r.error); return; }
+      state = r.state;
+      if (!save()) return;
+      close();
+      render();
+      toast('目标已设好');
+    };
+    const del = document.getElementById('gvDel');
+    if (del) del.onclick = () => {
+      if (!confirm('删掉这个目标？')) return;
+      state = L.clearGoal(state).state;
+      if (!save()) return;
+      close();
+      render();
+      toast('目标已删除');
+    };
+  }
+
   function renderHome(tk) {
     const cur = L.currentPeriod(state, tk);
     const periodKey = cur ? cur.key : (thisMonthKey() + '-01');
@@ -2344,7 +2655,14 @@ input,select,textarea{font:inherit;color:inherit}
         </div>`;
     }
 
-    el('homeHero').innerHTML = hero;
+    // 存钱目标放在最上面：要有动力，就得第一眼看见
+    el('homeHero').innerHTML = renderGoalCard() + hero;
+    var gb = document.getElementById('goalBtn');
+    if (gb) gb.onclick = function (e) { e.stopPropagation(); openGoalEditor(); };
+    var ge = document.getElementById('goalExpand');
+    if (ge) ge.onclick = function () { goalOpen = true; render(); };
+    var gc = document.getElementById('goalCollapse');
+    if (gc) gc.onclick = function () { goalOpen = false; render(); };
     // 生活费卡片（放在 hero 之后、明细之前）
     renderIncomeCard();
 
@@ -2554,6 +2872,13 @@ input,select,textarea{font:inherit;color:inherit}
     const list = L.incomesOf(state);
     const box = el('homeIncomeList');
     if (!box) return;
+    // 收起态的摘要：一眼看到最近一笔生活费
+    const sumEl = document.getElementById('incomeSum');
+    if (sumEl) {
+      sumEl.textContent = list.length
+        ? (list[0].date.slice(5).replace('-', '/') + ' · ¥' + L.formatCents(list[0].cents))
+        : '还没记';
+    }
     if (!list.length) {
       box.innerHTML = `<div style="font-size:12.5px;color:var(--ink-3);line-height:1.55">
         记一笔生活费，App 就能按 <b>发放日</b> 给你划分周期，不用再对着日历月算。</div>`;
@@ -3168,7 +3493,14 @@ input,select,textarea{font:inherit;color:inherit}
         id: x.id, amount: L.formatCentsShort(x.cents), date: x.date, note: x.note
       });
     });
-    el('btnAddIncome').addEventListener('click', () => openIncSheet());
+    el('btnAddIncome').addEventListener('click', (e) => {
+    // 这个按钮在 <summary> 里，不拦的话点一下会连带把折叠卡展开。
+    // ⚠️ 要判空：测试桩传进来的伪事件没有这两个方法，直接调用会抛异常，
+    //    表现是"点记一笔没反应"（而且只有测试环境会暴露）。
+    if (e && typeof e.preventDefault === 'function') e.preventDefault();
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    openIncSheet();
+  });
     el('incCancel').addEventListener('click', closeIncSheet);
     el('incMask').addEventListener('click', closeIncSheet);
     el('incSave').addEventListener('click', saveIncSheet);
